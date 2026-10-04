@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "YuraTrade"
+description = "Russian-language trading signals dashboard from the uploaded YuraTrade/VLADOS PRIME project. Includes signal overview, pair selection, history, learning pages, and a balance calculator. Live OTC market data is not configured in the source archive."
+version = "1.0.0"
+id = "artifacts/yuratrade"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18682
+
+[services.development]
+run = "pnpm --filter @workspace/yuratrade run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/yuratrade", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/yuratrade/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18682"
+BASE_PATH = "/"
