@@ -2,6 +2,10 @@ import WebSocket from "ws";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
+const AUTH_MISSING_MESSAGE =
+  "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
+const AUTH_REJECTED_MESSAGE =
+  "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
 
@@ -35,6 +39,8 @@ const pairs = new Map<string, FeedPair>();
 let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
+let connectionError = "";
+let retryAfter = 0;
 let expectAssets = false;
 let expectHistory = false;
 let expectBalance = false;
@@ -81,6 +87,7 @@ function storeAssets(rows: unknown[]) {
   if (next.size > 0) {
     pairs.clear();
     for (const [symbol, pair] of next) pairs.set(symbol, pair);
+    connectionError = "";
   }
 }
 
@@ -253,7 +260,7 @@ function waitQuote(symbol: string) {
     const stop = setTimeout(() => {
       clearInterval(timer);
       const quote = quotes.get(symbol);
-      if (quote && quote.at >= started - 4000) resolve(quote.price);
+      if (quote && Date.now() - quote.at <= 2000) resolve(quote.price);
       else reject(new Error("Цена не пришла. Попробуйте ещё раз."));
     }, 5000);
   });
@@ -280,7 +287,8 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   if (message.includes("NotAuthorized")) {
-    failPending(new Error("Котировки сейчас недоступны."));
+    connectionError = AUTH_REJECTED_MESSAGE;
+    failPending(new Error(connectionError));
     try {
       current.close();
     } catch {
@@ -339,8 +347,9 @@ function handleMessage(current: WebSocket, message: string) {
 }
 
 function connect() {
-  if (!FEED_AUTH) {
-    throw new Error("Pocket Option live feed is not configured.");
+  if (!FEED_AUTH.trim()) {
+    connectionError = AUTH_MISSING_MESSAGE;
+    throw new Error(connectionError);
   }
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === 0)) return;
   if (socket) {
@@ -353,6 +362,7 @@ function connect() {
       /* closed */
     }
   }
+  connectionError = "";
   const next = new WebSocket(FEED_URL, {
     headers: {
       Origin: "https://pocketoption.com",
@@ -362,12 +372,18 @@ function connect() {
     handshakeTimeout: 8000,
   });
   next.on("error", () => {
-    if (socket === next) socket = null;
+    if (socket !== next) return;
+    socket = null;
+    retryAfter = Date.now() + 2000;
+    connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
   });
   socket = next;
   next.on("message", (data) => handleMessage(next, textOf(data)));
   next.on("close", () => {
-    if (socket === next) socket = null;
+    if (socket !== next) return;
+    socket = null;
+    retryAfter = Date.now() + 2000;
+    if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
   });
 }
 
@@ -384,11 +400,12 @@ function ensureFeed() {
         resolve();
         return;
       }
-      if (!socket || socket.readyState === 3) connect();
+      if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) connect();
       if (Date.now() - started > 12000) {
         clearInterval(timer);
         ready = null;
-        reject(new Error("Котировки сейчас недоступны."));
+        if (!connectionError) connectionError = "Котировки Pocket Option не получены за 12 секунд.";
+        reject(new Error(connectionError));
       }
     }, 200);
   });
@@ -439,6 +456,23 @@ export function followQuote(symbol: string) {
   return quotes.get(symbol) ?? null;
 }
 
+export function quoteStatus(symbol: string) {
+  if (!FEED_AUTH.trim()) {
+    return { status: "error" as const, message: AUTH_MISSING_MESSAGE };
+  }
+  if (connectionError) {
+    return { status: "error" as const, message: connectionError };
+  }
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return { status: "connecting" as const, message: "Подключаемся к потоку Pocket Option." };
+  }
+  const quote = quotes.get(symbol);
+  if (quote && Date.now() - quote.at <= 5000) {
+    return { status: "connected" as const, message: "" };
+  }
+  return { status: "connecting" as const, message: "Ожидаем свежую котировку Pocket Option." };
+}
+
 export async function feedClose(symbol: string) {
   await ensureFeed();
   if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
@@ -455,11 +489,7 @@ export async function feedSignal(symbol: string, seconds: number): Promise<FeedS
   if (!pair) throw new Error("Эта пара сейчас недоступна.");
   if (candles.length < 5) throw new Error("Мало свечей для этого срока.");
   const judged = judge(candles, Math.round(seconds / 60), pair.name, pair.payout);
-  try {
-    judged.openPrice = await waitQuote(symbol);
-  } catch {
-    /* candle close stays if a live tick does not arrive */
-  }
+  judged.openPrice = await waitQuote(symbol);
   const { strength: _strength, ...signal } = judged;
   return signal;
 }
@@ -489,10 +519,6 @@ export async function feedBest() {
     }
   }
   if (!best) throw new Error("Не удалось выбрать пару. Попробуйте ещё раз.");
-  try {
-    best.signal.openPrice = await waitQuote(best.symbol);
-  } catch {
-    /* candle close stays */
-  }
+  best.signal.openPrice = await waitQuote(best.symbol);
   return { ...best.signal, symbol: best.symbol, group: best.group, seconds: best.seconds };
 }

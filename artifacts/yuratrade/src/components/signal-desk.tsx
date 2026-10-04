@@ -10,6 +10,7 @@ export function SignalDesk() {
   const { id } = usePocket();
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
+  const [feedStatus, setFeedStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [phase, setPhase] = useState<"idle" | "search">("idle");
   const [error, setError] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
@@ -24,11 +25,16 @@ export function SignalDesk() {
           if (stop) return;
           hasPairs.current = feed.pairs.length > 0;
           setReady(feed.pairs.length > 0);
+          setFeedStatus(feed.pairs.length > 0 ? "connected" : "error");
           setBalance(feed.balance);
           setError("");
         })
-        .catch(() => {
-          if (!stop && !hasPairs.current) setError("Котировки сейчас недоступны.");
+        .catch((cause: unknown) => {
+          if (stop) return;
+          hasPairs.current = false;
+          setReady(false);
+          setFeedStatus("error");
+          setError(cause instanceof Error ? cause.message : "Не удалось подключиться к Pocket Option.");
         });
     };
     pull();
@@ -88,6 +94,20 @@ export function SignalDesk() {
   return (
     <div className="mx-auto w-full max-w-md space-y-4">
       <section className="panel p-4">
+        <p
+          className={`mb-3 flex items-center justify-center gap-2 text-xs font-semibold ${
+            feedStatus === "connected" ? "text-win" : feedStatus === "error" ? "text-loss" : "text-dim"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current"} />
+          {feedStatus === "connected"
+            ? "Поток Pocket Option подключён"
+            : feedStatus === "error"
+              ? "Нет подключения к Pocket Option"
+              : "Подключаемся к Pocket Option…"}
+        </p>
         <p className="text-sm leading-relaxed text-muted">Бот сам смотрит пары с выплатой 92% и 80% и берёт самый чистый вход. Срок только 1 или 2 минуты.</p>
         <button type="button" className="btn-prime mt-4 w-full" disabled={!ready || phase === "search" || Boolean(blocked)} onClick={() => void ask()}>
           Получить сигнал

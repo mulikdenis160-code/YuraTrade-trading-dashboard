@@ -8,7 +8,7 @@ export const Route = createFileRoute("/api/ticks")({
         if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) {
           return new Response("bad symbol", { status: 400 });
         }
-        const { followQuote } = await import("@/lib/pocket-live.server");
+        const { followQuote, quoteStatus } = await import("@/lib/pocket-live.server");
         const encoder = new TextEncoder();
         let closed = false;
         const stream = new ReadableStream({
@@ -26,14 +26,20 @@ export const Route = createFileRoute("/api/ticks")({
             };
             request.signal.addEventListener("abort", stop);
             let last = "";
+            let lastStatus = "";
             timer = setInterval(() => {
               if (closed) return;
               const quote = followQuote(symbol);
-              if (!quote) return;
-              const line = String(quote.price);
-              if (line === last) return;
-              last = line;
               try {
+                const status = JSON.stringify(quoteStatus(symbol));
+                if (status !== lastStatus) {
+                  lastStatus = status;
+                  controller.enqueue(encoder.encode(`event: feed-status\ndata: ${status}\n\n`));
+                }
+                if (!quote) return;
+                const line = String(quote.price);
+                if (line === last) return;
+                last = line;
                 controller.enqueue(encoder.encode(`data: ${line}\n\n`));
               } catch {
                 stop();

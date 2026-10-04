@@ -1,7 +1,7 @@
 kind = "web"
 previewPath = "/"
 title = "Trading Signals Dashboard"
-description = "Russian-language trading-signal dashboard from the uploaded archive, with pair selection, signal history, learning pages, and a balance calculator. The Pocket Option live feed remains disabled until a fresh authorization is configured."
+description = "Russian-language trading-signal dashboard with live Pocket Option WebSocket quotes, including OTC pairs. Authorization is read only from Replit Secrets; the app does not reuse archive credentials or place trades."
 version = "1.0.0"
 id = "artifacts/yuratrade"
 router = "path"

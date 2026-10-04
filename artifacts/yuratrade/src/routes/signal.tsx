@@ -167,6 +167,8 @@ function SignalCard({ search }: { search: Search }) {
   const [prepLeft, setPrepLeft] = useState(10);
   const [error, setError] = useState("");
   const [live, setLive] = useState<number | null>(null);
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [liveMessage, setLiveMessage] = useState("");
   const settled = useRef(false);
   const until = search.started + search.seconds * 1000;
   const left = Math.max(0, until - now);
@@ -181,9 +183,33 @@ function SignalCard({ search }: { search: Search }) {
   useEffect(() => {
     if (phase !== "run" || !search.symbol) return;
     const source = new EventSource(`/api/ticks?symbol=${encodeURIComponent(search.symbol)}`);
+    source.onopen = () => setLiveStatus("connecting");
+    source.addEventListener("feed-status", (event) => {
+      try {
+        const status = JSON.parse((event as MessageEvent<string>).data) as {
+          status?: string;
+          message?: string;
+        };
+        if (status.status === "connected" || status.status === "connecting" || status.status === "error") {
+          setLiveStatus(status.status);
+          setLiveMessage(status.message ?? "");
+        }
+      } catch {
+        setLiveStatus("error");
+        setLiveMessage("Не удалось прочитать состояние потока котировок.");
+      }
+    });
     source.onmessage = (event) => {
       const next = Number(event.data);
-      if (Number.isFinite(next)) setLive(next);
+      if (Number.isFinite(next)) {
+        setLive(next);
+        setLiveStatus("connected");
+        setLiveMessage("");
+      }
+    };
+    source.onerror = () => {
+      setLiveStatus("error");
+      setLiveMessage("Соединение с потоком котировок прервано. Переподключаемся…");
     };
     return () => source.close();
   }, [phase, search.symbol]);
@@ -337,9 +363,19 @@ function SignalCard({ search }: { search: Search }) {
         </dl>
         {phase === "run" || phase === "check" ? (
           <div className="mt-5 rounded-2xl border border-white/10 bg-[#080b12] px-4 py-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <p className="flex items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.16em] text-dim uppercase">
-              <span className="live-dot" />
-              Цена сейчас
+            <p
+              className={`flex items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.16em] uppercase ${
+                liveStatus === "connected" ? "text-win" : liveStatus === "error" ? "text-loss" : "text-dim"
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className={liveStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current"} />
+              {liveStatus === "connected"
+                ? "Котировки Pocket Option активны"
+                : liveStatus === "error"
+                  ? "Поток котировок недоступен"
+                  : "Ожидание котировки Pocket Option"}
             </p>
             <p className={`mt-2 font-mono text-4xl font-extrabold tracking-tight sm:text-5xl ${live === null || live === search.open ? "text-fg" : live > search.open ? "text-win" : "text-loss"}`}>
               {live === null ? "…" : live.toFixed(digitsOf(live))}
@@ -347,6 +383,9 @@ function SignalCard({ search }: { search: Search }) {
             <p className={`mt-1 font-mono text-sm font-semibold ${live === null || live === search.open ? "text-dim" : live > search.open ? "text-win" : "text-loss"}`}>
               {live === null ? "ждём котировку" : live === search.open ? "без изменения" : `${live > search.open ? "+" : "−"}${Math.abs(live - search.open).toFixed(digitsOf(search.open))} от входа`}
             </p>
+            {liveMessage ? (
+              <p className={`mt-2 text-xs ${liveStatus === "error" ? "text-loss" : "text-dim"}`}>{liveMessage}</p>
+            ) : null}
           </div>
         ) : null}
         {error ? <p className="mt-3 text-sm text-loss">{error}</p> : null}
