@@ -451,6 +451,9 @@ async function loadCandles(symbol: string, seconds: number) {
 }
 
 export function followQuote(symbol: string) {
+  if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) {
+    void feedSnapshot().catch(() => {});
+  }
   const current = quotes.get(symbol);
   if (!current || Date.now() - current.at > 2000) subscribe(symbol);
   return quotes.get(symbol) ?? null;
