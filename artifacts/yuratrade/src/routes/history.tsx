@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download, History } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StatRow } from "@/components/stats";
+import { formatExpiry } from "@/lib/expiry";
 import {
   readSignalJournal,
   signalJournalCsv,
@@ -119,7 +120,7 @@ function HistoryPage() {
           </div>
         </div>
         <p className="mt-4 border-t border-white/8 pt-3 text-xs leading-relaxed text-muted">
-          Это локальный журнал фактических исходов, не прогноз. Условный итог не учитывает реальные суммы ставок, комиссии или размер перекрытий. Алгоритм пока эвристический, не ML-модель; запрос истории ограничен 40 свечами на срок, поэтому отдельный надёжный backtest не заявляется. CSV содержит свечи и результаты для последующей проверки.
+          Это локальный журнал фактических исходов, не прогноз. Условный итог не учитывает реальные суммы ставок, комиссии или размер перекрытий. Алгоритм пока эвристический, не ML-модель; история загружается примерно на 40 свечей выбранного периода анализа, поэтому отдельный надёжный backtest не заявляется. CSV содержит период свечей и результаты для последующей проверки.
         </p>
       </section>
 
@@ -135,7 +136,7 @@ function HistoryPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold text-fg">{market.name}</h3>
-                    <p className="mt-1 text-xs text-dim">{market.symbol} · {market.seconds / 60} мин</p>
+                    <p className="mt-1 text-xs text-dim">{market.symbol} · экспирация {formatExpiry(market.seconds)}</p>
                   </div>
                   <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-mono text-muted">
                     {market.summary.decided} решающих
@@ -185,7 +186,9 @@ function HistoryPage() {
               <div className="flex min-w-0 items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="truncate font-semibold text-fg">{entry.name}</h3>
-                  <p className="mt-1 text-xs text-dim">{formatDate(entry.startedAt)} · {entry.seconds / 60} мин</p>
+                  <p className="mt-1 text-xs text-dim">
+                    {formatDate(entry.startedAt)} · экспирация {formatExpiry(entry.seconds)} · свечи {formatExpiry(entry.analysisSeconds)}
+                  </p>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${outcomeStyles[entry.outcome]}`}>
                   {outcomeLabels[entry.outcome]}

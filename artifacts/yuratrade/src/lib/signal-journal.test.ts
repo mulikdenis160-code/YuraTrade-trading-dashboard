@@ -38,6 +38,7 @@ test("signal records are local, idempotent, and settle only once", () => {
     openPrice: 1.0842,
     payout: 92,
     seconds: 60,
+    analysisSeconds: 60,
     step: 0,
     startedAt: 1_750_000_000_000,
     ruleScore: 0.31,
@@ -63,6 +64,7 @@ test("journal statistics use payout-aware break-even and one-unit returns", () =
     direction: "call",
     openPrice: 1.08,
     seconds: 60,
+    analysisSeconds: 60,
     step: 0,
     startedAt: 1,
     ruleScore: 0.3,
@@ -91,6 +93,7 @@ test("CSV export escapes text fields and includes candle inputs", () => {
   const csv = signalJournalCsv(readSignalJournal());
   assert.match(csv, /EUR\/USD ""OTC""/);
   assert.match(csv, /"candles"/);
+  assert.match(csv, /"analysisSeconds"/);
   assert.match(csv, /\[\[1\.08,1\.09,1\.07,1\.0842\]\]/);
 });
 

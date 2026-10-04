@@ -1,3 +1,5 @@
+import { analysisPeriodForExpiry, ANALYSIS_PERIODS_SECONDS } from "./expiry.ts";
+
 export type JournalGroup = "fx" | "crypto" | "stock" | "commodity";
 export type JournalOutcome = "pending" | "win" | "loss" | "draw";
 
@@ -11,6 +13,7 @@ export type SignalJournalEntry = {
   closePrice?: number;
   payout: number;
   seconds: number;
+  analysisSeconds: number;
   step: number;
   startedAt: number;
   settledAt?: number;
@@ -82,6 +85,14 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
         )
         .slice(-32)
     : [];
+  const seconds = Math.max(60, Math.min(14400, Math.round(Number(entry.seconds) / 60) * 60));
+  const legacyAnalysisSeconds = [60, 120, 180, 300, 900].includes(seconds)
+    ? seconds
+    : analysisPeriodForExpiry(seconds);
+  const providedAnalysisSeconds = Number(entry.analysisSeconds);
+  const analysisSeconds = (ANALYSIS_PERIODS_SECONDS as readonly number[]).includes(providedAnalysisSeconds)
+    ? providedAnalysisSeconds
+    : legacyAnalysisSeconds;
 
   return {
     id: entry.id,
@@ -92,7 +103,8 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
     openPrice: Number(entry.openPrice),
     ...(Number.isFinite(entry.closePrice) ? { closePrice: Number(entry.closePrice) } : {}),
     payout: Math.max(0, Math.min(100, Number(entry.payout))),
-    seconds: Math.max(1, Number(entry.seconds)),
+    seconds,
+    analysisSeconds,
     step: Math.max(0, Math.min(3, Number(entry.step))),
     startedAt: Number(entry.startedAt),
     ...(Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {}),
@@ -239,6 +251,7 @@ export function signalJournalCsv(entries: SignalJournalEntry[]) {
     ["name", (entry) => entry.name],
     ["direction", (entry) => entry.direction],
     ["seconds", (entry) => entry.seconds],
+    ["analysisSeconds", (entry) => entry.analysisSeconds],
     ["payout", (entry) => entry.payout],
     ["openPrice", (entry) => entry.openPrice],
     ["closePrice", (entry) => entry.closePrice ?? ""],

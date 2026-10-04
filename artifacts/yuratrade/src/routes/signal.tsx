@@ -8,6 +8,12 @@ import {
   recordSignalStarted,
   signalRecordId,
 } from "@/lib/signal-journal";
+import {
+  analysisPeriodForExpiry,
+  formatExpiry,
+  isValidExpirySeconds,
+  lookbackForExpiry,
+} from "@/lib/expiry";
 
 type Group = "fx" | "crypto" | "stock" | "commodity";
 
@@ -19,6 +25,7 @@ type Search = {
   open: number;
   payout: number;
   seconds: number;
+  analysisSeconds: number;
   note: string;
   bars: Array<[number, number, number, number]>;
   ruleScore: number;
@@ -91,6 +98,8 @@ export const Route = createFileRoute("/signal")({
   validateSearch: (search: Record<string, unknown>): Search => {
     const group = groups.has(search.group as Group) ? (search.group as Group) : "fx";
     const direction = search.direction === "put" ? "put" : "call";
+    const parsedSeconds = Number(search.seconds);
+    const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : 60;
     return {
       symbol: typeof search.symbol === "string" ? search.symbol : "",
       name: typeof search.name === "string" ? search.name : "",
@@ -98,7 +107,8 @@ export const Route = createFileRoute("/signal")({
       direction,
       open: Number(search.open) || 0,
       payout: Number(search.payout) || 0,
-      seconds: Number(search.seconds) || 60,
+      seconds,
+      analysisSeconds: analysisPeriodForExpiry(seconds),
       note: typeof search.note === "string" ? search.note : "",
       bars: readBars(search.bars),
       ruleScore: Number(search.ruleScore) || 0,
@@ -143,6 +153,10 @@ function clock(ms: number) {
   const total = Math.ceil(ms / 1000);
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -167,6 +181,7 @@ function SignalRoute() {
 
 function SignalCard({ search }: { search: Search }) {
   const navigate = useNavigate();
+  const lookbackBars = lookbackForExpiry(search.seconds, search.analysisSeconds);
   const [now, setNow] = useState(() => Date.now());
   const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
@@ -198,15 +213,16 @@ function SignalCard({ search }: { search: Search }) {
       openPrice: search.open,
       payout: search.payout,
       seconds: search.seconds,
+      analysisSeconds: search.analysisSeconds,
       step: search.step,
       startedAt: search.started,
       ruleScore: search.ruleScore,
-      strategyVersion: "consensus-filter-v1",
+      strategyVersion: "expiry-adaptive-filter-v1",
       note: search.note,
       bars: search.bars,
     });
     setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
-  }, [journalId, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
+  }, [journalId, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
 
   useEffect(() => {
     if (phase !== "run") return;
@@ -293,7 +309,7 @@ function SignalCard({ search }: { search: Search }) {
     if (phase !== "hunt") return;
     let stop = false;
     const started = Date.now();
-    void takeSignal({ data: { symbol: search.symbol, seconds: search.seconds } })
+    void takeSignal({ data: { symbol: search.symbol, expirySeconds: search.seconds } })
       .then(async (result) => {
         if (!result) {
           if (stop) return;
@@ -315,6 +331,7 @@ function SignalCard({ search }: { search: Search }) {
             open: result.openPrice,
             payout: result.payout,
             seconds: search.seconds,
+            analysisSeconds: result.analysisSeconds,
             note: result.note,
             bars: result.bars,
             ruleScore: result.ruleScore,
@@ -394,11 +411,14 @@ function SignalCard({ search }: { search: Search }) {
           </div>
           <span className="flex shrink-0 flex-col items-end gap-1">
             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-blue-soft">
-              {search.seconds % 60 === 0 ? `${search.seconds / 60} мин` : `${search.seconds} сек`}
+              {formatExpiry(search.seconds)}
             </span>
             {search.step > 0 ? <span className="text-[11px] font-semibold text-dim">{search.step}/3</span> : null}
           </span>
         </div>
+        <p className="mt-3 text-xs leading-relaxed text-dim">
+          Экспирация {formatExpiry(search.seconds)} · свечи анализа {formatExpiry(search.analysisSeconds)} · окно {lookbackBars} свечей
+        </p>
         {phase === "run" || phase === "check" ? (
           <p className="glow-text mt-4 text-center font-mono text-4xl font-bold text-fg sm:text-5xl">{phase === "check" ? "…" : clock(left)}</p>
         ) : null}
@@ -510,7 +530,7 @@ function SignalCard({ search }: { search: Search }) {
         </div>
       ) : null}
 
-      {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={`${Math.round(search.seconds / 60)} мин`} /> : null}
+      {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={formatExpiry(search.seconds)} /> : null}
     </div>
   );
 }

@@ -1,5 +1,11 @@
 import WebSocket from "ws";
 import { assessSignalQuality } from "./signal-quality";
+import {
+  analysisPeriodForExpiry,
+  formatExpiry,
+  isValidExpirySeconds,
+  lookbackForExpiry,
+} from "./expiry";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -22,7 +28,7 @@ export type FeedSignal = {
   payout: number;
   direction: "call" | "put";
   openPrice: number;
-  minutes: number;
+  analysisSeconds: number;
   note: string;
   bars: Array<[number, number, number, number]>;
   ruleScore: number;
@@ -132,7 +138,9 @@ function rsiOf(closes: number[]) {
 function describe(input: {
   direction: "call" | "put";
   agree: boolean;
-  minutes: number;
+  expirySeconds: number;
+  analysisSeconds: number;
+  lookbackBars: number;
   greens: number;
   rsi: number | null;
   smaDelta: number;
@@ -160,17 +168,20 @@ function describe(input: {
     `Диапазон: цена в ${bandWord} трети окна`,
     `Свечи: ${input.greens} бычьих и ${5 - input.greens} медвежьих из последних пяти`,
     `Наклон: ${slopeWord}${input.agree ? ", совпадает со свечами" : ", свечи спорят с наклоном"}`,
-    `Срок ${input.minutes} мин. Вход ${side}: этот сценарий сильнее обратного.`,
+    `Экспирация ${formatExpiry(input.expirySeconds)}. Анализ: свечи ${formatExpiry(input.analysisSeconds)}, окно ${input.lookbackBars} свечей.`,
+    `Вход ${side}: этот сценарий сильнее обратного.`,
   ].join("\n");
 }
 
 function judge(
   candles: Candle[],
-  minutes: number,
+  expirySeconds: number,
+  analysisSeconds: number,
   name: string,
   payout: number,
 ): FeedSignal & { strength: number; approved: boolean } {
-  const last = candles.slice(-12);
+  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
+  const last = candles.slice(-lookbackBars);
   const closes = last.map((candle) => candle.close);
   const count = closes.length;
   let sumX = 0;
@@ -212,12 +223,14 @@ function judge(
     payout,
     direction,
     openPrice: price,
-    minutes,
+    analysisSeconds,
     ruleScore: quality.qualityScore,
     note: describe({
       direction,
       agree,
-      minutes,
+      expirySeconds,
+      analysisSeconds,
+      lookbackBars,
       greens,
       rsi,
       smaDelta: ((price - sma) / (sma || 1)) * 100,
@@ -494,51 +507,61 @@ export async function feedClose(symbol: string) {
   return waitQuote(symbol);
 }
 
-export async function feedSignal(symbol: string, seconds: number): Promise<FeedSignal | null> {
+export async function feedSignal(symbol: string, expirySeconds: number): Promise<FeedSignal | null> {
+  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
   subscribe(symbol);
-  const candles = await loadCandles(symbol, seconds);
+  const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
+  const candles = await loadCandles(symbol, analysisSeconds);
   const pair = pairs.get(symbol);
   if (!pair) throw new Error("Эта пара сейчас недоступна.");
-  if (candles.length < 5) throw new Error("Мало свечей для этого срока.");
-  const judged = judge(candles, Math.round(seconds / 60), pair.name, pair.payout);
+  if (candles.length < lookbackBars) throw new Error("Не удалось получить достаточно свечей для выбранной экспирации.");
+  const judged = judge(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
   if (!judged.approved) return null;
   judged.openPrice = await waitQuote(symbol);
   const { strength: _strength, approved: _approved, ...signal } = judged;
   return signal;
 }
 
-export async function feedBest() {
+export async function feedBest(expirySeconds: number) {
+  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
+  const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
   const ranked = [...pairs.values()]
     .filter((pair) => pair.payout === 92 || pair.payout === 80)
     .sort((a, b) => b.payout - a.payout);
   const live = ranked.filter((pair) => quotes.has(pair.symbol));
   const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
   if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-  let best: { signal: FeedSignal; symbol: string; group: PairGroup; seconds: number; strength: number } | null = null;
+  let best: { signal: FeedSignal; symbol: string; group: PairGroup; strength: number } | null = null;
   let usableHistories = 0;
   for (const pair of pool) {
-    for (const seconds of [60, 120]) {
-      try {
-        const candles = await loadCandles(pair.symbol, seconds);
-        if (candles.length < 5) continue;
-        usableHistories += 1;
-        const judged = judge(candles, seconds / 60, pair.name, pair.payout);
-        if (!judged.approved) continue;
-        if (!best || judged.strength > best.strength) {
-          const { strength, approved: _approved, ...signal } = judged;
-          best = { signal, symbol: pair.symbol, group: pair.group, seconds, strength };
-        }
-      } catch {
-        /* this pair or term did not answer, try the next */
+    try {
+      const candles = await loadCandles(pair.symbol, analysisSeconds);
+      if (candles.length < lookbackBars) continue;
+      usableHistories += 1;
+      const judged = judge(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
+      if (!judged.approved) continue;
+      if (!best || judged.strength > best.strength) {
+        const { strength, approved: _approved, ...signal } = judged;
+        best = { signal, symbol: pair.symbol, group: pair.group, strength };
       }
+    } catch {
+      /* this pair or history interval did not answer, try the next */
     }
   }
   if (!best && usableHistories === 0) {
-    throw new Error("Не удалось загрузить достаточно свечей для проверки. Попробуйте ещё раз.");
+    throw new Error("Не удалось загрузить достаточно свечей для этой экспирации. Попробуйте ещё раз.");
   }
   if (!best) return null;
   best.signal.openPrice = await waitQuote(best.symbol);
-  return { ...best.signal, symbol: best.symbol, group: best.group, seconds: best.seconds };
+  return {
+    ...best.signal,
+    symbol: best.symbol,
+    group: best.group,
+    seconds: expirySeconds,
+    analysisSeconds,
+  };
 }
