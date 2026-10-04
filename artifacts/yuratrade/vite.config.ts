@@ -142,18 +142,20 @@ function authPopupPlugin(): Plugin {
   };
 }
 
-// `0.0.0.0:8080` is the live-preview contract — don't change host/port.
+// Artifact workflows provide PORT; use a local default only for manual runs.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
+const appPort = Number(process.env.PORT ?? "8080");
+
 export default defineConfig(({ command, isPreview }) => ({
   server: {
     host: "0.0.0.0",
-    port: 8080,
+    port: appPort,
     strictPort: true,
   },
   preview: {
-    host: "127.0.0.1",
-    port: 8081,
+    host: "0.0.0.0",
+    port: appPort,
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
