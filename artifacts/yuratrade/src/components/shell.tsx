@@ -47,8 +47,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <span />
       </div>
       <header className="sticky top-0 z-20 border-b border-white/6 bg-bg/55 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-lg items-center gap-2 px-3 sm:h-16 sm:px-4">
-          <BrandName className="text-lg" />
+        <div className="mx-auto flex h-14 max-w-lg items-center gap-1.5 px-3 sm:h-16 sm:gap-2 sm:px-4">
+          <BrandName className="min-w-0 truncate text-[15px] sm:text-lg" />
           <nav className="ml-6 hidden items-center lg:flex">
             {links.map((item) => {
               const on = item.to === "/" ? path === "/" : path.startsWith(item.to);
@@ -59,7 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <Link to="/profile" className="chip on ml-auto max-w-[11rem] truncate text-xs">
+          <Link to="/profile" className="chip on ml-auto max-w-[7.5rem] shrink-0 truncate text-[11px] sm:max-w-[11rem] sm:text-xs">
             {admin ? "Админ" : levelName}
           </Link>
         </div>

@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { assessSignalQuality } from "./signal-quality";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -24,6 +25,7 @@ export type FeedSignal = {
   minutes: number;
   note: string;
   bars: Array<[number, number, number, number]>;
+  ruleScore: number;
 };
 
 type Candle = { open: number; close: number; high: number; low: number };
@@ -162,7 +164,12 @@ function describe(input: {
   ].join("\n");
 }
 
-function judge(candles: Candle[], minutes: number, name: string, payout: number): FeedSignal & { strength: number } {
+function judge(
+  candles: Candle[],
+  minutes: number,
+  name: string,
+  payout: number,
+): FeedSignal & { strength: number; approved: boolean } {
   const last = candles.slice(-12);
   const closes = last.map((candle) => candle.close);
   const count = closes.length;
@@ -188,8 +195,9 @@ function judge(candles: Candle[], minutes: number, name: string, payout: number)
   const average = earlier.reduce((sum, price) => sum + price, 0) / Math.max(1, earlier.length);
   const levelScore = Math.max(-1, Math.min(1, ((closes[count - 1] - average) / range) * 2));
   const score = slopeScore * 0.5 + bodyScore * 0.3 + levelScore * 0.2;
+  const quality = assessSignalQuality(score, slopeScore, bodyScore);
   const direction = score >= 0 ? "call" : "put";
-  const agree = Math.sign(slopeScore || score) === Math.sign(bodyScore || score);
+  const agree = quality.agrees;
   const full = candles.map((candle) => candle.close);
   const price = full[full.length - 1];
   const smaWindow = full.slice(-12);
@@ -205,6 +213,7 @@ function judge(candles: Candle[], minutes: number, name: string, payout: number)
     direction,
     openPrice: price,
     minutes,
+    ruleScore: quality.qualityScore,
     note: describe({
       direction,
       agree,
@@ -216,7 +225,8 @@ function judge(candles: Candle[], minutes: number, name: string, payout: number)
       slope: slopeScore,
     }),
     bars: pack.map((candle) => [cut(candle.open), cut(candle.high), cut(candle.low), cut(candle.close)]),
-    strength: Math.abs(score) * (agree ? 1.2 : 0.75) * (payout / 100),
+    strength: quality.qualityScore,
+    approved: quality.eligible,
   };
 }
 
@@ -484,7 +494,7 @@ export async function feedClose(symbol: string) {
   return waitQuote(symbol);
 }
 
-export async function feedSignal(symbol: string, seconds: number): Promise<FeedSignal> {
+export async function feedSignal(symbol: string, seconds: number): Promise<FeedSignal | null> {
   await ensureFeed();
   subscribe(symbol);
   const candles = await loadCandles(symbol, seconds);
@@ -492,8 +502,9 @@ export async function feedSignal(symbol: string, seconds: number): Promise<FeedS
   if (!pair) throw new Error("Эта пара сейчас недоступна.");
   if (candles.length < 5) throw new Error("Мало свечей для этого срока.");
   const judged = judge(candles, Math.round(seconds / 60), pair.name, pair.payout);
+  if (!judged.approved) return null;
   judged.openPrice = await waitQuote(symbol);
-  const { strength: _strength, ...signal } = judged;
+  const { strength: _strength, approved: _approved, ...signal } = judged;
   return signal;
 }
 
@@ -504,16 +515,19 @@ export async function feedBest() {
     .sort((a, b) => b.payout - a.payout);
   const live = ranked.filter((pair) => quotes.has(pair.symbol));
   const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
-  if (pool.length === 0) throw new Error("Нет пар с выплатой 92% или 80%.");
+  if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
   let best: { signal: FeedSignal; symbol: string; group: PairGroup; seconds: number; strength: number } | null = null;
+  let usableHistories = 0;
   for (const pair of pool) {
     for (const seconds of [60, 120]) {
       try {
         const candles = await loadCandles(pair.symbol, seconds);
         if (candles.length < 5) continue;
+        usableHistories += 1;
         const judged = judge(candles, seconds / 60, pair.name, pair.payout);
+        if (!judged.approved) continue;
         if (!best || judged.strength > best.strength) {
-          const { strength, ...signal } = judged;
+          const { strength, approved: _approved, ...signal } = judged;
           best = { signal, symbol: pair.symbol, group: pair.group, seconds, strength };
         }
       } catch {
@@ -521,7 +535,10 @@ export async function feedBest() {
       }
     }
   }
-  if (!best) throw new Error("Не удалось выбрать пару. Попробуйте ещё раз.");
+  if (!best && usableHistories === 0) {
+    throw new Error("Не удалось загрузить достаточно свечей для проверки. Попробуйте ещё раз.");
+  }
+  if (!best) return null;
   best.signal.openPrice = await waitQuote(best.symbol);
   return { ...best.signal, symbol: best.symbol, group: best.group, seconds: best.seconds };
 }

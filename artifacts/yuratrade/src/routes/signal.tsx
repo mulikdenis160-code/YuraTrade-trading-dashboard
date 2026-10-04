@@ -3,6 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { AnalysisModal } from "@/components/analysis-modal";
 import { PairMark } from "@/components/pair-mark";
 import { readClose, takeSignal } from "@/lib/pocket-live";
+import {
+  recordSignalOutcome,
+  recordSignalStarted,
+  signalRecordId,
+} from "@/lib/signal-journal";
 
 type Group = "fx" | "crypto" | "stock" | "commodity";
 
@@ -16,6 +21,7 @@ type Search = {
   seconds: number;
   note: string;
   bars: Array<[number, number, number, number]>;
+  ruleScore: number;
   step: number;
   started: number;
 };
@@ -95,6 +101,7 @@ export const Route = createFileRoute("/signal")({
       seconds: Number(search.seconds) || 60,
       note: typeof search.note === "string" ? search.note : "",
       bars: readBars(search.bars),
+      ruleScore: Number(search.ruleScore) || 0,
       step: Math.min(3, Math.max(0, Number(search.step) || 0)),
       started: Number(search.started) || Date.now(),
     };
@@ -161,18 +168,45 @@ function SignalRoute() {
 function SignalCard({ search }: { search: Search }) {
   const navigate = useNavigate();
   const [now, setNow] = useState(() => Date.now());
-  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop">("run");
+  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
   const [close, setClose] = useState<number | null>(null);
   const [prepLeft, setPrepLeft] = useState(10);
   const [error, setError] = useState("");
+  const [journalWarning, setJournalWarning] = useState("");
   const [live, setLive] = useState<number | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [liveMessage, setLiveMessage] = useState("");
   const settled = useRef(false);
+  const journalId = signalRecordId({
+    symbol: search.symbol,
+    startedAt: search.started,
+    step: search.step,
+  });
   const until = search.started + search.seconds * 1000;
   const left = Math.max(0, until - now);
   const up = search.direction === "call";
+
+  useEffect(() => {
+    if (!search.symbol || !search.open) return;
+    const saved = recordSignalStarted({
+      id: journalId,
+      symbol: search.symbol,
+      name: search.name,
+      group: search.group,
+      direction: search.direction,
+      openPrice: search.open,
+      payout: search.payout,
+      seconds: search.seconds,
+      step: search.step,
+      startedAt: search.started,
+      ruleScore: search.ruleScore,
+      strategyVersion: "consensus-filter-v1",
+      note: search.note,
+      bars: search.bars,
+    });
+    setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
+  }, [journalId, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
 
   useEffect(() => {
     if (phase !== "run") return;
@@ -225,11 +259,13 @@ function SignalCard({ search }: { search: Search }) {
         const entry = Number(search.open.toFixed(digits));
         const finish = Number(quote.close.toFixed(digits));
         const move = finish === entry ? 0 : finish > entry ? 1 : -1;
+        const won = up ? move > 0 : move < 0;
+        const saved = recordSignalOutcome(journalId, quote.close, move === 0 ? "draw" : won ? "win" : "loss");
+        if (!saved) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
         if (move === 0) {
           setPhase("draw");
           return;
         }
-        const won = up ? move > 0 : move < 0;
         setPhase(won ? "win" : search.step >= 3 ? "stop" : "prep");
       })
       .catch((cause: unknown) => {
@@ -259,6 +295,12 @@ function SignalCard({ search }: { search: Search }) {
     const started = Date.now();
     void takeSignal({ data: { symbol: search.symbol, seconds: search.seconds } })
       .then(async (result) => {
+        if (!result) {
+          if (stop) return;
+          setPhase("no-signal");
+          setError("");
+          return;
+        }
         const wait = Math.max(0, 2200 - (Date.now() - started));
         await new Promise((resolve) => window.setTimeout(resolve, wait));
         if (stop) return;
@@ -275,6 +317,7 @@ function SignalCard({ search }: { search: Search }) {
             seconds: search.seconds,
             note: result.note,
             bars: result.bars,
+            ruleScore: result.ruleScore,
             step: search.step + 1,
             started: Date.now(),
           },
@@ -299,10 +342,30 @@ function SignalCard({ search }: { search: Search }) {
     );
   }
 
+  if (phase === "no-signal") {
+    return (
+      <div className="mx-auto w-full max-w-md">
+        <BackLink />
+        <section className="panel arrive mt-3 px-4 py-8 text-center sm:px-6">
+          <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">Вход пропущен</p>
+          <h1 className="mt-3 text-xl font-bold text-fg">Новый сигнал не подтверждён</h1>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted">
+            Фильтр не подтвердил повторный вход по этой паре. Новый сигнал не выдан; предыдущий результат сохранён в журнале.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link to="/history" className="btn-ghost min-h-11 justify-center">Открыть историю</Link>
+            <Link to="/" className="btn-prime min-h-11 justify-center">К сигналам</Link>
+          </div>
+          {journalWarning ? <p className="mt-4 text-xs leading-relaxed text-loss" role="status">{journalWarning}</p> : null}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-md">
       <BackLink />
-      <article className="panel arrive mt-3 p-4 sm:p-5">
+      <article className="panel arrive mt-3 p-3 sm:p-5">
         <div className="flex items-center gap-3">
           <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-[#10151f]">
             <PairMark symbol={search.symbol} name={search.name} group={search.group} />
@@ -315,7 +378,7 @@ function SignalCard({ search }: { search: Search }) {
               </p>
               <button
                 type="button"
-                className="press shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-blue-soft"
+                className="press min-h-10 shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-blue-soft"
                 onClick={() => {
                   void copyName(search.name)
                     .then(() => {
@@ -354,11 +417,11 @@ function SignalCard({ search }: { search: Search }) {
         <dl className="mt-4 grid grid-cols-2 gap-3">
           <div>
             <dt className="text-xs text-dim">Цена входа</dt>
-            <dd className="mt-1 font-mono text-2xl font-bold text-fg">{search.open.toFixed(digitsOf(search.open))}</dd>
+            <dd className="mt-1 font-mono text-xl font-bold text-fg sm:text-2xl">{search.open.toFixed(digitsOf(search.open))}</dd>
           </div>
           <div>
             <dt className="text-xs text-dim">Выплата</dt>
-            <dd className="mt-1 font-mono text-2xl font-bold text-fg">{search.payout}%</dd>
+            <dd className="mt-1 font-mono text-xl font-bold text-fg sm:text-2xl">{search.payout}%</dd>
           </div>
         </dl>
         {phase === "run" || phase === "check" ? (
@@ -389,6 +452,7 @@ function SignalCard({ search }: { search: Search }) {
           </div>
         ) : null}
         {error ? <p className="mt-3 text-sm text-loss">{error}</p> : null}
+        {journalWarning ? <p className="mt-3 text-xs leading-relaxed text-loss" role="status">{journalWarning}</p> : null}
       </article>
 
       {phase === "win" && close !== null ? (
