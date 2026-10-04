@@ -156,6 +156,7 @@ export default defineConfig(({ command, isPreview }) => ({
   },
   preview: {
     host: "0.0.0.0",
+    allowedHosts: ["vlados-trade-trading-dashboard.replit.app"],
     port: appPort,
     strictPort: true,
   },
