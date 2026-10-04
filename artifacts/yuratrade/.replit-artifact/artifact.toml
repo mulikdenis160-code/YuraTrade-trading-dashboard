@@ -16,12 +16,17 @@ run = "pnpm --filter @workspace/yuratrade run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/yuratrade", "run", "build" ]
-serve = "static"
-publicDir = "artifacts/yuratrade/dist/public"
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.run]
+args = [ "pnpm", "--filter", "@workspace/yuratrade", "run", "serve" ]
+
+[services.production.run.env]
+PORT = "18682"
+BASE_PATH = "/"
+NODE_ENV = "production"
+
+[services.production.health.startup]
+path = "/"
 
 [services.env]
 PORT = "18682"
