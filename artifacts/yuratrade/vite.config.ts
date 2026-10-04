@@ -150,6 +150,7 @@ const appPort = Number(process.env.PORT ?? "8080");
 export default defineConfig(({ command, isPreview }) => ({
   server: {
     host: "0.0.0.0",
+    allowedHosts: [".replit.dev"],
     port: appPort,
     strictPort: true,
   },

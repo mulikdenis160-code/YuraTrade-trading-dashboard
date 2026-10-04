@@ -1,1 +1,1 @@
-- [Market data feed](market-data-feed.md) — live quotes are needed for signal generation; confirm a provider and use fresh secret authorization.
+- [Market data feed](market-data-feed.md) — the user chose Pocket Option quotes; keep authorization in Secrets and the feed read-only.
