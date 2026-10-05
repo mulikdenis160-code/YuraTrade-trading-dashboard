@@ -369,17 +369,26 @@ function SignalCard({ search }: { search: Search }) {
     return (
       <div className="mx-auto w-full max-w-md">
         <BackLink />
-        <section className="panel arrive mt-3 px-4 py-8 text-center sm:px-6">
-          <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("common.skipEntry")}</p>
-          <h1 className="mt-3 text-xl font-bold text-fg">{t("common.notConfirmed")}</h1>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted">
-            {error || t("common.skipReason")}
-          </p>
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Link to="/history" className="btn-ghost min-h-11 justify-center">{t("common.openHistory")}</Link>
-            <Link to="/" className="btn-prime min-h-11 justify-center">{t("common.toSignals")}</Link>
+        <section className="panel arrive mt-3 overflow-hidden rounded-3xl border border-blue/25 bg-[#0e1420] p-0 text-left shadow-[0_18px_50px_rgba(0,0,0,0.24)]">
+          <div className="flex items-start gap-3 border-b border-white/6 bg-gradient-to-r from-blue/10 to-transparent p-4 sm:p-5">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-blue/25 bg-blue/10 text-blue-soft">
+              <svg viewBox="0 0 24 24" fill="none" className="size-5" aria-hidden="true">
+                <path d="M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold tracking-[0.16em] text-blue-soft uppercase">{t("common.skipEntry")}</p>
+              <h1 className="mt-1 text-lg font-bold leading-snug text-fg sm:text-xl">{t("common.notConfirmed")}</h1>
+              <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-muted">
+                {error || t("common.skipReason")}
+              </p>
+            </div>
           </div>
-          {journalWarning ? <p className="mt-4 text-xs leading-relaxed text-loss" role="status">{journalWarning}</p> : null}
+          <div className="flex flex-col gap-2 p-4 sm:flex-row sm:p-5">
+            <Link to="/history" className="btn-ghost min-h-11 flex-1 justify-center">{t("common.openHistory")}</Link>
+            <Link to="/" className="btn-prime min-h-11 flex-1 justify-center">{t("common.toSignals")}</Link>
+          </div>
+          {journalWarning ? <p className="mx-4 mb-4 rounded-xl border border-loss/25 bg-loss/5 p-3 text-xs leading-relaxed text-loss sm:mx-5" role="status">{journalWarning}</p> : null}
         </section>
       </div>
     );

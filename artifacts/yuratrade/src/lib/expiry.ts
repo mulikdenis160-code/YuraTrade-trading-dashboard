@@ -3,6 +3,25 @@ export const MAX_EXPIRY_MINUTES = 240;
 export const MIN_EXPIRY_SECONDS = MIN_EXPIRY_MINUTES * 60;
 export const MAX_EXPIRY_SECONDS = MAX_EXPIRY_MINUTES * 60;
 export const ANALYSIS_PERIODS_SECONDS = [60, 180, 300, 900] as const;
+export const EXPIRY_OPTIONS_MINUTES = [1, 2, 3, 5, 10, 15, 25, 30, 60, 120, 180, 240] as const;
+
+export function alternativeExpiryMinutes(currentMinutes: number) {
+  const currentPeriod = analysisPeriodForExpiry(currentMinutes * 60);
+  const otherOptions = [...EXPIRY_OPTIONS_MINUTES]
+    .filter((minutes) => minutes !== currentMinutes)
+    .sort((a, b) => Math.abs(a - currentMinutes) - Math.abs(b - currentMinutes) || a - b);
+  const samePeriod = otherOptions.find(
+    (minutes) => analysisPeriodForExpiry(minutes * 60) === currentPeriod,
+  );
+  const differentPeriod = otherOptions.find(
+    (minutes) => analysisPeriodForExpiry(minutes * 60) !== currentPeriod,
+  );
+
+  const alternatives: number[] = [];
+  if (samePeriod !== undefined) alternatives.push(samePeriod);
+  if (differentPeriod !== undefined && differentPeriod !== samePeriod) alternatives.push(differentPeriod);
+  return alternatives;
+}
 
 export function isValidExpirySeconds(value: number): boolean {
   return (

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analysisPeriodForExpiry,
+  alternativeExpiryMinutes,
   formatExpiry,
   isValidExpirySeconds,
   lookbackForExpiry,
@@ -23,6 +24,13 @@ test("analysis candle interval scales with the selected expiration", () => {
   assert.equal(analysisPeriodForExpiry(60 * 60), 300);
   assert.equal(analysisPeriodForExpiry(61 * 60), 900);
   assert.equal(analysisPeriodForExpiry(4 * 60 * 60), 900);
+});
+
+test("alternative expirations include the nearest same- and different-candle periods", () => {
+  assert.deepEqual(alternativeExpiryMinutes(1), [2, 10]);
+  assert.deepEqual(alternativeExpiryMinutes(5), [3, 10]);
+  assert.deepEqual(alternativeExpiryMinutes(10), [15, 5]);
+  assert.deepEqual(alternativeExpiryMinutes(240), [180, 60]);
 });
 
 test("lookback grows for longer expirations and labels hours clearly", () => {

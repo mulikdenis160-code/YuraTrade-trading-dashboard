@@ -4,7 +4,17 @@ import { useLanguage } from "@/lib/language";
 
 const lines = ["modal.step1", "modal.step2", "modal.step3"] as const;
 
-export function AnalysisModal({ pair, expiry }: { pair: string; expiry: string }) {
+export function AnalysisModal({
+  pair,
+  expiry,
+  title,
+  description,
+}: {
+  pair: string;
+  expiry: string;
+  title?: string;
+  description?: string;
+}) {
   const { t } = useLanguage();
   const [line, setLine] = useState(0);
 
@@ -29,8 +39,8 @@ export function AnalysisModal({ pair, expiry }: { pair: string; expiry: string }
             ))}
           </div>
         </div>
-        <h2 className="mt-6 text-2xl font-bold text-fg">{t("modal.title")}</h2>
-        <p className="mt-2 min-h-10 text-sm text-muted">{t(lines[line])}</p>
+        <h2 className="mt-6 text-2xl font-bold text-fg">{title ?? t("modal.title")}</h2>
+        <p className="mt-2 min-h-10 text-sm leading-relaxed text-muted">{description ?? t(lines[line])}</p>
       </div>
     </div>,
     document.body,

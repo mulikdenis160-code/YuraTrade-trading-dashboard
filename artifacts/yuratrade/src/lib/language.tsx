@@ -74,6 +74,53 @@ const copy = {
   "signal.checking": ["Проверяем пары…", "Перевіряємо пари…", "Checking pairs…"],
   "signal.searchFailed": ["Не удалось завершить поиск", "Не вдалося завершити пошук", "Signal search could not be completed"],
   "signal.tryAgain": ["Искать ещё раз", "Шукати ще раз", "Search again"],
+  "signal.noSignalAtExpiry": [
+    "На экспирации {expiry} ИИ не нашёл достаточно ясного сигнала. Направление не выдумываем.",
+    "На експірації {expiry} ШІ не знайшов достатньо чіткого сигналу. Напрямок не вигадуємо.",
+    "The AI found no clear signal for the {expiry} expiry. No direction was guessed.",
+  ],
+  "signal.reason": ["Почему сигнал не выдан", "Чому сигнал не надано", "Why no signal was issued"],
+  "signal.alternativeSearchKicker": [
+    "БЛИЖАЙШИЕ ЭКСПИРАЦИИ",
+    "НАЙБЛИЖЧІ ЕКСПІРАЦІЇ",
+    "NEARBY EXPIRIES",
+  ],
+  "signal.alternativesChecking": [
+    "Проверяем другие экспирации",
+    "Перевіряємо інші експірації",
+    "Checking other expiries",
+  ],
+  "signal.alternativesCheckingBody": [
+    "Проверяем ближайшие сроки. Покажем только варианты, где ИИ действительно выбрал пару и направление.",
+    "Перевіряємо найближчі строки. Покажемо лише варіанти, де ШІ справді обрав пару та напрямок.",
+    "Checking nearby durations. Only options where the AI actually selected a pair and direction will be shown.",
+  ],
+  "signal.alternativesFound": [
+    "Сигнал найден на другой экспирации",
+    "Сигнал знайдено на іншій експірації",
+    "A signal was found at another expiry",
+  ],
+  "signal.alternativesFoundBody": [
+    "Выберите срок, чтобы показать пару. Перед выдачей направления ИИ проверит её ещё раз.",
+    "Оберіть строк, щоб показати пару. Перед видачею напрямку ШІ перевірить її ще раз.",
+    "Choose an expiry to reveal the pair. The AI will check it again before issuing a direction.",
+  ],
+  "signal.alternativePayout": ["Выплата {payout}%", "Виплата {payout}%", "{payout}% payout"],
+  "signal.alternativeChoose": [
+    "Выбрать срок и показать пару",
+    "Обрати строк і показати пару",
+    "Choose expiry and reveal pair",
+  ],
+  "signal.alternativesNone": [
+    "На проверенных сроках ясных сигналов тоже нет. Выберите другую экспирацию и запустите новый поиск.",
+    "На перевірених строках чітких сигналів також немає. Оберіть іншу експірацію та запустіть новий пошук.",
+    "No clear signals were found at the checked expiries either. Choose another expiry and search again.",
+  ],
+  "signal.alternativesPartial": [
+    "Не все другие экспирации удалось проверить: {error}",
+    "Не всі інші експірації вдалося перевірити: {error}",
+    "Some alternative expiries could not be checked: {error}",
+  ],
   "signal.get": ["Получить сигнал", "Отримати сигнал", "Get a signal"],
   "signal.noLimit": ["Без лимита", "Без ліміту", "No limit"],
   "signal.pairReady": ["Пара выбрана", "Пару вибрано", "Pair selected"],
