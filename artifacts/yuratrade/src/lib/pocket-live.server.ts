@@ -490,16 +490,23 @@ export async function feedBest(expirySeconds: number) {
   const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
   if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
   const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
+  let historyResponses = 0;
+  let historyFailure = "";
   for (const pair of pool) {
     try {
       const candles = await loadCandles(pair.symbol, analysisSeconds);
+      historyResponses += 1;
       if (candles.length < MIN_DIRECT_AI_CANDLES) continue;
       candidates.push({ pair, candles });
-    } catch {
+    } catch (cause) {
+      if (cause instanceof Error) historyFailure = cause.message;
       // Continue to another pair if its history request fails.
     }
   }
   if (candidates.length === 0) {
+    if (historyResponses === 0 && historyFailure) {
+      throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
+    }
     throw new Error(`Не удалось получить по Pocket Option минимум ${MIN_DIRECT_AI_CANDLES} исторических свечей ни для одной пары.`);
   }
   const review = await analyzeMarketCandidates(

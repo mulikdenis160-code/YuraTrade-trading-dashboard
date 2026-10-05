@@ -85,9 +85,9 @@ const copy = {
   "signal.countdownUnit": ["до сигнала", "до сигналу", "until the signal"],
   "signal.finalizing": ["Проверяем вход…", "Перевіряємо вхід…", "Checking the entry…"],
   "signal.pairNoLongerReady": [
-    "При повторном анализе ИИ больше не выбрал эту пару. Получите новый сигнал.",
-    "Під час повторного аналізу ШІ більше не обрав цю пару. Запросіть новий сигнал.",
-    "The AI selected a different pair on reanalysis. Request a new signal.",
+    "При повторном анализе ИИ не подтвердил направление по этой паре. Получите новый сигнал.",
+    "Під час повторного аналізу ШІ не підтвердив напрямок для цієї пари. Запросіть новий сигнал.",
+    "The AI did not confirm a direction for this pair on reanalysis. Request a new signal.",
   ],
   "ai.title": ["ИИ выбрал направление", "ШІ обрав напрямок", "AI-selected direction"],
   "ai.explanation": [

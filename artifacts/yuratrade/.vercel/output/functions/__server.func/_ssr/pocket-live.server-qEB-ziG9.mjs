@@ -2,7 +2,7 @@ import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, r as formatExp
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as OpenAI } from "../_libs/openai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CB4zwfCI.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-qEB-ziG9.js
 var DIRECT_AI_MODEL = "gpt-6-astra";
 var signalReviewSchema = object({
 	decision: literal("signal"),
@@ -10,18 +10,18 @@ var signalReviewSchema = object({
 	direction: _enum(["call", "put"]),
 	confidence: number().int().min(0).max(100),
 	explanation: object({
-		pairSelection: string().trim().min(1).max(240),
-		candleEvidence: string().trim().min(1).max(300),
-		directionRationale: string().trim().min(1).max(240),
-		riskFactors: string().trim().min(1).max(240),
-		invalidation: string().trim().min(1).max(240)
-	}).strict()
-}).strict();
+		pairSelection: string().trim().min(1).max(1200),
+		candleEvidence: string().trim().min(1).max(1200),
+		directionRationale: string().trim().min(1).max(1200),
+		riskFactors: string().trim().min(1).max(1200),
+		invalidation: string().trim().min(1).max(1200)
+	})
+});
 var passReviewSchema = object({
 	decision: literal("pass"),
-	reason: string().trim().min(1).max(220)
-}).strict();
-var reviewSchema = discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
+	reason: string().trim().min(1).max(1200)
+});
+discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
 var client = null;
 function getOpenAiClient() {
 	const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
@@ -29,9 +29,129 @@ function getOpenAiClient() {
 	if (!apiKey || !baseURL) throw new Error("Подключение OpenAI не настроено. Сигнал не выдан.");
 	if (!client) client = new OpenAI({
 		apiKey,
-		baseURL
+		baseURL,
+		timeout: 45e3,
+		maxRetries: 1
 	});
 	return client;
+}
+function isRecord(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function firstString(source, keys) {
+	for (const key of keys) {
+		const value = source[key];
+		if (typeof value === "string" && value.trim()) return value.trim();
+	}
+	return "";
+}
+function firstValue(source, keys) {
+	for (const key of keys) {
+		const value = source[key];
+		if (value !== void 0 && value !== null) return value;
+	}
+}
+function decodeJsonContent(content) {
+	const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+	try {
+		return JSON.parse(cleaned);
+	} catch {
+		const start = cleaned.indexOf("{");
+		const end = cleaned.lastIndexOf("}");
+		if (start < 0 || end <= start) return null;
+		try {
+			return JSON.parse(cleaned.slice(start, end + 1));
+		} catch {
+			return null;
+		}
+	}
+}
+function normalizeDirection(value) {
+	if (typeof value !== "string") return null;
+	const token = value.trim().toLowerCase().split(/[\s(/_-]+/u)[0];
+	if ([
+		"call",
+		"up",
+		"buy",
+		"higher",
+		"bullish",
+		"long",
+		"вверх",
+		"покупка"
+	].includes(token)) return "call";
+	if ([
+		"put",
+		"down",
+		"sell",
+		"lower",
+		"bearish",
+		"short",
+		"вниз",
+		"продажа"
+	].includes(token)) return "put";
+	return null;
+}
+function normalizeConfidence(value) {
+	const raw = typeof value === "string" ? Number(value.trim().replace(/%$/, "")) : value;
+	if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 100) return null;
+	const score = raw > 0 && raw <= 1 ? raw * 100 : raw;
+	return Math.round(score);
+}
+function matchAllowedSymbol(value, allowedSymbols) {
+	if (typeof value !== "string" || !value.trim()) return null;
+	const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+	const matches = allowedSymbols.filter((symbol) => symbol.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized);
+	return matches.length === 1 ? matches[0] : null;
+}
+function normalizeExplanation(value, root) {
+	const source = isRecord(value) ? value : {};
+	const general = typeof value === "string" ? value.trim() : firstString(root, [
+		"analysis",
+		"reasoning",
+		"rationale",
+		"summary",
+		"reason"
+	]);
+	const missing = "ИИ не предоставил отдельное пояснение для этого пункта.";
+	const pairSelection = firstString(source, [
+		"pairSelection",
+		"pair_selection",
+		"pairReason",
+		"pair_reason"
+	]).slice(0, 1200);
+	const candleEvidence = firstString(source, [
+		"candleEvidence",
+		"candle_evidence",
+		"evidence",
+		"candleAnalysis",
+		"candle_analysis"
+	]).slice(0, 1200);
+	const directionRationale = firstString(source, [
+		"directionRationale",
+		"direction_rationale",
+		"rationale",
+		"directionReason",
+		"direction_reason"
+	]).slice(0, 1200) || general.slice(0, 1200);
+	const riskFactors = firstString(source, [
+		"riskFactors",
+		"risk_factors",
+		"risks",
+		"risk"
+	]).slice(0, 1200);
+	const invalidation = firstString(source, [
+		"invalidation",
+		"invalidationCondition",
+		"invalidation_condition",
+		"invalidationSignal"
+	]).slice(0, 1200);
+	return Boolean(pairSelection || candleEvidence || directionRationale || riskFactors || invalidation) ? {
+		pairSelection: pairSelection || missing,
+		candleEvidence: candleEvidence || missing,
+		directionRationale: directionRationale || missing,
+		riskFactors: riskFactors || missing,
+		invalidation: invalidation || missing
+	} : null;
 }
 function candlesInBasisPoints(candles) {
 	const start = Math.max(0, candles.length - 128);
@@ -52,25 +172,155 @@ function candlesInBasisPoints(candles) {
 	return result;
 }
 function parseMarketAiReview(content, allowedSymbols) {
-	let decoded;
-	try {
-		decoded = JSON.parse(content);
-	} catch {
-		return null;
+	const decoded = decodeJsonContent(content);
+	if (!isRecord(decoded)) return null;
+	const root = isRecord(decoded.result) ? decoded.result : isRecord(decoded.data) ? decoded.data : decoded;
+	const decision = firstString(root, [
+		"decision",
+		"status",
+		"type"
+	]).toLowerCase();
+	if ([
+		"pass",
+		"abstain",
+		"no_signal",
+		"no-signal",
+		"none"
+	].includes(decision)) {
+		const parsedPass = passReviewSchema.safeParse({
+			decision: "pass",
+			reason: (firstString(root, [
+				"reason",
+				"message",
+				"explanation"
+			]) || "ИИ не выбрал направление.").slice(0, 1200)
+		});
+		return parsedPass.success ? parsedPass.data : null;
 	}
-	const parsed = reviewSchema.safeParse(decoded);
-	if (!parsed.success) return null;
-	if (parsed.data.decision === "signal" && !allowedSymbols.includes(parsed.data.symbol)) return null;
-	return parsed.data;
+	const direction = normalizeDirection(firstValue(root, [
+		"direction",
+		"side",
+		"action",
+		"signal"
+	]) ?? decision);
+	if (!direction) return null;
+	if (decision && ![
+		"signal",
+		"trade",
+		"call",
+		"put",
+		"buy",
+		"sell",
+		"up",
+		"down",
+		"long",
+		"short",
+		"вверх",
+		"вниз"
+	].includes(decision)) return null;
+	const rawSymbol = firstValue(root, [
+		"symbol",
+		"pair",
+		"asset",
+		"ticker"
+	]);
+	const symbol = rawSymbol === void 0 && allowedSymbols.length === 1 ? allowedSymbols[0] : matchAllowedSymbol(rawSymbol, allowedSymbols);
+	const confidence = normalizeConfidence(firstValue(root, [
+		"confidence",
+		"confidenceScore",
+		"confidence_score",
+		"certainty"
+	]));
+	if (!symbol || confidence === null) return null;
+	const explanation = normalizeExplanation(firstValue(root, [
+		"explanation",
+		"analysis",
+		"reasoning"
+	]), root);
+	if (!explanation) return null;
+	const parsed = signalReviewSchema.safeParse({
+		decision: "signal",
+		symbol,
+		direction,
+		confidence,
+		explanation
+	});
+	return parsed.success ? parsed.data : null;
 }
 function acceptsMarketAiReview(review, allowedSymbols) {
 	return review?.decision === "signal" && allowedSymbols.includes(review.symbol);
 }
+function isValidCandle(candle) {
+	return Number.isFinite(candle.time) && Number.isFinite(candle.open) && Number.isFinite(candle.high) && Number.isFinite(candle.low) && Number.isFinite(candle.close) && candle.time > 0 && candle.open > 0 && candle.high > 0 && candle.low > 0 && candle.close > 0 && candle.high >= candle.low && candle.high >= Math.max(candle.open, candle.close) && candle.low <= Math.min(candle.open, candle.close);
+}
+function marketAiApiErrorMessage(error) {
+	if (error instanceof Error && error.message.includes("Подключение OpenAI не настроено")) return error.message;
+	const status = isRecord(error) ? Number(error.status ?? error.statusCode) : NaN;
+	const name = error instanceof Error ? error.name.toLowerCase() : "";
+	if (status === 401 || status === 403) return "OpenAI отклонил подключение. Проверьте настройки подключения; сигнал не выдан.";
+	if (status === 429) return "OpenAI временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
+	if (status === 408 || status === 504 || name.includes("timeout")) return "Анализ OpenAI занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
+	if (status === 400) return "OpenAI отклонил формат запроса. Попробуйте ещё раз; если ошибка повторится, проверьте настройку модели.";
+	if (status === 404) return "Модель OpenAI сейчас недоступна. Попробуйте ещё раз позже.";
+	if (status >= 500 || name.includes("connection")) return "Сервис OpenAI временно недоступен. Попробуйте ещё раз через минуту.";
+	return "Не удалось завершить анализ OpenAI. Попробуйте ещё раз; сигнал не выдан.";
+}
+function requestMarketAiCompletion(messages) {
+	return getOpenAiClient().chat.completions.create({
+		model: DIRECT_AI_MODEL,
+		max_completion_tokens: 8192,
+		response_format: { type: "json_object" },
+		messages
+	});
+}
+async function requestMarketAiReviewWithRepair(request, baseMessages, allowedSymbols) {
+	let firstChoice;
+	try {
+		firstChoice = (await request(baseMessages)).choices[0];
+	} catch (error) {
+		throw new Error(marketAiApiErrorMessage(error));
+	}
+	const firstContent = firstChoice?.message.content;
+	const firstReview = typeof firstContent === "string" ? parseMarketAiReview(firstContent, allowedSymbols) : null;
+	if (firstReview) return firstReview;
+	if (firstChoice?.message.refusal) throw new Error("OpenAI отказался выполнить анализ. Сигнал не выдан.");
+	const repairMessages = [
+		...baseMessages,
+		...typeof firstContent === "string" && firstContent ? [{
+			role: "assistant",
+			content: firstContent.slice(0, 16e3)
+		}] : [],
+		{
+			role: "user",
+			content: "Предыдущий ответ нельзя проверить. Повтори анализ и верни один корректный JSON-объект по заданному формату. Используй точный symbol из списка, направление call или put, числовую confidence от 0 до 100 и все пять полей explanation. Не добавляй факты, которых нет в свечах."
+		}
+	];
+	let retryChoice;
+	try {
+		retryChoice = (await request(repairMessages)).choices[0];
+	} catch (error) {
+		throw new Error(marketAiApiErrorMessage(error));
+	}
+	const retryContent = retryChoice?.message.content;
+	const retryReview = typeof retryContent === "string" ? parseMarketAiReview(retryContent, allowedSymbols) : null;
+	if (retryReview) return retryReview;
+	if (retryChoice?.message.refusal) throw new Error("OpenAI отказался выполнить анализ повторно. Сигнал не выдан.");
+	if (firstChoice?.finish_reason === "length" || retryChoice?.finish_reason === "length") throw new Error("OpenAI оборвал ответ по лимиту длины. Повторите запрос; сигнал не выдан.");
+	if (typeof firstContent !== "string" && typeof retryContent !== "string") throw new Error("OpenAI не вернул текст анализа после повторного запроса. Сигнал не выдан.");
+	throw new Error("OpenAI дважды вернул ответ, который не удалось проверить. Повторите запрос; сигнал не выдан.");
+}
 async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates) {
-	const eligibleCandidates = candidates.filter((candidate) => candidate.candles.length >= 30);
+	const eligibleCandidates = candidates.map((candidate) => {
+		const candlesByTime = /* @__PURE__ */ new Map();
+		for (const candle of candidate.candles) if (isValidCandle(candle)) candlesByTime.set(candle.time, candle);
+		return {
+			...candidate,
+			candles: [...candlesByTime.values()].sort((a, b) => a.time - b.time)
+		};
+	}).filter((candidate) => candidate.candles.length >= 30);
 	if (eligibleCandidates.length === 0) return {
 		decision: "pass",
-		reason: `Нужно не менее 30 свечей на пару.`
+		reason: `После проверки данных нужно не менее 30 корректных свечей на пару.`
 	};
 	const input = {
 		expirySeconds,
@@ -82,26 +332,15 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates)
 			candles: candlesInBasisPoints(candidate.candles)
 		}))
 	};
-	let content;
-	try {
-		content = (await getOpenAiClient().chat.completions.create({
-			model: DIRECT_AI_MODEL,
-			max_completion_tokens: 8192,
-			response_format: { type: "json_object" },
-			messages: [{
-				role: "system",
-				content: "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT. Не используй отдельный классификатор, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр. Если есть не менее 30 корректных свечей, сравни доступные пары и выбери наиболее обоснованную пару и направление; возвращай pass только если данные некорректны или недостаточны для анализа. Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки. Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены. Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}."
-			}, {
-				role: "user",
-				content: JSON.stringify(input)
-			}]
-		})).choices[0]?.message?.content;
-	} catch {
-		throw new Error("OpenAI не смог завершить анализ. Сигнал не выдан.");
-	}
-	const review = content ? parseMarketAiReview(content, eligibleCandidates.map((candidate) => candidate.symbol)) : null;
-	if (!review) throw new Error("OpenAI вернул некорректный анализ. Сигнал не выдан.");
-	return review;
+	const systemPrompt = "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT. Не используй отдельный классификатор, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр. Если есть не менее 30 корректных свечей, сравни доступные пары и выбери наиболее обоснованную пару и направление; возвращай pass только если данные некорректны или недостаточны для анализа. Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки. Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены. Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.";
+	const userPrompt = JSON.stringify(input);
+	return requestMarketAiReviewWithRepair(requestMarketAiCompletion, [{
+		role: "system",
+		content: systemPrompt
+	}, {
+		role: "user",
+		content: userPrompt
+	}], eligibleCandidates.map((candidate) => candidate.symbol));
 }
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -520,15 +759,23 @@ async function feedBest(expirySeconds) {
 	const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
 	if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
 	const candidates = [];
+	let historyResponses = 0;
+	let historyFailure = "";
 	for (const pair of pool) try {
 		const candles = await loadCandles(pair.symbol, analysisSeconds);
+		historyResponses += 1;
 		if (candles.length < 30) continue;
 		candidates.push({
 			pair,
 			candles
 		});
-	} catch {}
-	if (candidates.length === 0) throw new Error(`Не удалось получить по Pocket Option минимум 30 исторических свечей ни для одной пары.`);
+	} catch (cause) {
+		if (cause instanceof Error) historyFailure = cause.message;
+	}
+	if (candidates.length === 0) {
+		if (historyResponses === 0 && historyFailure) throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
+		throw new Error(`Не удалось получить по Pocket Option минимум 30 исторических свечей ни для одной пары.`);
+	}
 	const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, candidates.map((candidate) => ({
 		symbol: candidate.pair.symbol,
 		name: candidate.pair.name,
