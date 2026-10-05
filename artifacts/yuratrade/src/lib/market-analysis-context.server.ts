@@ -61,6 +61,9 @@ function isValidCandle(candle: MarketCandle) {
     Number.isFinite(candle.close) &&
     candle.time > 0 &&
     candle.open > 0 &&
+    candle.high > 0 &&
+    candle.low > 0 &&
+    candle.close > 0 &&
     candle.high >= candle.low &&
     candle.high >= Math.max(candle.open, candle.close) &&
     candle.low <= Math.min(candle.open, candle.close)
@@ -73,6 +76,10 @@ function round(value: number): number | null {
 
 function basisPoints(value: number, base: number) {
   return base > 0 ? round(((value / base) - 1) * 10_000) : null;
+}
+
+function signedMagnitudeBps(value: number, base: number) {
+  return base > 0 ? round((value / base) * 10_000) : null;
 }
 
 function average(values: number[]) {
@@ -160,7 +167,7 @@ function macdHistogram(closes: number[]) {
   if (macdValue === undefined || signalValue === null || signalValue === undefined || lastClose === undefined) {
     return null;
   }
-  return basisPoints(macdValue - signalValue, lastClose);
+  return signedMagnitudeBps(macdValue - signalValue, lastClose);
 }
 
 function bollingerZScore(closes: number[], period = 20) {
@@ -227,7 +234,7 @@ function technicalIndicators(candles: MarketCandle[]): MarketTechnicalIndicators
     macdHistogramBps: macdHistogram(closes),
     bollingerZ20: bollingerZScore(closes),
     atr14Bps: atr14 !== null && lastClose !== undefined
-      ? basisPoints(atr14, lastClose)
+      ? signedMagnitudeBps(atr14, lastClose)
       : null,
     atr5To14Ratio:
       atr5 !== null && atr14 !== null && atr14 > 0

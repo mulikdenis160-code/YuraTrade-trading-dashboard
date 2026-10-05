@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
 
 export const DIRECT_AI_MODEL = "claude-opus-5";
@@ -40,13 +41,16 @@ const reviewSchema = z.discriminatedUnion("decision", [
 export type MarketAiReview = z.infer<typeof reviewSchema>;
 
 export const DIRECT_AI_SYSTEM_PROMPT = [
-  "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT.",
+  "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT, если для него есть ясное преимущество.",
   "Не используй отдельный классификатор, числовой порог уверенности, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр.",
   "Минимум 30 корректных свечей — только условие достаточности входных данных, а не причина обязательно выдать сигнал.",
   "Не вынуждай себя выбирать направление: возвращай pass, если нет ясного преимущества, свечи боковые или хаотичные, недавнее движение противоречит общей структуре, направление держится только на одной свече или коротком всплеске, либо CALL и PUT одинаково правдоподобны.",
-  "Оцени ожидаемое движение к концу указанной экспирации, а не только цвет последних свечей. Учитывай, что candleSeconds — интервал свечи, а не гарантированный период прогноза.",
+  "Проверяй контекст на нескольких масштабах: сопоставь короткую структуру OHLC с higherTimeframe, режимом волатильности, импульсом, EMA, RSI, MACD, Bollinger z-score и расстоянием до недавних границ диапазона. Ищи возможный пробой, ложный пробой, отбой от уровня и смену импульса.",
+  "Эти индикаторы рассчитаны из тех же свечей, поэтому не считай их независимыми подтверждениями и не складывай механический балл. Используй их как проверяемые описания цены; при противоречии индикаторов и OHLC, пропуске важных интервалов или устаревании истории объясни риск либо верни pass.",
+  "Если higherTimeframe отсутствует или содержит мало свечей, прямо учитывай ограниченность контекста и не достраивай недостающие бары. Не используй незакрытые свечи.",
+  "Оцени ожидаемое движение к концу указанной экспирации, а не только цвет последних свечей. Учитывай, что candleSeconds — интервал свечи, а не гарантированный период прогноза; сравни horizonCandles с доступной историей.",
   "Сравнивай доступные пары и выбирай сигнал только если одна пара и направление обоснованы лучше альтернатив; если данные не дают такого преимущества, возвращай pass.",
-  "Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных.",
+  "Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Технические расстояния даны в basis points, RSI — 0..100, Bollinger z-score — в стандартных отклонениях.",
   "Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки.",
   "Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены.",
   "Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
@@ -242,24 +246,6 @@ export function acceptsMarketAiReview(
   return review?.decision === "signal" && allowedSymbols.includes(review.symbol);
 }
 
-function isValidCandle(candle: MarketCandle) {
-  return (
-    Number.isFinite(candle.time) &&
-    Number.isFinite(candle.open) &&
-    Number.isFinite(candle.high) &&
-    Number.isFinite(candle.low) &&
-    Number.isFinite(candle.close) &&
-    candle.time > 0 &&
-    candle.open > 0 &&
-    candle.high > 0 &&
-    candle.low > 0 &&
-    candle.close > 0 &&
-    candle.high >= candle.low &&
-    candle.high >= Math.max(candle.open, candle.close) &&
-    candle.low <= Math.min(candle.open, candle.close)
-  );
-}
-
 export function marketAiApiErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.includes("Подключение Anthropic через Replit AI Integrations не настроено")) {
     return error.message;
@@ -396,34 +382,66 @@ export async function analyzeMarketCandidates(
   expirySeconds: number,
   candleSeconds: number,
   candidates: MarketAiCandidate[],
+  options: {
+    nowSeconds?: number;
+    request?: ReviewCompletionRequest;
+  } = {},
 ): Promise<MarketAiReview> {
-  const eligibleCandidates = candidates
-    .map((candidate) => {
-      const candlesByTime = new Map<number, MarketCandle>();
-      for (const candle of candidate.candles) {
-        if (isValidCandle(candle)) candlesByTime.set(candle.time, candle);
-      }
-      return {
-        ...candidate,
-        candles: [...candlesByTime.values()].sort((a, b) => a.time - b.time),
-      };
-    })
-    .filter((candidate) => candidate.candles.length >= MIN_DIRECT_AI_CANDLES);
+  const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
+  const preparedCandidates = candidates.map((candidate) => ({
+    ...candidate,
+    context: buildMarketAnalysisContext(candidate.candles, candleSeconds, nowSeconds),
+  }));
+  const eligibleCandidates = preparedCandidates.filter(
+    (candidate) =>
+      candidate.context.candles.length >= MIN_DIRECT_AI_CANDLES &&
+      candidate.context.dataQuality.isFresh,
+  );
   if (eligibleCandidates.length === 0) {
+    const hasEnoughButStaleHistory = preparedCandidates.some(
+      (candidate) =>
+        candidate.context.candles.length >= MIN_DIRECT_AI_CANDLES &&
+        !candidate.context.dataQuality.isFresh,
+    );
     return {
       decision: "pass",
-      reason: `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} корректных свечей на пару.`,
+      reason: hasEnoughButStaleHistory
+        ? "Последняя закрытая свеча слишком старая для надёжного анализа. Сигнал не выдан."
+        : `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} закрытых корректных свечей на пару.`,
     };
   }
 
   const input = {
     expirySeconds,
     candleSeconds,
-    candleFormat: "Последовательность OHLC, oldest-to-newest; значения в basis points относительно close предыдущей свечи.",
+    horizonCandles: expirySeconds / candleSeconds,
+    candleFormat: "Последовательность закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. higherTimeframe содержит только полностью собранные свечи.",
+    indicatorFormat: {
+      recentReturnBps: "Изменение close за указанное число свечей в basis points.",
+      ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",
+      emaSlope5Bps: "Изменение EMA за 5 свечей в basis points; знак показывает направление наклона.",
+      rsi14: "RSI 14 в диапазоне 0..100.",
+      macdHistogramBps: "Знак и величина MACD-гистограммы в basis points относительно последнего close.",
+      bollingerZ20: "Отклонение последнего close от средней Bollinger 20 в стандартных отклонениях.",
+      atr14Bps: "Средний истинный диапазон за 14 свечей в basis points.",
+      atr5To14Ratio: "Отношение ATR 5 к ATR 14; выше 1 означает недавнее расширение диапазона.",
+      prior20HighDistanceBps: "Предыдущий максимум 20 свечей относительно текущего close; отрицательное значение означает close выше максимума.",
+      prior20LowDistanceBps: "Текущий close относительно предыдущего минимума 20 свечей; отрицательное значение означает close ниже минимума.",
+      null: "Истории недостаточно для надёжного расчёта этого показателя.",
+    },
     candidates: eligibleCandidates.map((candidate) => ({
       symbol: candidate.symbol,
       name: candidate.name,
-      candles: candlesInBasisPoints(candidate.candles),
+      dataQuality: candidate.context.dataQuality,
+      technicalIndicators: candidate.context.technicalIndicators,
+      higherTimeframe: candidate.context.higherTimeframe
+        ? {
+            candleSeconds: candidate.context.higherTimeframe.candleSeconds,
+            candleCount: candidate.context.higherTimeframe.candles.length,
+            candles: candlesInBasisPoints(candidate.context.higherTimeframe.candles),
+          }
+        : null,
+      candles: candlesInBasisPoints(candidate.context.candles),
     })),
   };
 
@@ -433,5 +451,9 @@ export async function analyzeMarketCandidates(
     { role: "user", content: userPrompt },
   ];
   const allowedSymbols = eligibleCandidates.map((candidate) => candidate.symbol);
-  return requestMarketAiReviewWithRepair(requestMarketAiCompletion, baseMessages, allowedSymbols);
+  return requestMarketAiReviewWithRepair(
+    options.request ?? requestMarketAiCompletion,
+    baseMessages,
+    allowedSymbols,
+  );
 }

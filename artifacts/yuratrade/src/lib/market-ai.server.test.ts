@@ -10,6 +10,7 @@ import {
   parseMarketAiReview,
   requestMarketAiReviewWithRepair,
 } from "./market-ai.server.ts";
+import type { MarketCandle } from "./signal-model.server.ts";
 
 test("direct market analysis uses Claude Opus 5 through Replit AI Integrations", () => {
   assert.equal(DIRECT_AI_MODEL, "claude-opus-5");
@@ -28,6 +29,23 @@ const validReview = JSON.stringify({
     invalidation: "Сценарий ослабнет, если следующие свечи закрепятся ниже недавних минимумов.",
   },
 });
+
+function risingCandles(count: number, startTime = 6_000, interval = 60): MarketCandle[] {
+  const candles: MarketCandle[] = [];
+  let close = 1;
+  for (let index = 0; index < count; index += 1) {
+    const open = close;
+    close += 0.0001;
+    candles.push({
+      time: startTime + index * interval,
+      open,
+      high: close + 0.00005,
+      low: open - 0.00005,
+      close,
+    });
+  }
+  return candles;
+}
 
 test("direct AI review accepts only an allowed pair with a valid structured response", () => {
   const review = parseMarketAiReview(validReview, ["EURUSD_otc"]);
@@ -105,7 +123,71 @@ test("direct AI may abstain when candle data is valid but no direction has a cle
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass, если нет ясного преимущества/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /candleSeconds — интервал свечи/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /числовой порог уверенности/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /higherTimeframe/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /не складывай механический балл/);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass только если/u);
+});
+
+test("analysis request supplies closed candles, indicators, and completed higher-timeframe context", async () => {
+  const candles = risingCandles(101);
+  const last = candles.at(-1)!;
+  let userContent = "";
+  const result = await analyzeMarketCandidates(
+    600,
+    60,
+    [{ symbol: "EURUSD_otc", name: "EUR/USD OTC", candles }],
+    {
+      nowSeconds: last.time + 30,
+      request: async (messages) => {
+        userContent = messages.find((message) => message.role === "user")?.content ?? "";
+        return {
+          choices: [{ message: { content: validReview }, finish_reason: "stop" }],
+        };
+      },
+    },
+  );
+
+  assert.equal(result.decision, "signal");
+  const input = JSON.parse(userContent) as {
+    horizonCandles: number;
+    candidates: Array<{
+      candles: number[][];
+      dataQuality: { closedCandleCount: number; isFresh: boolean };
+      technicalIndicators: { rsi14: number | null };
+      higherTimeframe: { candleSeconds: number; candleCount: number; candles: number[][] } | null;
+    }>;
+  };
+  assert.equal(input.horizonCandles, 10);
+  assert.equal(input.candidates[0]?.candles.length, 100);
+  assert.equal(input.candidates[0]?.dataQuality.closedCandleCount, 100);
+  assert.equal(input.candidates[0]?.dataQuality.isFresh, true);
+  assert.equal(input.candidates[0]?.technicalIndicators.rsi14, 100);
+  assert.equal(input.candidates[0]?.higherTimeframe?.candleSeconds, 300);
+  assert.equal(input.candidates[0]?.higherTimeframe?.candleCount, 20);
+});
+
+test("stale candle history is rejected before calling the AI", async () => {
+  const candles = risingCandles(40);
+  const last = candles.at(-1)!;
+  let aiCalled = false;
+  const result = await analyzeMarketCandidates(
+    60,
+    60,
+    [{ symbol: "EURUSD_otc", name: "EUR/USD OTC", candles }],
+    {
+      nowSeconds: last.time + 60 * 5,
+      request: async () => {
+        aiCalled = true;
+        return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    decision: "pass",
+    reason: "Последняя закрытая свеча слишком старая для надёжного анализа. Сигнал не выдан.",
+  });
+  assert.equal(aiCalled, false);
 });
 
 test("a valid AI abstention preserves its reason for the interface", () => {
@@ -131,7 +213,7 @@ test("direct AI abstains when a candidate has too few candles", async () => {
 
   assert.deepEqual(result, {
     decision: "pass",
-    reason: `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} корректных свечей на пару.`,
+    reason: `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} закрытых корректных свечей на пару.`,
   });
 });
 
