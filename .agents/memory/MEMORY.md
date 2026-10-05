@@ -2,3 +2,4 @@
 - [Signal preparation flow](signal-preparation.md) — reveal the selected currency pair, wait 10 seconds, then issue a fresh signal; copy pair names without OTC.
 - [Signal model](signal-model.md) — direct Claude Opus 5 analysis may abstain; verify exact Replit model IDs against the live endpoint.
 - [Rotating signal candidates](signal-candidate-rotation.md) — scan eligible pairs in bounded rotating batches so repeated searches do not inspect only the same first slice.
+- [Referral scope](referral-scope.md) — do not add referral features unless explicitly requested; keep signal-reliability work focused.
