@@ -127,8 +127,9 @@ function digitsOf(price: number) {
 }
 
 function copyName(text: string) {
+  const pairName = text.replace(/\s+OTC$/i, "").trim();
   const area = document.createElement("textarea");
-  area.value = text;
+  area.value = pairName;
   area.setAttribute("readonly", "");
   area.style.position = "fixed";
   area.style.top = "0";
@@ -137,7 +138,7 @@ function copyName(text: string) {
   document.body.appendChild(area);
   area.focus();
   area.select();
-  area.setSelectionRange(0, text.length);
+  area.setSelectionRange(0, pairName.length);
   let copied = false;
   try {
     copied = document.execCommand("copy");
@@ -146,7 +147,7 @@ function copyName(text: string) {
   }
   area.remove();
   if (copied) return Promise.resolve();
-  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(pairName);
   return Promise.reject(new Error("copy"));
 }
 
