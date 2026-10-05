@@ -5,6 +5,7 @@ import {
   markExpiredPendingSignals,
   recordSignalOutcome,
   recordSignalStarted,
+  recentlyUsedSignalSymbols,
   signalJournalCsv,
   signalRecordId,
   summarizeSignals,
@@ -98,6 +99,43 @@ test("journal statistics use payout-aware break-even and one-unit returns", () =
   assert.equal(summary.hitRate, 50);
   assert.ok(Math.abs(summary.netUnits + 0.08) < 1e-10);
   assert.ok(summary.breakEvenRate !== null && summary.breakEvenRate > 53 && summary.breakEvenRate < 55);
+});
+
+test("recently used FX pairs are excluded while pending and cooldown outcomes are recent", () => {
+  const entry = (
+    id: string,
+    symbol: string,
+    outcome: SignalJournalEntry["outcome"],
+    startedAt: number,
+    settledAt?: number,
+    group: SignalJournalEntry["group"] = "fx",
+  ): SignalJournalEntry => ({
+    id,
+    symbol,
+    name: symbol,
+    group,
+    direction: "call",
+    openPrice: 1,
+    payout: 92,
+    seconds: 60,
+    analysisSeconds: 60,
+    step: 0,
+    startedAt,
+    ...(settledAt === undefined ? {} : { settledAt }),
+    outcome,
+    strategyVersion: "test",
+    note: "",
+    bars: [],
+  });
+  const symbols = recentlyUsedSignalSymbols([
+    entry("recent-loss", "EURUSD_otc", "loss", 80_000, 91_000),
+    entry("older-repeat", "EURUSD_otc", "win", 70_000, 88_000),
+    entry("pending", "GBPUSD_otc", "pending", 1),
+    entry("old", "USDJPY_otc", "win", 70_000, 79_999),
+    entry("not-fx", "BTCUSD_otc", "loss", 80_000, 95_000, "crypto"),
+  ], 100_000, 20_000);
+
+  assert.deepEqual(symbols, ["EURUSD_otc", "GBPUSD_otc"]);
 });
 
 test("CSV export escapes text fields and includes candle inputs", () => {

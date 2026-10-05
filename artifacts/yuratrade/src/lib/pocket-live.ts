@@ -32,14 +32,24 @@ export const takeSignal = createServerFn({ method: "POST" })
   });
 
 export const takeBest = createServerFn({ method: "POST" })
-  .validator((input: { expirySeconds: number }) => {
+  .validator((input: { expirySeconds: number; excludedSymbols?: unknown }) => {
     const expirySeconds = Number(input?.expirySeconds);
     if (!isValidExpirySeconds(expirySeconds)) {
       throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
     }
-    return { expirySeconds };
+    const excludedSymbols = Array.isArray(input?.excludedSymbols)
+      ? [...new Set(
+          input.excludedSymbols
+            .filter(
+              (symbol): symbol is string =>
+                typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim()),
+            )
+            .map((symbol) => symbol.trim()),
+        )].slice(0, 24)
+      : [];
+    return { expirySeconds, excludedSymbols };
   })
   .handler(async ({ data }) => {
     const { feedBest } = await import("./pocket-live.server");
-    return feedBest(data.expirySeconds);
+    return feedBest(data.expirySeconds, data.excludedSymbols);
   });

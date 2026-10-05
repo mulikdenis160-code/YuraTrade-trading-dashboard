@@ -1,8 +1,7 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { AnalysisModal } from "@/components/analysis-modal";
 import { PairMark } from "@/components/pair-mark";
-import { readClose, takeSignal } from "@/lib/pocket-live";
+import { readClose } from "@/lib/pocket-live";
 import {
   recordSignalOutcome,
   recordSignalStarted,
@@ -186,13 +185,11 @@ function SignalRoute() {
 
 function SignalCard({ search }: { search: Search }) {
   const { language, t } = useLanguage();
-  const navigate = useNavigate();
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
   const [now, setNow] = useState(() => Date.now());
-  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop" | "no-signal">("run");
+  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
   const [close, setClose] = useState<number | null>(null);
-  const [prepLeft, setPrepLeft] = useState(10);
   const [error, setError] = useState("");
   const [journalWarning, setJournalWarning] = useState("");
   const [live, setLive] = useState<number | null>(null);
@@ -223,7 +220,7 @@ function SignalCard({ search }: { search: Search }) {
       step: search.step,
       startedAt: search.started,
       aiConfidence: search.aiConfidence ?? undefined,
-      strategyVersion: "direct-ai-v1",
+      strategyVersion: "direct-ai-v2",
       note: search.note,
       bars: search.bars,
     });
@@ -288,7 +285,7 @@ function SignalCard({ search }: { search: Search }) {
           setPhase("draw");
           return;
         }
-        setPhase(won ? "win" : search.step >= 3 ? "stop" : "prep");
+        setPhase(won ? "win" : "stop");
       })
       .catch((cause: unknown) => {
         setPhase("run");
@@ -296,65 +293,6 @@ function SignalCard({ search }: { search: Search }) {
         setError(cause instanceof Error ? cause.message : "Не удалось сверить цену.");
       });
   }, [left, phase, search.open, search.step, search.symbol, up]);
-
-  useEffect(() => {
-    if (phase !== "prep") return;
-    const ends = Date.now() + 10000;
-    const timer = window.setInterval(() => {
-      const left = Math.max(0, Math.ceil((ends - Date.now()) / 1000));
-      setPrepLeft(left);
-      if (left <= 0) {
-        window.clearInterval(timer);
-        setPhase("hunt");
-      }
-    }, 200);
-    return () => window.clearInterval(timer);
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== "hunt") return;
-    let stop = false;
-    const started = Date.now();
-    void takeSignal({ data: { symbol: search.symbol, expirySeconds: search.seconds } })
-      .then(async (result) => {
-        if (!result) {
-          if (stop) return;
-          setPhase("no-signal");
-          setError("");
-          return;
-        }
-        const wait = Math.max(0, 2200 - (Date.now() - started));
-        await new Promise((resolve) => window.setTimeout(resolve, wait));
-        if (stop) return;
-        await navigate({
-          to: "/signal",
-          replace: true,
-          search: {
-            symbol: search.symbol,
-            name: result.name,
-            group: search.group,
-            direction: result.direction,
-            open: result.openPrice,
-            payout: result.payout,
-            seconds: search.seconds,
-            analysisSeconds: result.analysisSeconds,
-            note: result.note,
-            bars: result.bars,
-            aiConfidence: result.aiConfidence,
-            step: search.step + 1,
-            started: Date.now(),
-          },
-        });
-      })
-      .catch((cause: unknown) => {
-        if (stop) return;
-        setPhase("prep");
-        setError(cause instanceof Error ? cause.message : "Не удалось дать перекрытие.");
-      });
-    return () => {
-      stop = true;
-    };
-  }, [navigate, phase, search.group, search.seconds, search.step, search.symbol]);
 
   if (!search.symbol || !search.open) {
     return (
@@ -419,7 +357,6 @@ function SignalCard({ search }: { search: Search }) {
             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-blue-soft">
               {expiryLabel(search.seconds)}
             </span>
-            {search.step > 0 ? <span className="text-[11px] font-semibold text-dim">{search.step}/3</span> : null}
           </span>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-dim">
@@ -521,31 +458,20 @@ function SignalCard({ search }: { search: Search }) {
         </div>
       ) : null}
 
-      {phase === "prep" ? (
-        <div className="panel arrive mt-4 px-6 py-8 text-center">
-          <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">{t("common.loss")}</p>
-          <p className="mt-2 text-lg font-bold text-fg">{t("common.prepareRecovery")}</p>
-          {close !== null ? (
-            <p className="mt-2 font-mono text-sm text-loss">
-              {search.open.toFixed(digitsOf(search.open))} → {close.toFixed(digitsOf(close))}
-            </p>
-          ) : null}
-          <p className="mt-3 font-mono text-5xl font-bold text-fg">{prepLeft}</p>
-          <p className="mt-2 text-sm text-dim">{t("common.samePairAttempts", { count: 3 - search.step })}</p>
-        </div>
-      ) : null}
-
       {phase === "stop" && close !== null ? (
         <div className="panel arrive mt-4 px-6 py-8 text-center">
           <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">{t("common.loss")}</p>
-          <p className="mt-2 text-lg font-bold text-fg">{t("common.recoveryStop")}</p>
+          <p className="mt-2 text-lg font-bold text-fg">{t("common.stopAfterLoss")}</p>
           <p className="mt-3 font-mono text-sm text-muted">
             {search.open.toFixed(digitsOf(search.open))} → {close.toFixed(digitsOf(close))}
           </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link to="/history" className="btn-ghost min-h-11 justify-center">{t("common.openHistory")}</Link>
+            <Link to="/" className="btn-prime min-h-11 justify-center">{t("common.toSignals")}</Link>
+          </div>
         </div>
       ) : null}
 
-      {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={expiryLabel(search.seconds)} /> : null}
     </div>
   );
 }

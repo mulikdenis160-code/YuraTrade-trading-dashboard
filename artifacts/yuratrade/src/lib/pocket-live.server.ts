@@ -479,15 +479,21 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   return signal;
 }
 
-export async function feedBest(expirySeconds: number) {
+export async function feedBest(expirySeconds: number, excludedSymbols: string[] = []) {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const ranked = [...pairs.values()]
     .filter((pair) => pair.payout === 92 || pair.payout === 80)
     .sort((a, b) => b.payout - a.payout);
-  const live = ranked.filter((pair) => quotes.has(pair.symbol));
-  const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
+  if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+  const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
+  const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
+  if (available.length === 0) {
+    throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
+  }
+  const live = available.filter((pair) => quotes.has(pair.symbol));
+  const pool = (live.length >= 4 ? live : available).slice(0, 4);
   if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
   const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
   let historyResponses = 0;

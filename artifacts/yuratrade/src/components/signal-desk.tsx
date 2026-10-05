@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { loadFeed, takeBest, takeSignal } from "@/lib/pocket-live";
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
+import { readSignalJournal, recentlyUsedSignalSymbols } from "@/lib/signal-journal";
 import { AnalysisModal } from "@/components/analysis-modal";
 import { analysisPeriodForExpiry } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
@@ -86,7 +87,12 @@ export function SignalDesk() {
     setError("");
     setNotice("");
     try {
-      const candidate = await takeBest({ data: { expirySeconds } });
+      const candidate = await takeBest({
+        data: {
+          expirySeconds,
+          excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal()),
+        },
+      });
       if (attemptRef.current !== attempt) return;
       if (!candidate) {
         setPhase("idle");

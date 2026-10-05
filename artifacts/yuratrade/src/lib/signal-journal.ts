@@ -277,6 +277,31 @@ export function summarizeByMarket(entries: SignalJournalEntry[]) {
     );
 }
 
+export function recentlyUsedSignalSymbols(
+  entries: SignalJournalEntry[],
+  now = Date.now(),
+  cooldownMs = 15 * 60_000,
+  limit = 12,
+) {
+  const recent = entries
+    .filter((entry) => {
+      if (entry.group !== "fx") return false;
+      if (entry.outcome === "pending") return true;
+      return (entry.settledAt ?? entry.startedAt) >= now - cooldownMs;
+    })
+    .sort(
+      (a, b) =>
+        (b.settledAt ?? b.startedAt) - (a.settledAt ?? a.startedAt) ||
+        b.startedAt - a.startedAt,
+    );
+  const symbols = new Set<string>();
+  for (const entry of recent) {
+    symbols.add(entry.symbol);
+    if (symbols.size >= Math.max(0, Math.min(24, Math.floor(limit)))) break;
+  }
+  return [...symbols];
+}
+
 export function subscribeToSignalJournal(listener: () => void) {
   if (typeof window === "undefined") return () => {};
   window.addEventListener(JOURNAL_EVENT, listener);

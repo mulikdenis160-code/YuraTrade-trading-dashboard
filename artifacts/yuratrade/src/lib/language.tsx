@@ -180,11 +180,13 @@ const copy = {
   "common.priceFell": ["Цена упала", "Ціна впала", "Price fell"],
   "common.draw": ["Ничья", "Нічия", "Draw"],
   "common.refund": ["Возврат", "Повернення", "Refund"],
-  "common.priceUnchanged": ["Цена не изменилась. Перекрытия нет.", "Ціна не змінилася. Перекриття немає.", "Price did not change. No recovery trade."],
+  "common.priceUnchanged": ["Цена не изменилась. Результат: ничья.", "Ціна не змінилася. Результат: нічия.", "Price was unchanged; the result is a draw."],
   "common.loss": ["Проигрыш", "Поразка", "Loss"],
-  "common.prepareRecovery": ["Подготовьтесь к перекрытию", "Підготуйтеся до перекриття", "Prepare for recovery trade"],
-  "common.samePairAttempts": ["Та же пара. Осталось попыток: {count}", "Та сама пара. Спроб залишилося: {count}", "Same pair. Attempts left: {count}"],
-  "common.recoveryStop": ["Три перекрытия уже были", "Три перекриття вже були", "Three recovery trades have been used"],
+  "common.stopAfterLoss": [
+    "Автоповтор сигнала по этой паре остановлен после убытка. Проверьте журнал перед следующим запросом.",
+    "Автоповтор сигналу для цієї пари зупинено після збитку. Перевірте журнал перед наступним запитом.",
+    "Automatic retries on this pair stop after a loss. Review the journal before requesting another signal.",
+  ],
   "common.skipEntry": ["Вход пропущен", "Вхід пропущено", "Entry skipped"],
   "common.notConfirmed": ["Новый сигнал не подтверждён", "Новий сигнал не підтверджено", "New signal not confirmed"],
   "common.skipReason": [
