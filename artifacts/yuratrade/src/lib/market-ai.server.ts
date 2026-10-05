@@ -2,8 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { MarketCandle } from "./signal-model.server.ts";
 
-export const DIRECT_AI_MODEL = "claude-opus-5-5";
-export const DIRECT_AI_MODEL_LABEL = "Claude Opus 5.5";
+export const DIRECT_AI_MODEL = "claude-opus-5";
+export const DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 30;
 
@@ -281,7 +281,7 @@ export function marketAiApiErrorMessage(error: unknown) {
     return "Anthropic отклонил формат запроса. Попробуйте ещё раз; если ошибка повторится, проверьте настройку модели.";
   }
   if (status === 404) {
-    return "Модель Claude Opus 5.5 сейчас недоступна. Попробуйте ещё раз позже.";
+    return "Модель Claude Opus 5 сейчас недоступна. Попробуйте ещё раз позже.";
   }
   if (status >= 500 || name.includes("connection")) {
     return "Сервис Anthropic временно недоступен. Попробуйте ещё раз через минуту.";

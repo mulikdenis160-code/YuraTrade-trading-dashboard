@@ -11,8 +11,8 @@ import {
   requestMarketAiReviewWithRepair,
 } from "./market-ai.server.ts";
 
-test("direct market analysis uses Claude Opus 5.5 through Replit AI Integrations", () => {
-  assert.equal(DIRECT_AI_MODEL, "claude-opus-5-5");
+test("direct market analysis uses Claude Opus 5 through Replit AI Integrations", () => {
+  assert.equal(DIRECT_AI_MODEL, "claude-opus-5");
 });
 
 const validReview = JSON.stringify({

@@ -2,9 +2,9 @@ import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, r as formatExp
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as Anthropic } from "../_libs/@anthropic-ai/sdk+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CKWaZ8fg.js
-var DIRECT_AI_MODEL = "claude-opus-5-5";
-var DIRECT_AI_MODEL_LABEL = "Claude Opus 5.5";
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DlLNwTY8.js
+var DIRECT_AI_MODEL = "claude-opus-5";
+var DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
 var signalReviewSchema = object({
 	decision: literal("signal"),
 	symbol: string().min(1).max(80),
@@ -274,7 +274,7 @@ function marketAiApiErrorMessage(error) {
 	if (status === 429) return "Anthropic временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
 	if (status === 408 || status === 504 || name.includes("timeout")) return "Анализ Claude занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
 	if (status === 400) return "Anthropic отклонил формат запроса. Попробуйте ещё раз; если ошибка повторится, проверьте настройку модели.";
-	if (status === 404) return "Модель Claude Opus 5.5 сейчас недоступна. Попробуйте ещё раз позже.";
+	if (status === 404) return "Модель Claude Opus 5 сейчас недоступна. Попробуйте ещё раз позже.";
 	if (status >= 500 || name.includes("connection")) return "Сервис Anthropic временно недоступен. Попробуйте ещё раз через минуту.";
 	return "Не удалось завершить анализ Claude. Попробуйте ещё раз; сигнал не выдан.";
 }
