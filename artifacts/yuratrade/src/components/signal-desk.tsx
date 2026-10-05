@@ -25,7 +25,8 @@ export function SignalDesk() {
   const [phase, setPhase] = useState<"idle" | "search" | "countdown" | "finalizing">("idle");
   const [prepared, setPrepared] = useState<PreparedSignal | null>(null);
   const [countdown, setCountdown] = useState(10);
-  const [error, setError] = useState("");
+  const [feedError, setFeedError] = useState("");
+  const [searchError, setSearchError] = useState("");
   const [notice, setNotice] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
   const [used, setUsed] = useState(0);
@@ -45,13 +46,13 @@ export function SignalDesk() {
           setReady(feed.pairs.length > 0);
           setFeedStatus(feed.pairs.length > 0 ? "connected" : "error");
           setBalance(feed.balance);
-          setError("");
+          setFeedError("");
         })
         .catch((cause: unknown) => {
           if (stop) return;
           setReady(false);
           setFeedStatus("error");
-          setError(cause instanceof Error ? cause.message : "Не удалось подключиться к Pocket Option.");
+          setFeedError(cause instanceof Error ? cause.message : "Не удалось подключиться к Pocket Option.");
         });
     };
     pull();
@@ -84,7 +85,7 @@ export function SignalDesk() {
     if (phase !== "idle" || blocked || !ready) return;
     const attempt = ++attemptRef.current;
     setPhase("search");
-    setError("");
+    setSearchError("");
     setNotice("");
     try {
       const candidate = await takeBest({
@@ -140,7 +141,7 @@ export function SignalDesk() {
       if (attemptRef.current !== attempt) return;
       setPhase("idle");
       setPrepared(null);
-      setError(cause instanceof Error ? cause.message : t("signal.none"));
+      setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
     }
   };
 
@@ -168,6 +169,11 @@ export function SignalDesk() {
               ? t("signal.disconnected")
               : t("signal.connecting")}
         </p>
+        {feedError ? (
+          <p className="mb-3 text-center text-xs leading-relaxed text-loss" role="status" aria-live="polite">
+            {feedError}
+          </p>
+        ) : null}
         <p className="text-sm leading-relaxed text-muted">
           {t("signal.description")}
         </p>
@@ -218,11 +224,33 @@ export function SignalDesk() {
         <p className={`mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`}>
           {blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", { used, cap }))}
         </p>
-        {error ? <p className="mt-3 text-sm text-loss">{error}</p> : null}
+        {searchError ? (
+          <section className="mt-4 rounded-2xl border border-loss/30 bg-loss/8 p-4 text-left" role="alert" aria-live="assertive">
+            <p className="text-sm font-semibold text-loss">{t("signal.searchFailed")}</p>
+            <p className="mt-1 text-sm leading-relaxed text-muted">{searchError}</p>
+            <button
+              type="button"
+              className="btn-ghost mt-3 min-h-10 w-full justify-center"
+              disabled={!ready || phase !== "idle" || Boolean(blocked)}
+              onClick={() => void ask()}
+            >
+              {t("signal.tryAgain")}
+            </button>
+          </section>
+        ) : null}
         {notice ? (
-          <p className="mt-3 rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-sm leading-relaxed text-muted" role="status" aria-live="polite">
-            {notice}
-          </p>
+          <section className="mt-4 rounded-2xl border border-blue/25 bg-blue/8 p-4 text-left" role="status" aria-live="polite">
+            <p className="text-sm font-semibold text-blue-soft">{t("common.notConfirmed")}</p>
+            <p className="mt-1 text-sm leading-relaxed text-muted">{notice}</p>
+            <button
+              type="button"
+              className="btn-ghost mt-3 min-h-10 w-full justify-center"
+              disabled={!ready || phase !== "idle" || Boolean(blocked)}
+              onClick={() => void ask()}
+            >
+              {t("signal.tryAgain")}
+            </button>
+          </section>
         ) : null}
       </section>
       {phase === "countdown" && prepared ? (

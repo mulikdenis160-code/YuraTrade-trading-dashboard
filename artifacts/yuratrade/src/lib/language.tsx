@@ -72,6 +72,8 @@ const copy = {
     "Candle interval {period}; direct AI analysis uses up to the latest 128 candles.",
   ],
   "signal.checking": ["Проверяем пары…", "Перевіряємо пари…", "Checking pairs…"],
+  "signal.searchFailed": ["Не удалось завершить поиск", "Не вдалося завершити пошук", "Signal search could not be completed"],
+  "signal.tryAgain": ["Искать ещё раз", "Шукати ще раз", "Search again"],
   "signal.get": ["Получить сигнал", "Отримати сигнал", "Get a signal"],
   "signal.noLimit": ["Без лимита", "Без ліміту", "No limit"],
   "signal.pairReady": ["Пара выбрана", "Пару вибрано", "Pair selected"],
