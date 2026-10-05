@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { MarketCandle } from "./signal-model.server.ts";
 
 export const DIRECT_AI_MODEL = "gpt-6-astra";
-export const MIN_DIRECT_AI_CONFIDENCE = 80;
+export const MIN_DIRECT_AI_CANDLES = 30;
 
 export type MarketAiCandidate = {
   symbol: string;
@@ -85,14 +85,9 @@ export function parseMarketAiReview(content: string, allowedSymbols: string[]): 
 
 export function acceptsMarketAiReview(
   review: MarketAiReview | null,
-  candidate: { symbol: string; direction: "call" | "put" },
+  allowedSymbols: string[],
 ) {
-  return (
-    review?.decision === "signal" &&
-    review.symbol === candidate.symbol &&
-    review.direction === candidate.direction &&
-    review.confidence >= MIN_DIRECT_AI_CONFIDENCE
-  );
+  return review?.decision === "signal" && allowedSymbols.includes(review.symbol);
 }
 
 export async function analyzeMarketCandidates(
@@ -100,13 +95,18 @@ export async function analyzeMarketCandidates(
   candleSeconds: number,
   candidates: MarketAiCandidate[],
 ): Promise<MarketAiReview> {
-  if (candidates.length === 0) return { decision: "pass", reason: "Нет свечных кандидатов для анализа." };
+  const eligibleCandidates = candidates.filter(
+    (candidate) => candidate.candles.length >= MIN_DIRECT_AI_CANDLES,
+  );
+  if (eligibleCandidates.length === 0) {
+    return { decision: "pass", reason: `Нужно не менее ${MIN_DIRECT_AI_CANDLES} свечей на пару.` };
+  }
 
   const input = {
     expirySeconds,
     candleSeconds,
     candleFormat: "Последовательность OHLC, oldest-to-newest; значения в basis points относительно close предыдущей свечи.",
-    candidates: candidates.map((candidate) => ({
+    candidates: eligibleCandidates.map((candidate) => ({
       symbol: candidate.symbol,
       name: candidate.name,
       candles: candlesInBasisPoints(candidate.candles),
@@ -123,7 +123,7 @@ export async function analyzeMarketCandidates(
         {
           role: "system",
           content:
-            "Ты анализируешь направление ближайшего движения по свечам OHLC для сигнала CALL/PUT. Используй только переданные данные, сравни доступные пары по вероятности верного направления и пропускай сомнительные ситуации. Не учитывай размер выплаты как причину повысить уверенность. Самооценка confidence не является статистически калиброванной вероятностью. Не обещай результат и не открывай сделки. Не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Все пять текстов explanation должны быть написаны тобой по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без указания выдуманной цены. Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
+            "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT. Не используй отдельный классификатор, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр. Если есть не менее 30 корректных свечей, сравни доступные пары и выбери наиболее обоснованную пару и направление; возвращай pass только если данные некорректны или недостаточны для анализа. Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки. Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены. Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
         },
         {
           role: "user",
@@ -136,7 +136,9 @@ export async function analyzeMarketCandidates(
     throw new Error("OpenAI не смог завершить анализ. Сигнал не выдан.");
   }
 
-  const review = content ? parseMarketAiReview(content, candidates.map((candidate) => candidate.symbol)) : null;
+  const review = content
+    ? parseMarketAiReview(content, eligibleCandidates.map((candidate) => candidate.symbol))
+    : null;
   if (!review) throw new Error("OpenAI вернул некорректный анализ. Сигнал не выдан.");
   return review;
 }
