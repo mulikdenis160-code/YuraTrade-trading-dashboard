@@ -3,8 +3,8 @@ name: Signal model
 description: Scope and safeguards for PRIME BOT's WebSocket-candle direction model.
 ---
 
-The server-side model must use historical candles received from Pocket Option through its WebSocket and choose the call/put direction itself. Do not train direction from the browser's settled journal or fall back to a heuristic. Keep the feed read-only. Split candle samples chronologically for training, calibration, and later validation. The user prioritizes observed WIN rate over signal volume; accept fewer or no signals rather than relaxing validation.
+The server-side signal flow uses Pocket Option WebSocket candles and keeps the feed read-only. The user prioritizes WIN rate over signal volume and explicitly asked for direct OpenAI candle analysis. OpenAI GPT-6 Astra may select one eligible pair/direction from a batch of up to four, but a signal requires an exact agreement with the independently forward-validated local classifier and at least 80/100 subjective AI confidence. Never present that self-rating as calibrated probability or observed win rate.
 
-**Why:** the user chose maximum WIN rate over volume or payout-adjusted return, and a single historical loss is not enough evidence to tune the model.
+**Why:** the user requested maximum WIN rate and direct AI analysis; prior historical replay produced only one qualified outcome, so there is not enough evidence to claim improved accuracy.
 
-**How to apply:** preserve read-only market access, show sample and holdout diagnostics, keep probabilities experimental, and fail closed whenever history or validation is insufficient. Never claim a high accuracy rate from a small holdout or tune to one outcome.
+**How to apply:** train, calibrate, and validate chronologically; fail closed if history or forward validation is insufficient, or if the direct AI and local model disagree. Keep probabilities experimental and do not tune to one outcome.
