@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
+  DIRECT_AI_SYSTEM_PROMPT,
   marketAiApiErrorMessage,
   MIN_DIRECT_AI_CANDLES,
   parseMarketAiReview,
@@ -94,6 +95,14 @@ test("a direct AI signal uses the AI decision without a confidence threshold or 
   assert.equal(acceptsMarketAiReview(lowerConfidence, ["EURUSD_otc"]), true);
 });
 
+test("direct AI may abstain when candle data is valid but no direction has a clear edge", () => {
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /30 корректных свечей — только условие достаточности входных данных/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass, если нет ясного преимущества/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /candleSeconds — интервал свечи/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /числовой порог уверенности/);
+  assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass только если/u);
+});
+
 test("direct AI abstains when a candidate has too few candles", async () => {
   const result = await analyzeMarketCandidates(60, 60, [{
     symbol: "EURUSD_otc",
@@ -146,9 +155,11 @@ test("an unparseable OpenAI response is retried once and the repaired signal is 
       if (calls === 1) {
         return { choices: [{ message: { content: "not valid JSON" }, finish_reason: "stop" }] };
       }
-      assert.ok(messages.some(
+      const repairPrompt = messages.find(
         (message) => message.role === "user" && message.content.includes("Предыдущий ответ нельзя проверить"),
-      ));
+      )?.content ?? "";
+      assert.match(repairPrompt, /верни pass/);
+      assert.match(repairPrompt, /ясного преимущества нет/);
       return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
     },
     [{ role: "user", content: "Свечи для анализа." }],
