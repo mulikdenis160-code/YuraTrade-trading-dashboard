@@ -1,8 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-Cg2IKr54.mjs";
-import { t as AnalysisModal } from "./analysis-modal-nTChG3rp.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-DPeqtNxL.js
+import { C as formatExpiryForLanguage, g as takeSignal, l as signalRecordId, m as readClose, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-CYxNC4fV.mjs";
+import { t as AnalysisModal } from "./analysis-modal-DMdve2xs.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-D5hwEVhO.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -370,7 +370,7 @@ function SignalCard({ search }) {
 			step: search.step,
 			startedAt: search.started,
 			aiConfidence: search.aiConfidence ?? void 0,
-			strategyVersion: "direct-ai-v1",
+			strategyVersion: "direct-ai-v2",
 			note: search.note,
 			bars: search.bars
 		});
@@ -477,10 +477,10 @@ function SignalCard({ search }) {
 			symbol: search.symbol,
 			expirySeconds: search.seconds
 		} }).then(async (result) => {
-			if (!result) {
+			if (result.decision === "pass") {
 				if (stop) return;
 				setPhase("no-signal");
-				setError("");
+				setError(result.reason);
 				return;
 			}
 			const wait = Math.max(0, 2200 - (Date.now() - started));
@@ -543,7 +543,7 @@ function SignalCard({ search }) {
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted",
-					children: t("common.skipReason")
+					children: error || t("common.skipReason")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center",
@@ -718,6 +718,35 @@ function SignalCard({ search }) {
 					}) : null
 				]
 			}),
+			phase === "prep" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "panel arrive mt-4 px-6 py-8 text-center",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-sm font-semibold tracking-[0.16em] text-loss uppercase",
+						children: t("common.loss")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-2 text-lg font-bold text-fg",
+						children: t("common.prepareRecovery")
+					}),
+					close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "mt-2 font-mono text-sm text-loss",
+						children: [
+							search.open.toFixed(digitsOf(search.open)),
+							" → ",
+							close.toFixed(digitsOf(close))
+						]
+					}) : null,
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-3 font-mono text-5xl font-bold text-fg",
+						children: prepLeft
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-2 text-sm text-dim",
+						children: t("common.samePairAttempts", { count: 3 - search.step })
+					})
+				]
+			}) : null,
 			phase === "win" && close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "win-screen",
 				children: [
@@ -791,35 +820,6 @@ function SignalCard({ search }) {
 					})
 				]
 			}) : null,
-			phase === "prep" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "panel arrive mt-4 px-6 py-8 text-center",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "text-sm font-semibold tracking-[0.16em] text-loss uppercase",
-						children: t("common.loss")
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-2 text-lg font-bold text-fg",
-						children: t("common.prepareRecovery")
-					}),
-					close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "mt-2 font-mono text-sm text-loss",
-						children: [
-							search.open.toFixed(digitsOf(search.open)),
-							" → ",
-							close.toFixed(digitsOf(close))
-						]
-					}) : null,
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-3 font-mono text-5xl font-bold text-fg",
-						children: prepLeft
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-2 text-sm text-dim",
-						children: t("common.samePairAttempts", { count: 3 - search.step })
-					})
-				]
-			}) : null,
 			phase === "stop" && close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "panel arrive mt-4 px-6 py-8 text-center",
 				children: [
@@ -838,6 +838,18 @@ function SignalCard({ search }) {
 							" → ",
 							close.toFixed(digitsOf(close))
 						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+							to: "/history",
+							className: "btn-ghost min-h-11 justify-center",
+							children: t("common.openHistory")
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+							to: "/",
+							className: "btn-prime min-h-11 justify-center",
+							children: t("common.toSignals")
+						})]
 					})
 				]
 			}) : null,

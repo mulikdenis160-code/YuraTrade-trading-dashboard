@@ -9,7 +9,7 @@ import { analysisPeriodForExpiry } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 const expiryOptionsMinutes = [1, 2, 3, 5, 10, 15, 25, 30, 60, 120, 180, 240] as const;
-type PreparedSignal = NonNullable<Awaited<ReturnType<typeof takeBest>>>;
+type PreparedSignal = Extract<Awaited<ReturnType<typeof takeBest>>, { decision: "signal" }>;
 
 function pairLabel(name: string) {
   return name.replace(/\s+OTC$/i, "").trim();
@@ -94,9 +94,9 @@ export function SignalDesk() {
         },
       });
       if (attemptRef.current !== attempt) return;
-      if (!candidate) {
+      if (candidate.decision === "pass") {
         setPhase("idle");
-        setNotice(t("signal.none"));
+        setNotice(candidate.reason);
         return;
       }
       setPrepared(candidate);
@@ -111,10 +111,10 @@ export function SignalDesk() {
       setPhase("finalizing");
       const result = await takeSignal({ data: { symbol: candidate.symbol, expirySeconds } });
       if (attemptRef.current !== attempt) return;
-      if (!result) {
+      if (result.decision === "pass") {
         setPrepared(null);
         setPhase("idle");
-        setNotice(t("signal.pairNoLongerReady"));
+        setNotice(result.reason);
         return;
       }
       if (cap !== null) setUsed(markSignalUsed());

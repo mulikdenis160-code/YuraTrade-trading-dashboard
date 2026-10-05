@@ -41,6 +41,16 @@ export type FeedSignal = {
   aiConfidence: number;
 };
 
+type PassResult = { decision: "pass"; reason: string };
+type SignalResult = { decision: "signal" } & FeedSignal;
+type BestSignalResult = SignalResult & {
+  symbol: string;
+  group: PairGroup;
+  seconds: number;
+};
+export type FeedSignalResult = PassResult | SignalResult;
+export type FeedBestResult = PassResult | BestSignalResult;
+
 type Candle = { open: number; close: number; high: number; low: number };
 type HistoricalCandle = Candle & { time: number };
 
@@ -461,7 +471,7 @@ export async function feedClose(symbol: string) {
   return waitQuote(symbol);
 }
 
-export async function feedSignal(symbol: string, expirySeconds: number): Promise<FeedSignal | null> {
+export async function feedSignal(symbol: string, expirySeconds: number): Promise<FeedSignalResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
   subscribe(symbol);
@@ -472,14 +482,19 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [
     { symbol, name: pair.name, candles },
   ]);
-  if (review.decision !== "signal") return null;
-  if (!acceptsMarketAiReview(review, [symbol])) return null;
+  if (review.decision === "pass") return review;
+  if (!acceptsMarketAiReview(review, [symbol])) {
+    return { decision: "pass", reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан." };
+  }
   const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
   signal.openPrice = await waitQuote(symbol);
-  return signal;
+  return { decision: "signal", ...signal };
 }
 
-export async function feedBest(expirySeconds: number, excludedSymbols: string[] = []) {
+export async function feedBest(
+  expirySeconds: number,
+  excludedSymbols: string[] = [],
+): Promise<FeedBestResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
@@ -524,10 +539,10 @@ export async function feedBest(expirySeconds: number, excludedSymbols: string[] 
       candles: candidate.candles,
     })),
   );
-  if (review.decision !== "signal") return null;
+  if (review.decision === "pass") return review;
   const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
   if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) {
-    return null;
+    return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
   }
   const signal = buildDirectAiSignal(
     best.candles,
@@ -539,6 +554,7 @@ export async function feedBest(expirySeconds: number, excludedSymbols: string[] 
   );
   signal.openPrice = await waitQuote(best.pair.symbol);
   return {
+    decision: "signal",
     ...signal,
     symbol: best.pair.symbol,
     group: best.pair.group,

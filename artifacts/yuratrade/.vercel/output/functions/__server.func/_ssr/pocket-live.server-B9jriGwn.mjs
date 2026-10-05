@@ -2,7 +2,7 @@ import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, r as formatExp
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as OpenAI } from "../_libs/openai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-qEB-ziG9.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B9jriGwn.js
 var DIRECT_AI_MODEL = "gpt-6-astra";
 var signalReviewSchema = object({
 	decision: literal("signal"),
@@ -22,6 +22,18 @@ var passReviewSchema = object({
 	reason: string().trim().min(1).max(1200)
 });
 discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
+var DIRECT_AI_SYSTEM_PROMPT = [
+	"Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT.",
+	"Не используй отдельный классификатор, числовой порог уверенности, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр.",
+	"Минимум 30 корректных свечей — только условие достаточности входных данных, а не причина обязательно выдать сигнал.",
+	"Не вынуждай себя выбирать направление: возвращай pass, если нет ясного преимущества, свечи боковые или хаотичные, недавнее движение противоречит общей структуре, направление держится только на одной свече или коротком всплеске, либо CALL и PUT одинаково правдоподобны.",
+	"Оцени ожидаемое движение к концу указанной экспирации, а не только цвет последних свечей. Учитывай, что candleSeconds — интервал свечи, а не гарантированный период прогноза.",
+	"Сравнивай доступные пары и выбирай сигнал только если одна пара и направление обоснованы лучше альтернатив; если данные не дают такого преимущества, возвращай pass.",
+	"Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных.",
+	"Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки.",
+	"Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены.",
+	"Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}."
+].join(" ");
 var client = null;
 function getOpenAiClient() {
 	const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
@@ -292,7 +304,7 @@ async function requestMarketAiReviewWithRepair(request, baseMessages, allowedSym
 		}] : [],
 		{
 			role: "user",
-			content: "Предыдущий ответ нельзя проверить. Повтори анализ и верни один корректный JSON-объект по заданному формату. Используй точный symbol из списка, направление call или put, числовую confidence от 0 до 100 и все пять полей explanation. Не добавляй факты, которых нет в свечах."
+			content: "Предыдущий ответ нельзя проверить. Повтори анализ по исходным правилам и верни один корректный JSON-объект. Если ясного преимущества нет, верни pass с краткой причиной и не вынуждай себя выбирать направление. Если выдаёшь signal, используй точный symbol из списка, направление call или put, числовую confidence от 0 до 100 и все пять полей explanation. Не добавляй факты, которых нет в свечах."
 		}
 	];
 	let retryChoice;
@@ -332,11 +344,10 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates)
 			candles: candlesInBasisPoints(candidate.candles)
 		}))
 	};
-	const systemPrompt = "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT. Не используй отдельный классификатор, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр. Если есть не менее 30 корректных свечей, сравни доступные пары и выбери наиболее обоснованную пару и направление; возвращай pass только если данные некорректны или недостаточны для анализа. Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки. Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены. Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.";
 	const userPrompt = JSON.stringify(input);
 	return requestMarketAiReviewWithRepair(requestMarketAiCompletion, [{
 		role: "system",
-		content: systemPrompt
+		content: DIRECT_AI_SYSTEM_PROMPT
 	}, {
 		role: "user",
 		content: userPrompt
@@ -744,19 +755,29 @@ async function feedSignal(symbol, expirySeconds) {
 		name: pair.name,
 		candles
 	}]);
-	if (review.decision !== "signal") return null;
-	if (!acceptsMarketAiReview(review, [symbol])) return null;
+	if (review.decision === "pass") return review;
+	if (!acceptsMarketAiReview(review, [symbol])) return {
+		decision: "pass",
+		reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан."
+	};
 	const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
 	signal.openPrice = await waitQuote(symbol);
-	return signal;
+	return {
+		decision: "signal",
+		...signal
+	};
 }
-async function feedBest(expirySeconds) {
+async function feedBest(expirySeconds, excludedSymbols = []) {
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
 	await ensureFeed();
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 	const ranked = [...pairs.values()].filter((pair) => pair.payout === 92 || pair.payout === 80).sort((a, b) => b.payout - a.payout);
-	const live = ranked.filter((pair) => quotes.has(pair.symbol));
-	const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
+	if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+	const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
+	const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
+	if (available.length === 0) throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
+	const live = available.filter((pair) => quotes.has(pair.symbol));
+	const pool = (live.length >= 4 ? live : available).slice(0, 4);
 	if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
 	const candidates = [];
 	let historyResponses = 0;
@@ -781,12 +802,16 @@ async function feedBest(expirySeconds) {
 		name: candidate.pair.name,
 		candles: candidate.candles
 	})));
-	if (review.decision !== "signal") return null;
+	if (review.decision === "pass") return review;
 	const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
-	if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) return null;
+	if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) return {
+		decision: "pass",
+		reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан."
+	};
 	const signal = buildDirectAiSignal(best.candles, expirySeconds, analysisSeconds, best.pair.name, best.pair.payout, review);
 	signal.openPrice = await waitQuote(best.pair.symbol);
 	return {
+		decision: "signal",
 		...signal,
 		symbol: best.pair.symbol,
 		group: best.pair.group,

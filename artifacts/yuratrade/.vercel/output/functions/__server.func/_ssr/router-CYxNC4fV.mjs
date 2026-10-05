@@ -4,7 +4,7 @@ import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } f
 import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-BxofkO8c.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-Cg2IKr54.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-CYxNC4fV.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -875,9 +875,9 @@ var copy = {
 		"Refund"
 	],
 	"common.priceUnchanged": [
-		"Цена не изменилась. Перекрытия нет.",
-		"Ціна не змінилася. Перекриття немає.",
-		"Price did not change. No recovery trade."
+		"Цена не изменилась. Результат: ничья.",
+		"Ціна не змінилася. Результат: нічия.",
+		"Price was unchanged; the result is a draw."
 	],
 	"common.loss": [
 		"Проигрыш",
@@ -887,7 +887,7 @@ var copy = {
 	"common.prepareRecovery": [
 		"Подготовьтесь к перекрытию",
 		"Підготуйтеся до перекриття",
-		"Prepare for recovery trade"
+		"Prepare for the recovery trade"
 	],
 	"common.samePairAttempts": [
 		"Та же пара. Осталось попыток: {count}",
@@ -895,9 +895,9 @@ var copy = {
 		"Same pair. Attempts left: {count}"
 	],
 	"common.recoveryStop": [
-		"Три перекрытия уже были",
-		"Три перекриття вже були",
-		"Three recovery trades have been used"
+		"Все три попытки перекрытия использованы. Проверьте журнал перед следующим запросом.",
+		"Усі три спроби перекриття використано. Перевірте журнал перед наступним запитом.",
+		"All three recovery attempts have been used. Review the journal before requesting another signal."
 	],
 	"common.skipEntry": [
 		"Вход пропущен",
@@ -1485,7 +1485,10 @@ var takeSignal = createServerFn({ method: "POST" }).validator((input) => {
 var takeBest = createServerFn({ method: "POST" }).validator((input) => {
 	const expirySeconds = Number(input?.expirySeconds);
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
-	return { expirySeconds };
+	return {
+		expirySeconds,
+		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
+	};
 }).handler(createSsrRpc("65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab"));
 var STORAGE_KEY = "vprime_signal_journal_v1";
 var JOURNAL_EVENT = "vprime:signal-journal-updated";
@@ -1679,6 +1682,19 @@ function summarizeByMarket(entries) {
 		seconds: group[0].seconds,
 		summary: summarizeSignals(group)
 	})).sort((a, b) => b.summary.decided - a.summary.decided || a.name.localeCompare(b.name) || a.seconds - b.seconds);
+}
+function recentlyUsedSignalSymbols(entries, now = Date.now(), cooldownMs = 9e5, limit = 12) {
+	const recent = entries.filter((entry) => {
+		if (entry.group !== "fx") return false;
+		if (entry.outcome === "pending") return true;
+		return (entry.settledAt ?? entry.startedAt) >= now - cooldownMs;
+	}).sort((a, b) => (b.settledAt ?? b.startedAt) - (a.settledAt ?? a.startedAt) || b.startedAt - a.startedAt);
+	const symbols = /* @__PURE__ */ new Set();
+	for (const entry of recent) {
+		symbols.add(entry.symbol);
+		if (symbols.size >= Math.max(0, Math.min(24, Math.floor(limit)))) break;
+	}
+	return [...symbols];
 }
 function subscribeToSignalJournal(listener) {
 	if (typeof window === "undefined") return () => {};
@@ -1936,15 +1952,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-Bq98VSL8.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-CltlajTa.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-B6Ft5eXw.mjs");
+var $$splitComponentImporter$3 = () => import("./history-BlISKHKb.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-D7CXreDH.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-BxrO_0iU.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-DvR2WUvi.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-BsIbs2t-.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-DPeqtNxL.mjs");
+var $$splitComponentImporter = () => import("./signal-D5hwEVhO.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -1998,7 +2014,7 @@ var Route$1 = createFileRoute("/signal")({
 var Route = createFileRoute("/api/ticks")({ server: { handlers: { GET: async ({ request }) => {
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-qEB-ziG9.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-B9jriGwn.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2080,4 +2096,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { useLanguage as C, formatExpiryForLanguage as S, levels as _, recordSignalOutcome as a, isAdminId as b, signalRecordId as c, summarizeSignals as d, loadFeed as f, levelForBalance as g, takeSignal as h, readSignalJournal as i, subscribeToSignalJournal as l, takeBest as m, Route$1 as n, recordSignalStarted as o, readClose as p, markExpiredPendingSignals as r, signalJournalCsv as s, router_exports as t, summarizeByMarket as u, markSignalUsed as v, usePocket as x, signalsUsedToday as y };
+export { formatExpiryForLanguage as C, usePocket as S, levelForBalance as _, recentlyUsedSignalSymbols as a, signalsUsedToday as b, signalJournalCsv as c, summarizeByMarket as d, summarizeSignals as f, takeSignal as g, takeBest as h, readSignalJournal as i, signalRecordId as l, readClose as m, Route$1 as n, recordSignalOutcome as o, loadFeed as p, markExpiredPendingSignals as r, recordSignalStarted as s, router_exports as t, subscribeToSignalJournal as u, levels as v, useLanguage as w, isAdminId as x, markSignalUsed as y };

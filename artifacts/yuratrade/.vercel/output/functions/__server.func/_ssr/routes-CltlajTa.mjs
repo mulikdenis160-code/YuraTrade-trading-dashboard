@@ -2,10 +2,10 @@ import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as analysisPeriodForExpiry } from "./expiry-BxofkO8c.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, b as isAdminId, f as loadFeed, g as levelForBalance, h as takeSignal, m as takeBest, v as markSignalUsed, x as usePocket, y as signalsUsedToday } from "./router-Cg2IKr54.mjs";
-import { t as StatRow } from "./stats-D7bTi1gx.mjs";
-import { t as AnalysisModal } from "./analysis-modal-nTChG3rp.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Bq98VSL8.js
+import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, h as takeBest, i as readSignalJournal, p as loadFeed, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-CYxNC4fV.mjs";
+import { t as StatRow } from "./stats-CD8dGWe7.mjs";
+import { t as AnalysisModal } from "./analysis-modal-DMdve2xs.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CltlajTa.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var expiryOptionsMinutes = [
@@ -82,11 +82,14 @@ function SignalDesk() {
 		setError("");
 		setNotice("");
 		try {
-			const candidate = await takeBest({ data: { expirySeconds } });
+			const candidate = await takeBest({ data: {
+				expirySeconds,
+				excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal())
+			} });
 			if (attemptRef.current !== attempt) return;
-			if (!candidate) {
+			if (candidate.decision === "pass") {
 				setPhase("idle");
-				setNotice(t("signal.none"));
+				setNotice(candidate.reason);
 				return;
 			}
 			setPrepared(candidate);
@@ -103,10 +106,10 @@ function SignalDesk() {
 				expirySeconds
 			} });
 			if (attemptRef.current !== attempt) return;
-			if (!result) {
+			if (result.decision === "pass") {
 				setPrepared(null);
 				setPhase("idle");
-				setNotice(t("signal.pairNoLongerReady"));
+				setNotice(result.reason);
 				return;
 			}
 			if (cap !== null) setUsed(markSignalUsed());

@@ -317,10 +317,10 @@ function SignalCard({ search }: { search: Search }) {
     const started = Date.now();
     void takeSignal({ data: { symbol: search.symbol, expirySeconds: search.seconds } })
       .then(async (result) => {
-        if (!result) {
+        if (result.decision === "pass") {
           if (stop) return;
           setPhase("no-signal");
-          setError("");
+          setError(result.reason);
           return;
         }
         const wait = Math.max(0, 2200 - (Date.now() - started));
@@ -373,7 +373,7 @@ function SignalCard({ search }: { search: Search }) {
           <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("common.skipEntry")}</p>
           <h1 className="mt-3 text-xl font-bold text-fg">{t("common.notConfirmed")}</h1>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted">
-            {t("common.skipReason")}
+            {error || t("common.skipReason")}
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
             <Link to="/history" className="btn-ghost min-h-11 justify-center">{t("common.openHistory")}</Link>

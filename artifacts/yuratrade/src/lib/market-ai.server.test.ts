@@ -103,6 +103,14 @@ test("direct AI may abstain when candle data is valid but no direction has a cle
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass только если/u);
 });
 
+test("a valid AI abstention preserves its reason for the interface", () => {
+  const reason = "Направление не подтверждается последовательностью свечей.";
+  assert.deepEqual(
+    parseMarketAiReview(JSON.stringify({ decision: "pass", reason }), ["EURUSD_otc"]),
+    { decision: "pass", reason },
+  );
+});
+
 test("direct AI abstains when a candidate has too few candles", async () => {
   const result = await analyzeMarketCandidates(60, 60, [{
     symbol: "EURUSD_otc",
