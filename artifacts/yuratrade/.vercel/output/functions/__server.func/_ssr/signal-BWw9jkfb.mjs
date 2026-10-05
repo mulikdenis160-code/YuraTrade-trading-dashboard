@@ -1,9 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { a as lookbackForExpiry } from "./expiry-B3tUilyb.mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-B1zMSVel.mjs";
-import { t as AnalysisModal } from "./analysis-modal-CSDgyEkL.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-BlX7zDss.js
+import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-ByIoEGFE.mjs";
+import { t as AnalysisModal } from "./analysis-modal-CjnONcC6.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-BWw9jkfb.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -279,8 +279,9 @@ function digitsOf(price) {
 	return 5;
 }
 function copyName(text) {
+	const pairName = text.replace(/\s+OTC$/i, "").trim();
 	const area = document.createElement("textarea");
-	area.value = text;
+	area.value = pairName;
 	area.setAttribute("readonly", "");
 	area.style.position = "fixed";
 	area.style.top = "0";
@@ -289,7 +290,7 @@ function copyName(text) {
 	document.body.appendChild(area);
 	area.focus();
 	area.select();
-	area.setSelectionRange(0, text.length);
+	area.setSelectionRange(0, pairName.length);
 	let copied = false;
 	try {
 		copied = document.execCommand("copy");
@@ -298,7 +299,7 @@ function copyName(text) {
 	}
 	area.remove();
 	if (copied) return Promise.resolve();
-	if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+	if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(pairName);
 	return Promise.reject(/* @__PURE__ */ new Error("copy"));
 }
 function clock(ms) {

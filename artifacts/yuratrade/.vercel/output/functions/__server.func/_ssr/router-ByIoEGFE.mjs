@@ -4,7 +4,7 @@ import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } f
 import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-B3tUilyb.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
 import { a as union, i as string, n as number, r as object, t as literal } from "../_libs/zod.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-B1zMSVel.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-ByIoEGFE.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -484,6 +484,41 @@ var copy = {
 		"Без ліміту",
 		"No limit"
 	],
+	"signal.pairReady": [
+		"Пара выбрана",
+		"Пару вибрано",
+		"Pair selected"
+	],
+	"signal.pairChosen": [
+		"Валютная пара выбрана",
+		"Валютну пару вибрано",
+		"Currency pair selected"
+	],
+	"signal.choosePair": [
+		"Выберите эту пару у брокера. Направление появится после отсчёта.",
+		"Оберіть цю пару у брокера. Напрямок з’явиться після відліку.",
+		"Select this pair at your broker. The direction appears when the countdown ends."
+	],
+	"signal.countdownRemaining": [
+		"Осталось {seconds} секунд",
+		"Залишилося {seconds} секунд",
+		"{seconds} seconds remaining"
+	],
+	"signal.countdownUnit": [
+		"до сигнала",
+		"до сигналу",
+		"until the signal"
+	],
+	"signal.finalizing": [
+		"Проверяем вход…",
+		"Перевіряємо вхід…",
+		"Checking the entry…"
+	],
+	"signal.pairNoLongerReady": [
+		"По выбранной паре больше нет подтверждённого входа. Получите новый сигнал.",
+		"Для вибраної пари більше немає підтвердженого входу. Запросіть новий сигнал.",
+		"There is no longer a confirmed entry for this pair. Request a new signal."
+	],
 	"signal.today": [
 		"Сегодня {used} из {cap}",
 		"Сьогодні {used} із {cap}",
@@ -883,6 +918,11 @@ var copy = {
 		"Не удалось скопировать название.",
 		"Не вдалося скопіювати назву.",
 		"Could not copy the pair name."
+	],
+	"common.cancel": [
+		"Отмена",
+		"Скасувати",
+		"Cancel"
 	],
 	"learn.kicker": [
 		"Курс",
@@ -1815,7 +1855,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-DUksGfRQ.css";
+var styles_default = "/assets/styles-tRZBvtqW.css";
 var Route$6 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -1870,15 +1910,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-DF3yrwyC.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-VR0uET5D.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-CwHtiK2W.mjs");
+var $$splitComponentImporter$3 = () => import("./history-BcjfBtjT.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-CYd9kq1c.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-86HExIaO.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-B9xOiOD8.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-1ZS7bnUg.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-BlX7zDss.mjs");
+var $$splitComponentImporter = () => import("./signal-BWw9jkfb.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];

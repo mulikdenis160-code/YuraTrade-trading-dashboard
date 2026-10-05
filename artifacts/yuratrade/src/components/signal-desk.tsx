@@ -119,7 +119,7 @@ export function SignalDesk() {
       await navigate({
         to: "/signal",
         search: {
-          symbol: result.symbol,
+          symbol: candidate.symbol,
           name: result.name,
           group: "fx",
           direction: result.direction,

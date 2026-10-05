@@ -2,10 +2,10 @@ import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { a as lookbackForExpiry, n as analysisPeriodForExpiry } from "./expiry-B3tUilyb.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, b as isAdminId, f as loadFeed, g as levelForBalance, m as takeBest, v as markSignalUsed, x as usePocket, y as signalsUsedToday } from "./router-B1zMSVel.mjs";
-import { t as StatRow } from "./stats-Bj81Q044.mjs";
-import { t as AnalysisModal } from "./analysis-modal-CSDgyEkL.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-DF3yrwyC.js
+import { C as useLanguage, S as formatExpiryForLanguage, b as isAdminId, f as loadFeed, g as levelForBalance, h as takeSignal, m as takeBest, v as markSignalUsed, x as usePocket, y as signalsUsedToday } from "./router-ByIoEGFE.mjs";
+import { t as StatRow } from "./stats-B1TlRjmF.mjs";
+import { t as AnalysisModal } from "./analysis-modal-CjnONcC6.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-VR0uET5D.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var expiryOptionsMinutes = [
@@ -22,6 +22,9 @@ var expiryOptionsMinutes = [
 	180,
 	240
 ];
+function pairLabel(name) {
+	return name.replace(/\s+OTC$/i, "").trim();
+}
 function SignalDesk() {
 	const navigate = useNavigate();
 	const { id } = usePocket();
@@ -30,11 +33,17 @@ function SignalDesk() {
 	const [ready, setReady] = (0, import_react.useState)(false);
 	const [feedStatus, setFeedStatus] = (0, import_react.useState)("connecting");
 	const [phase, setPhase] = (0, import_react.useState)("idle");
+	const [prepared, setPrepared] = (0, import_react.useState)(null);
+	const [countdown, setCountdown] = (0, import_react.useState)(10);
 	const [error, setError] = (0, import_react.useState)("");
 	const [notice, setNotice] = (0, import_react.useState)("");
 	const [balance, setBalance] = (0, import_react.useState)(null);
 	const [used, setUsed] = (0, import_react.useState)(0);
 	const [expiryMinutes, setExpiryMinutes] = (0, import_react.useState)(1);
+	const attemptRef = (0, import_react.useRef)(0);
+	(0, import_react.useEffect)(() => () => {
+		attemptRef.current += 1;
+	}, []);
 	(0, import_react.useEffect)(() => {
 		let stop = false;
 		const pull = () => {
@@ -68,25 +77,44 @@ function SignalDesk() {
 	const blocked = admin ? "" : balance === null ? t("signal.block.deposit") : !level ? t("signal.block.minimum") : left === 0 ? t("signal.block.limit") : "";
 	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
 	const ask = async () => {
-		if (phase === "search" || blocked || !ready) return;
+		if (phase !== "idle" || blocked || !ready) return;
+		const attempt = ++attemptRef.current;
 		setPhase("search");
 		setError("");
 		setNotice("");
-		const started = Date.now();
 		try {
-			const result = await takeBest({ data: { expirySeconds } });
-			if (!result) {
+			const candidate = await takeBest({ data: { expirySeconds } });
+			if (attemptRef.current !== attempt) return;
+			if (!candidate) {
 				setPhase("idle");
 				setNotice(t("signal.none"));
 				return;
 			}
-			const wait = Math.max(0, 2400 - (Date.now() - started));
-			await new Promise((resolve) => window.setTimeout(resolve, wait));
+			setPrepared(candidate);
+			setPhase("countdown");
+			for (let seconds = 10; seconds > 0; seconds -= 1) {
+				if (attemptRef.current !== attempt) return;
+				setCountdown(seconds);
+				await new Promise((resolve) => window.setTimeout(resolve, 1e3));
+			}
+			if (attemptRef.current !== attempt) return;
+			setPhase("finalizing");
+			const result = await takeSignal({ data: {
+				symbol: candidate.symbol,
+				expirySeconds
+			} });
+			if (attemptRef.current !== attempt) return;
+			if (!result) {
+				setPrepared(null);
+				setPhase("idle");
+				setNotice(t("signal.pairNoLongerReady"));
+				return;
+			}
 			if (cap !== null) setUsed(markSignalUsed());
 			await navigate({
 				to: "/signal",
 				search: {
-					symbol: result.symbol,
+					symbol: candidate.symbol,
 					name: result.name,
 					group: "fx",
 					direction: result.direction,
@@ -102,97 +130,153 @@ function SignalDesk() {
 				}
 			});
 		} catch (cause) {
+			if (attemptRef.current !== attempt) return;
 			setPhase("idle");
+			setPrepared(null);
 			setError(cause instanceof Error ? cause.message : t("signal.none"));
 		}
 	};
+	const cancelCountdown = () => {
+		attemptRef.current += 1;
+		setPrepared(null);
+		setPhase("idle");
+		setCountdown(10);
+	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto w-full max-w-md space-y-4",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-			className: "panel p-4",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-					className: `mb-3 flex items-center justify-center gap-2 text-xs font-semibold ${feedStatus === "connected" ? "text-win" : feedStatus === "error" ? "text-loss" : "text-dim"}`,
-					role: "status",
-					"aria-live": "polite",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? t("signal.connected") : feedStatus === "error" ? t("signal.disconnected") : t("signal.connecting")]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "text-sm leading-relaxed text-muted",
-					children: t("signal.description")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-2 text-xs leading-relaxed text-dim",
-					children: t("signal.experimental")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3",
-					"aria-label": t("signal.expiry"),
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between gap-3",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-sm font-semibold text-fg",
-								children: t("signal.expiry")
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-sm font-bold text-blue-soft",
-								children: expiryLabel(expirySeconds)
-							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "mt-3 grid grid-cols-4 gap-2",
-							children: expiryOptionsMinutes.map((minutes) => {
-								const selected = expiryMinutes === minutes;
-								const label = expiryLabel(minutes * 60);
-								return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									"aria-pressed": selected,
-									title: expiryLabel(minutes * 60),
-									onClick: () => setExpiryMinutes(minutes),
-									className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"}`,
-									children: label
-								}, minutes);
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "panel p-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: `mb-3 flex items-center justify-center gap-2 text-xs font-semibold ${feedStatus === "connected" ? "text-win" : feedStatus === "error" ? "text-loss" : "text-dim"}`,
+						role: "status",
+						"aria-live": "polite",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? t("signal.connected") : feedStatus === "error" ? t("signal.disconnected") : t("signal.connecting")]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-sm leading-relaxed text-muted",
+						children: t("signal.description")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-2 text-xs leading-relaxed text-dim",
+						children: t("signal.experimental")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3",
+						"aria-label": t("signal.expiry"),
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center justify-between gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-sm font-semibold text-fg",
+									children: t("signal.expiry")
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-sm font-bold text-blue-soft",
+									children: expiryLabel(expirySeconds)
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-3 grid grid-cols-4 gap-2",
+								children: expiryOptionsMinutes.map((minutes) => {
+									const selected = expiryMinutes === minutes;
+									const label = expiryLabel(minutes * 60);
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										disabled: phase !== "idle",
+										"aria-pressed": selected,
+										title: expiryLabel(minutes * 60),
+										onClick: () => setExpiryMinutes(minutes),
+										className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"} disabled:cursor-not-allowed disabled:opacity-50`,
+										children: label
+									}, minutes);
+								})
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-2 text-xs leading-relaxed text-dim",
+								"aria-live": "polite",
+								children: t("signal.analyzed", {
+									period: expiryLabel(analysisSeconds),
+									bars: lookbackBars
+								})
 							})
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "mt-2 text-xs leading-relaxed text-dim",
-							"aria-live": "polite",
-							children: t("signal.analyzed", {
-								period: expiryLabel(analysisSeconds),
-								bars: lookbackBars
-							})
-						})
-					]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					className: "btn-prime mt-4 min-h-12 w-full",
-					disabled: !ready || phase === "search" || Boolean(blocked),
-					onClick: () => void ask(),
-					children: phase === "search" ? t("signal.checking") : t("signal.get")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
-					children: blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", {
-						used,
-						cap
-					}))
-				}),
-				error ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-3 text-sm text-loss",
-					children: error
-				}) : null,
-				notice ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-3 rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-sm leading-relaxed text-muted",
-					role: "status",
-					"aria-live": "polite",
-					children: notice
-				}) : null
-			]
-		}), phase === "search" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
-			pair: t("home.eyebrow"),
-			expiry: expiryLabel(expirySeconds)
-		}) : null]
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "btn-prime mt-4 min-h-12 w-full",
+						disabled: !ready || phase !== "idle" || Boolean(blocked),
+						onClick: () => void ask(),
+						children: phase === "search" ? t("signal.checking") : phase === "countdown" ? t("signal.pairReady") : phase === "finalizing" ? t("signal.finalizing") : t("signal.get")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
+						children: blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", {
+							used,
+							cap
+						}))
+					}),
+					error ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-3 text-sm text-loss",
+						children: error
+					}) : null,
+					notice ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-3 rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-sm leading-relaxed text-muted",
+						role: "status",
+						"aria-live": "polite",
+						children: notice
+					}) : null
+				]
+			}),
+			phase === "countdown" && prepared ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "panel rise p-5 text-center",
+				role: "status",
+				"aria-live": "polite",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
+						children: t("signal.pairChosen")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-2 flex items-center justify-center gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+							className: "text-2xl font-extrabold tracking-tight text-fg",
+							children: pairLabel(prepared.name)
+						}), /\sOTC$/i.test(prepared.name) ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold tracking-wide text-muted",
+							children: "OTC"
+						}) : null]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted",
+						children: t("signal.choosePair")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-4 font-mono text-6xl font-extrabold tabular-nums text-blue-soft",
+						"aria-label": t("signal.countdownRemaining", { seconds: countdown }),
+						children: countdown
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 text-xs text-dim",
+						children: t("signal.countdownUnit")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "btn-ghost mt-4 min-h-10 justify-center",
+						onClick: cancelCountdown,
+						children: t("common.cancel")
+					})
+				]
+			}) : null,
+			phase === "search" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+				pair: t("home.eyebrow"),
+				expiry: expiryLabel(expirySeconds)
+			}) : null,
+			phase === "finalizing" && prepared ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+				pair: pairLabel(prepared.name),
+				expiry: expiryLabel(expirySeconds)
+			}) : null
+		]
 	});
 }
 var risks = [

@@ -1,6 +1,6 @@
 import { g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as useLanguage, _ as levels, b as isAdminId, x as usePocket } from "./router-B1zMSVel.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/profile-B9xOiOD8.js
+import { C as useLanguage, _ as levels, b as isAdminId, x as usePocket } from "./router-ByIoEGFE.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/profile-1ZS7bnUg.js
 var import_jsx_runtime = require_jsx_runtime();
 function ProfilePage() {
 	const { t } = useLanguage();
