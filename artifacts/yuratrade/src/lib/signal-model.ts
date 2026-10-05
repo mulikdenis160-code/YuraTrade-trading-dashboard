@@ -1,6 +1,6 @@
 import type { SignalJournalEntry } from "./signal-journal.ts";
 
-export const MIN_MODEL_SAMPLES = 100;
+export const MIN_MODEL_SAMPLES = 120;
 
 export type SignalModelInput = Pick<
   SignalJournalEntry,
@@ -9,10 +9,12 @@ export type SignalModelInput = Pick<
 
 export type SignalModelAssessment = {
   status: "collecting" | "ready" | "unreliable";
+  reason?: "sample-count" | "class-balance" | "no-baseline-edge";
   sampleCount: number;
   minimumSamples: number;
   validationCount: number;
   probability?: number;
+  expectedValue?: number;
   brierScore?: number;
   baselineBrier?: number;
 };
@@ -132,20 +134,7 @@ function fitCalibration(logits: number[], labels: Array<0 | 1>) {
 }
 
 export function assessSignalModel(entries: SignalJournalEntry[], candidate: SignalModelInput): SignalModelAssessment {
-  const examples = entries
-    .filter(
-      (entry) =>
-        entry.group === "fx" &&
-        (entry.outcome === "win" || entry.outcome === "loss"),
-    )
-    .map((entry) => {
-      const features = featuresOf(entry);
-      return features ? { features, label: entry.outcome === "win" ? (1 as const) : (0 as const) } : null;
-    })
-    .filter((example): example is Example => example !== null)
-    .sort((a, b) => 0);
-
-  // Use journal time order for a forward holdout, never a random split.
+  // Use journal time order for separate training, calibration, and forward-test sets.
   const chronological = entries
     .filter(
       (entry) =>
@@ -160,55 +149,78 @@ export function assessSignalModel(entries: SignalJournalEntry[], candidate: Sign
     }));
 
   const sampleCount = chronological.length;
-  const validationCount = sampleCount - Math.floor(sampleCount * 0.8);
+  const trainCount = Math.floor(sampleCount * 0.7);
+  const calibrationEnd = Math.floor(sampleCount * 0.85);
+  const training = chronological.slice(0, trainCount);
+  const calibrationSet = chronological.slice(trainCount, calibrationEnd);
+  const validation = chronological.slice(calibrationEnd);
   const collecting = (): SignalModelAssessment => ({
     status: "collecting",
+    reason: "sample-count",
     sampleCount,
     minimumSamples: MIN_MODEL_SAMPLES,
-    validationCount,
+    validationCount: validation.length,
   });
-  if (sampleCount < MIN_MODEL_SAMPLES || examples.length === 0) return collecting();
+  if (sampleCount < MIN_MODEL_SAMPLES) return collecting();
 
-  const trainCount = Math.floor(sampleCount * 0.8);
-  const training = chronological.slice(0, trainCount);
-  const validation = chronological.slice(trainCount);
   const trainingWins = training.filter((example) => example.label === 1).length;
+  const calibrationWins = calibrationSet.filter((example) => example.label === 1).length;
   const validationWins = validation.filter((example) => example.label === 1).length;
   if (
-    trainingWins < 20 ||
-    training.length - trainingWins < 20 ||
+    trainingWins < 25 ||
+    training.length - trainingWins < 25 ||
+    calibrationWins < 5 ||
+    calibrationSet.length - calibrationWins < 5 ||
     validationWins < 5 ||
     validation.length - validationWins < 5
   ) {
-    return collecting();
+    return { ...collecting(), reason: "class-balance" };
   }
 
   const model = fitLogistic(training);
+  const calibrationLogits = calibrationSet.map((example) => logit(model, example.features));
+  const calibration = fitCalibration(calibrationLogits, calibrationSet.map((example) => example.label));
   const validationLogits = validation.map((example) => logit(model, example.features));
-  const calibration = fitCalibration(validationLogits, validation.map((example) => example.label));
   const probabilities = validationLogits.map((value) => sigmoid(calibration.slope * value + calibration.intercept));
-  const baseRate = validationWins / validation.length;
+  const baseRate = calibrationWins / calibrationSet.length;
   const brierScore =
     probabilities.reduce((sum, value, index) => sum + (value - validation[index].label) ** 2, 0) /
     validation.length;
-  const baselineBrier = validation.reduce((sum, example) => sum + (baseRate - example.label) ** 2, 0) /
-    validation.length;
+  const baselineBrier =
+    validation.reduce((sum, example) => sum + (baseRate - example.label) ** 2, 0) / validation.length;
 
   if (brierScore >= baselineBrier) {
-    return { status: "unreliable", sampleCount, minimumSamples: MIN_MODEL_SAMPLES, validationCount, brierScore, baselineBrier };
+    return {
+      status: "unreliable",
+      reason: "no-baseline-edge",
+      sampleCount,
+      minimumSamples: MIN_MODEL_SAMPLES,
+      validationCount: validation.length,
+      brierScore,
+      baselineBrier,
+    };
   }
-
   const candidateFeatures = featuresOf(candidate);
   if (!candidateFeatures) {
-    return { status: "unreliable", sampleCount, minimumSamples: MIN_MODEL_SAMPLES, validationCount, brierScore, baselineBrier };
+    return {
+      status: "unreliable",
+      reason: "no-baseline-edge",
+      sampleCount,
+      minimumSamples: MIN_MODEL_SAMPLES,
+      validationCount: validation.length,
+      brierScore,
+      baselineBrier,
+    };
   }
   const probability = sigmoid(calibration.slope * logit(model, candidateFeatures) + calibration.intercept);
+  const expectedValue = probability * (candidate.payout / 100) - (1 - probability);
   return {
     status: "ready",
     sampleCount,
     minimumSamples: MIN_MODEL_SAMPLES,
-    validationCount,
+    validationCount: validation.length,
     probability,
+    expectedValue,
     brierScore,
     baselineBrier,
   };

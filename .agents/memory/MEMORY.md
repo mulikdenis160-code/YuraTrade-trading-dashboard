@@ -1,2 +1,3 @@
 - [Market data feed](market-data-feed.md) — the user chose Pocket Option quotes; keep authorization in Secrets and the feed read-only.
 - [Signal preparation flow](signal-preparation.md) — reveal the selected currency pair, wait 10 seconds, then issue a fresh signal; copy pair names without OTC.
+- [Signal model](signal-model.md) — train only from this browser’s settled FX journal; keep the ML estimate experimental and separate from signal direction.

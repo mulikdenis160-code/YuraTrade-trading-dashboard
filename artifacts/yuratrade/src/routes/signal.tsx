@@ -4,10 +4,12 @@ import { AnalysisModal } from "@/components/analysis-modal";
 import { PairMark } from "@/components/pair-mark";
 import { readClose, takeSignal } from "@/lib/pocket-live";
 import {
+  readSignalJournal,
   recordSignalOutcome,
   recordSignalStarted,
   signalRecordId,
 } from "@/lib/signal-journal";
+import { assessSignalModel, type SignalModelAssessment } from "@/lib/signal-model";
 import {
   analysisPeriodForExpiry,
   isValidExpirySeconds,
@@ -194,6 +196,7 @@ function SignalCard({ search }: { search: Search }) {
   const [prepLeft, setPrepLeft] = useState(10);
   const [error, setError] = useState("");
   const [journalWarning, setJournalWarning] = useState("");
+  const [aiAssessment, setAiAssessment] = useState<SignalModelAssessment | null>(null);
   const [live, setLive] = useState<number | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [liveMessage, setLiveMessage] = useState("");
@@ -228,6 +231,17 @@ function SignalCard({ search }: { search: Search }) {
     });
     setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
   }, [journalId, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
+
+  useEffect(() => {
+    setAiAssessment(assessSignalModel(readSignalJournal(), {
+      direction: search.direction,
+      payout: search.payout,
+      seconds: search.seconds,
+      step: search.step,
+      ruleScore: search.ruleScore,
+      bars: search.bars,
+    }));
+  }, [search.bars, search.direction, search.payout, search.ruleScore, search.seconds, search.step]);
 
   useEffect(() => {
     if (phase !== "run") return;
@@ -439,6 +453,40 @@ function SignalCard({ search }: { search: Search }) {
               </li>
             ))}
         </ul>
+        {aiAssessment ? (
+          <section className="mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-4" aria-live="polite">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold tracking-[0.14em] text-blue-soft uppercase">{t("ai.title")}</p>
+              {aiAssessment.status === "ready" && aiAssessment.probability !== undefined ? (
+                <p className="font-mono text-lg font-bold text-fg">{Math.round(aiAssessment.probability * 100)}%</p>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.explanation")}</p>
+            {aiAssessment.status === "ready" && aiAssessment.probability !== undefined ? (
+              <>
+                <p className="mt-2 text-xs leading-relaxed text-muted">
+                  {t("ai.validated", {
+                    samples: aiAssessment.sampleCount,
+                    brier: aiAssessment.brierScore?.toFixed(3) ?? "—",
+                  })}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  {t("ai.expectedValue", {
+                    value: `${(aiAssessment.expectedValue ?? 0) >= 0 ? "+" : ""}${(aiAssessment.expectedValue ?? 0).toFixed(3)}`,
+                  })}
+                </p>
+              </>
+            ) : aiAssessment.status === "unreliable" ? (
+              <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.unreliable")}</p>
+            ) : aiAssessment.reason === "class-balance" ? (
+              <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.classBalance", { samples: aiAssessment.sampleCount })}</p>
+            ) : (
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                {t("ai.collecting", { samples: aiAssessment.sampleCount, minimum: aiAssessment.minimumSamples })}
+              </p>
+            )}
+          </section>
+        ) : null}
         <dl className="mt-4 grid grid-cols-2 gap-3">
           <div>
             <dt className="text-xs text-dim">{t("common.entryPrice")}</dt>

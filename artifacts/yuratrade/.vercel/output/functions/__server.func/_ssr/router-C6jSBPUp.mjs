@@ -4,7 +4,7 @@ import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } f
 import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-B3tUilyb.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
 import { a as union, i as string, n as number, r as object, t as literal } from "../_libs/zod.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-ByIoEGFE.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-C6jSBPUp.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -519,6 +519,41 @@ var copy = {
 		"Для вибраної пари більше немає підтвердженого входу. Запросіть новий сигнал.",
 		"There is no longer a confirmed entry for this pair. Request a new signal."
 	],
+	"ai.title": [
+		"ИИ-оценка (эксперимент)",
+		"Оцінка ШІ (експеримент)",
+		"AI estimate (experimental)"
+	],
+	"ai.explanation": [
+		"Это экспериментальная оценка шанса выигрыша по направлению сигнала. Модель обучается только на закрытых сигналах, ранее отобранных текущим фильтром в этом браузере; направление не меняет.",
+		"Це експериментальна оцінка шансу виграшу за напрямком сигналу. Модель навчається лише на закритих сигналах, раніше відібраних поточним фільтром у цьому браузері; напрямок не змінює.",
+		"This experimental estimate predicts the signal direction's win chance. It trains only on completed signals previously selected by the current filter in this browser, and does not change the direction."
+	],
+	"ai.validated": [
+		"Модель: {samples} исходов; проверка на более позднем отрезке, Brier {brier}.",
+		"Модель: {samples} результатів; перевірка на пізнішому відрізку, Brier {brier}.",
+		"Model: {samples} outcomes; forward-time validation, Brier score {brier}."
+	],
+	"ai.expectedValue": [
+		"Расчётное ожидание на ставку 1 ед.: {value} ед.",
+		"Розрахункове очікування на ставку 1 од.: {value} од.",
+		"Estimated value per 1-unit stake: {value} units."
+	],
+	"ai.collecting": [
+		"Для обучения и проверки нужно не менее {minimum} завершённых исходов; сейчас {samples}.",
+		"Для навчання та перевірки потрібно щонайменше {minimum} завершених результатів; зараз {samples}.",
+		"Training and validation need at least {minimum} completed outcomes; current count: {samples}."
+	],
+	"ai.classBalance": [
+		"Пока недостаточно побед и поражений для честного обучения и проверки. Сигнал по-прежнему формирует текущий фильтр.",
+		"Поки недостатньо перемог і поразок для чесного навчання та перевірки. Сигнал і далі формує поточний фільтр.",
+		"There are not enough wins and losses for a meaningful training and validation split. The current filter still generates the signal."
+	],
+	"ai.unreliable": [
+		"На отложенных по времени данных модель не превзошла базовый прогноз; оценка не показывается.",
+		"На відкладених за часом даних модель не перевершила базовий прогноз; оцінку не показано.",
+		"On later time-held-out data, the model did not beat the baseline; its estimate is hidden."
+	],
 	"signal.today": [
 		"Сегодня {used} из {cap}",
 		"Сьогодні {used} із {cap}",
@@ -585,9 +620,9 @@ var copy = {
 		"Each entry is treated as a 1-unit stake"
 	],
 	"history.disclaimer": [
-		"Это локальный журнал фактических исходов, не прогноз. Условный итог не учитывает реальные суммы ставок, комиссии или размер перекрытий. Алгоритм эвристический, не ML-модель; надёжный backtest не заявляется.",
-		"Це локальний журнал фактичних результатів, а не прогноз. Умовний підсумок не враховує реальні суми ставок, комісії або розмір перекриттів. Алгоритм евристичний, не ML-модель; надійний backtest не заявляється.",
-		"This is a local record of actual outcomes, not a forecast. The illustrative total excludes real stake sizes, fees, and recovery trades. The algorithm is heuristic, not an ML model; no reliable backtest is claimed."
+		"Это локальный журнал фактических исходов, не прогноз. Сигнал формирует эвристический фильтр; экспериментальная ML-оценка обучается отдельно и не меняет направление. Условный итог не учитывает суммы ставок, комиссии или перекрытия.",
+		"Це локальний журнал фактичних результатів, а не прогноз. Сигнал формує евристичний фільтр; експериментальна ML-оцінка навчається окремо та не змінює напрямок. Умовний підсумок не враховує суми ставок, комісії чи перекриття.",
+		"This is a local record of actual outcomes, not a forecast. The heuristic filter still generates signals; the experimental ML estimate trains separately and does not change direction. Illustrative totals exclude stake sizes, fees, and recovery trades."
 	],
 	"history.byPair": [
 		"Разбивка по паре и сроку",
@@ -1855,7 +1890,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-tRZBvtqW.css";
+var styles_default = "/assets/styles-nOZSjJD7.css";
 var Route$6 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -1910,15 +1945,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-VR0uET5D.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-BpfAJIsb.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-BcjfBtjT.mjs");
+var $$splitComponentImporter$3 = () => import("./history-hIrGzEO5.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-86HExIaO.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-CPeC6JMB.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-1ZS7bnUg.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-BdsZ6qob.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-BWw9jkfb.mjs");
+var $$splitComponentImporter = () => import("./signal-BiFBPZbr.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
