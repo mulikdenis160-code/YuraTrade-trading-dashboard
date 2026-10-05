@@ -1,8 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-D9YrstdH.mjs";
-import { t as AnalysisModal } from "./analysis-modal-BVC-4S6t.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-DJ3RC2ww.js
+import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-shM-Bm2r.mjs";
+import { t as AnalysisModal } from "./analysis-modal-DOmXwOt9.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-CHiIqAJd.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -369,28 +369,15 @@ function SignalCard({ search }) {
 			analysisSeconds: search.analysisSeconds,
 			step: search.step,
 			startedAt: search.started,
-			ruleScore: search.ruleScore,
-			aiProbability: search.aiProbability,
-			aiExpectedValue: search.aiExpectedValue,
-			aiBrierScore: search.aiBrierScore,
-			aiBaselineBrier: search.aiBaselineBrier,
-			aiSamples: search.aiSamples,
-			aiValidationTrades: search.aiValidationTrades,
-			aiValidationReturn: search.aiValidationReturn,
-			strategyVersion: "websocket-ml-v1",
+			aiConfidence: search.aiConfidence ?? void 0,
+			strategyVersion: "direct-ai-v1",
 			note: search.note,
 			bars: search.bars
 		});
 		setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
 	}, [
 		journalId,
-		search.aiBaselineBrier,
-		search.aiBrierScore,
-		search.aiExpectedValue,
-		search.aiProbability,
-		search.aiSamples,
-		search.aiValidationReturn,
-		search.aiValidationTrades,
+		search.aiConfidence,
 		search.analysisSeconds,
 		search.bars,
 		search.direction,
@@ -399,7 +386,6 @@ function SignalCard({ search }) {
 		search.note,
 		search.open,
 		search.payout,
-		search.ruleScore,
 		search.seconds,
 		search.started,
 		search.step,
@@ -514,14 +500,7 @@ function SignalCard({ search }) {
 					analysisSeconds: result.analysisSeconds,
 					note: result.note,
 					bars: result.bars,
-					ruleScore: result.ruleScore,
-					aiProbability: result.aiProbability,
-					aiExpectedValue: result.aiExpectedValue,
-					aiBrierScore: result.aiBrierScore,
-					aiBaselineBrier: result.aiBaselineBrier,
-					aiSamples: result.aiSamples,
-					aiValidationTrades: result.aiValidationTrades,
-					aiValidationReturn: result.aiValidationReturn,
+					aiConfidence: result.aiConfidence,
 					step: search.step + 1,
 					started: Date.now()
 				}
@@ -672,43 +651,22 @@ function SignalCard({ search }) {
 							children: line
 						}, line))
 					}),
-					search.aiSamples > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+					search.aiConfidence !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 						className: "mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-4",
 						"aria-live": "polite",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center justify-between gap-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "text-xs font-semibold tracking-[0.14em] text-blue-soft uppercase",
-									children: t("ai.title")
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-									className: "font-mono text-lg font-bold text-fg",
-									children: [Math.round(search.aiProbability * 100), "%"]
-								})]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-2 text-xs leading-relaxed text-muted",
-								children: t("ai.explanation")
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-2 text-xs leading-relaxed text-muted",
-								children: t("ai.validated", {
-									samples: search.aiSamples,
-									brier: search.aiBrierScore.toFixed(3)
-								})
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-1 text-xs leading-relaxed text-muted",
-								children: t("ai.expectedValue", { value: `${search.aiExpectedValue >= 0 ? "+" : ""}${search.aiExpectedValue.toFixed(3)}` })
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-1 text-xs leading-relaxed text-muted",
-								children: t("ai.validationDetails", {
-									trades: search.aiValidationTrades,
-									result: `${search.aiValidationReturn >= 0 ? "+" : ""}${search.aiValidationReturn.toFixed(3)}`
-								})
-							})
-						]
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center justify-between gap-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs font-semibold tracking-[0.14em] text-blue-soft uppercase",
+								children: t("ai.title")
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								className: "font-mono text-lg font-bold text-fg",
+								children: [search.aiConfidence, "/100"]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-2 text-xs leading-relaxed text-muted",
+							children: t("ai.explanation")
+						})]
 					}) : null,
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("dl", {
 						className: "mt-4 grid grid-cols-2 gap-3",

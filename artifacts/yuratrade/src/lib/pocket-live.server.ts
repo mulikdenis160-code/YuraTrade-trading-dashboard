@@ -1,15 +1,10 @@
 import WebSocket from "ws";
 import {
-  AI_HISTORY_CANDLES,
-  analyzeCandleHistory,
-  MIN_LIVE_WIN_PROBABILITY,
-  MIN_AI_SAMPLES,
-  type AiCandleDecision,
-} from "./signal-model.server";
-import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
+  DIRECT_AI_HISTORY_CANDLES,
   DIRECT_AI_MODEL,
+  MIN_DIRECT_AI_CANDLES,
   type MarketAiReview,
 } from "./market-ai.server";
 import {
@@ -43,24 +38,11 @@ export type FeedSignal = {
   analysisSeconds: number;
   note: string;
   bars: Array<[number, number, number, number]>;
-  ruleScore: number;
-  aiProbability: number;
-  aiExpectedValue: number;
-  aiBrierScore: number;
-  aiBaselineBrier: number;
-  aiSamples: number;
-  aiValidationTrades: number;
-  aiValidationReturn: number;
+  aiConfidence: number;
 };
 
 type Candle = { open: number; close: number; high: number; low: number };
 type HistoricalCandle = Candle & { time: number };
-type ReadySignalCandidate = {
-  signal: FeedSignal;
-  symbol: string;
-  group: PairGroup;
-  candles: HistoricalCandle[];
-};
 
 type Pending = {
   asset: string;
@@ -145,45 +127,38 @@ function asCandles(data: unknown[]): HistoricalCandle[] {
   return candles;
 }
 
-function buildAiSignal(
+function buildDirectAiSignal(
   candles: HistoricalCandle[],
   expirySeconds: number,
   analysisSeconds: number,
   name: string,
   payout: number,
-): FeedSignal | AiCandleDecision {
-  const decision = analyzeCandleHistory(candles, expirySeconds, analysisSeconds, payout);
-  if (decision.status !== "ready") return decision;
-
+  review: Extract<MarketAiReview, { decision: "signal" }>,
+): FeedSignal {
   const pack = candles.slice(-28);
   const price = candles[candles.length - 1]?.close ?? 0;
   const sample = pack[pack.length - 1]?.close ?? price;
   const digits = sample >= 100 ? 2 : sample >= 10 ? 3 : 5;
   const cut = (value: number) => Number(value.toFixed(digits));
-  const directionLabel = decision.direction === "call" ? "вверх" : "вниз";
-  const signedValue = `${decision.expectedValue >= 0 ? "+" : ""}${decision.expectedValue.toFixed(3)}`;
+  const directionLabel = review.direction === "call" ? "CALL (вверх)" : "PUT (вниз)";
 
   return {
     name,
     payout,
-    direction: decision.direction,
+    direction: review.direction,
     openPrice: price,
     analysisSeconds,
-    ruleScore: decision.probability,
-    aiProbability: decision.probability,
-    aiExpectedValue: decision.expectedValue,
-    aiBrierScore: decision.brierScore,
-    aiBaselineBrier: decision.baselineBrier,
-    aiSamples: decision.sampleCount,
-    aiValidationTrades: decision.validationTrades,
-    aiValidationReturn: decision.validationReturn,
+    aiConfidence: review.confidence,
     note: [
-      `Статистическая проверка подтвердила направление ${directionLabel} по свечам Pocket Option WebSocket.`,
-      `Калиброванная вероятность выигрыша направления: ${(decision.probability * 100).toFixed(1)}%.`,
-      `Ожидаемое значение на ставку 1 ед.: ${signedValue} ед.`,
-      `Проверочный процент побед: ${(decision.validationWinRate * 100).toFixed(1)}% на ${decision.validationTrades} входах.`,
-      `Проверка калибровки на более поздних свечах: Brier ${decision.brierScore.toFixed(3)} против базовых ${decision.baselineBrier.toFixed(3)}.`,
+      `Прямой анализ OpenAI ${DIRECT_AI_MODEL} выбрал ${directionLabel}.`,
+      `Самооценка ИИ: ${review.confidence}/100; это субъективная оценка, а не измеренная вероятность или историческая точность.`,
+      `ИИ — выбор пары: ${review.explanation.pairSelection}`,
+      `ИИ — разбор свечей: ${review.explanation.candleEvidence}`,
+      `ИИ — аргумент направления: ${review.explanation.directionRationale}`,
+      `ИИ — риски сценария: ${review.explanation.riskFactors}`,
+      `ИИ — что ослабит сценарий: ${review.explanation.invalidation}`,
       `Экспирация ${formatExpiry(expirySeconds)}; интервал свечи ${formatExpiry(analysisSeconds)}.`,
+      "Направление выбрано прямым анализом ИИ без независимой проверки другой модели; результат не гарантирован.",
     ].join("\n"),
     bars: pack.map((candle) => [
       cut(candle.open),
@@ -192,36 +167,6 @@ function buildAiSignal(
       cut(candle.close),
     ]),
   };
-}
-
-function appendDirectAiReview(signal: FeedSignal, review: Extract<MarketAiReview, { decision: "signal" }>) {
-  const directionLabel = review.direction === "call" ? "CALL (вверх)" : "PUT (вниз)";
-  signal.note = [
-    signal.note,
-    `Прямой анализ OpenAI ${DIRECT_AI_MODEL}: ${directionLabel}; самооценка уверенности ${review.confidence}/100.`,
-    `ИИ — выбор пары: ${review.explanation.pairSelection}`,
-    `ИИ — разбор свечей: ${review.explanation.candleEvidence}`,
-    `ИИ — аргумент направления: ${review.explanation.directionRationale}`,
-    `ИИ — риски сценария: ${review.explanation.riskFactors}`,
-    `ИИ — что ослабит сценарий: ${review.explanation.invalidation}`,
-    "Самооценка OpenAI не является калиброванной исторической точностью; сигнал выдан только при совпадении со статистической проверкой.",
-  ].join("\n");
-}
-
-function aiNotReadyMessage(decision: AiCandleDecision | null) {
-  if (!decision || decision.status === "ready") {
-    return "ИИ не нашёл направление с положительным ожидаемым значением.";
-  }
-  if (decision.status === "no-edge") {
-    return `Нет сигнала с вероятностью победы не ниже ${(MIN_LIVE_WIN_PROBABILITY * 100).toFixed(0)}% и положительным ожидаемым значением.`;
-  }
-  if (decision.reason === "insufficient-history") {
-    return `ИИ не получил достаточно исторических свечей для обучения и проверки (найдено ${decision.sampleCount} примеров, нужно не менее ${MIN_AI_SAMPLES}).`;
-  }
-  if (decision.reason === "class-balance") {
-    return "ИИ не может надёжно проверить модель: в исторических свечах недостаточно примеров обоих направлений.";
-  }
-  return "ИИ-модель не прошла проверку на более поздних свечах. Сигнал не выдан.";
 }
 
 function rememberTicks(message: string) {
@@ -467,8 +412,8 @@ async function loadCandles(symbol: string, seconds: number) {
   await ensureFeed();
   const collected = new Map<number, HistoricalCandle>();
   let cursor = Math.floor(Date.now() / 1000);
-  const maxPages = Math.ceil(AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
-  for (let page = 0; page < maxPages && collected.size < AI_HISTORY_CANDLES; page += 1) {
+  const maxPages = Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
+  for (let page = 0; page < maxPages && collected.size < DIRECT_AI_HISTORY_CANDLES; page += 1) {
     const candles = await loadHistoryPage(symbol, seconds, cursor);
     if (candles.length === 0) break;
     const previousSize = collected.size;
@@ -479,7 +424,7 @@ async function loadCandles(symbol: string, seconds: number) {
   }
   return [...collected.values()]
     .sort((a, b) => a.time - b.time)
-    .slice(-AI_HISTORY_CANDLES);
+    .slice(-DIRECT_AI_HISTORY_CANDLES);
 }
 
 export function followQuote(symbol: string) {
@@ -524,19 +469,14 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   const candles = await loadCandles(symbol, analysisSeconds);
   const pair = pairs.get(symbol);
   if (!pair) throw new Error("Эта пара сейчас недоступна.");
-  const evaluated = buildAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
-  if ("status" in evaluated) {
-    if (evaluated.status === "no-edge") return null;
-    throw new Error(aiNotReadyMessage(evaluated));
-  }
   const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [
     { symbol, name: pair.name, candles },
   ]);
   if (review.decision !== "signal") return null;
-  if (!acceptsMarketAiReview(review, { symbol, direction: evaluated.direction })) return null;
-  appendDirectAiReview(evaluated, review);
-  evaluated.openPrice = await waitQuote(symbol);
-  return evaluated;
+  if (!acceptsMarketAiReview(review, [symbol])) return null;
+  const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
+  signal.openPrice = await waitQuote(symbol);
+  return signal;
 }
 
 export async function feedBest(expirySeconds: number) {
@@ -549,51 +489,46 @@ export async function feedBest(expirySeconds: number) {
   const live = ranked.filter((pair) => quotes.has(pair.symbol));
   const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
   if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-  const candidates: ReadySignalCandidate[] = [];
-  let validatedModels = 0;
-  let largestSampleCount = 0;
-  let latestDecision: AiCandleDecision | null = null;
+  const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
   for (const pair of pool) {
     try {
       const candles = await loadCandles(pair.symbol, analysisSeconds);
-      const evaluated = buildAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
-      if ("status" in evaluated) {
-        largestSampleCount = Math.max(largestSampleCount, evaluated.sampleCount);
-        latestDecision = evaluated;
-        if (evaluated.status === "no-edge") validatedModels += 1;
-        continue;
-      }
-      validatedModels += 1;
-      candidates.push({ signal: evaluated, symbol: pair.symbol, group: pair.group, candles });
+      if (candles.length < MIN_DIRECT_AI_CANDLES) continue;
+      candidates.push({ pair, candles });
     } catch {
       // Continue to another pair if its history request fails.
     }
   }
-  if (candidates.length === 0 && validatedModels === 0) {
-    if (latestDecision) throw new Error(aiNotReadyMessage({ ...latestDecision, sampleCount: largestSampleCount }));
-    throw new Error("Не удалось получить исторические свечи Pocket Option по WebSocket.");
+  if (candidates.length === 0) {
+    throw new Error(`Не удалось получить по Pocket Option минимум ${MIN_DIRECT_AI_CANDLES} исторических свечей ни для одной пары.`);
   }
-  if (candidates.length === 0) return null;
   const review = await analyzeMarketCandidates(
     expirySeconds,
     analysisSeconds,
     candidates.map((candidate) => ({
-      symbol: candidate.symbol,
-      name: candidate.signal.name,
+      symbol: candidate.pair.symbol,
+      name: candidate.pair.name,
       candles: candidate.candles,
     })),
   );
   if (review.decision !== "signal") return null;
-  const best = candidates.find((candidate) => candidate.symbol === review.symbol);
-  if (!best || !acceptsMarketAiReview(review, { symbol: best.symbol, direction: best.signal.direction })) {
+  const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
+  if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) {
     return null;
   }
-  appendDirectAiReview(best.signal, review);
-  best.signal.openPrice = await waitQuote(best.symbol);
+  const signal = buildDirectAiSignal(
+    best.candles,
+    expirySeconds,
+    analysisSeconds,
+    best.pair.name,
+    best.pair.payout,
+    review,
+  );
+  signal.openPrice = await waitQuote(best.pair.symbol);
   return {
-    ...best.signal,
-    symbol: best.symbol,
-    group: best.group,
+    ...signal,
+    symbol: best.pair.symbol,
+    group: best.pair.group,
     seconds: expirySeconds,
     analysisSeconds,
   };

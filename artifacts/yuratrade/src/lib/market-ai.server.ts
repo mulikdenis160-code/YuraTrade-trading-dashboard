@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { MarketCandle } from "./signal-model.server.ts";
 
 export const DIRECT_AI_MODEL = "gpt-6-astra";
+export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 30;
 
 export type MarketAiCandidate = {
@@ -50,7 +51,7 @@ function getOpenAiClient() {
 }
 
 function candlesInBasisPoints(candles: MarketCandle[]) {
-  const start = Math.max(0, candles.length - 128);
+  const start = Math.max(0, candles.length - DIRECT_AI_HISTORY_CANDLES);
   let previousClose = candles[start - 1]?.close ?? candles[start]?.open ?? 1;
   const result: number[][] = [];
 

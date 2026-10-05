@@ -18,7 +18,8 @@ export type SignalJournalEntry = {
   startedAt: number;
   settledAt?: number;
   outcome: JournalOutcome;
-  ruleScore: number;
+  ruleScore?: number;
+  aiConfidence?: number;
   aiProbability?: number;
   aiExpectedValue?: number;
   aiBrierScore?: number;
@@ -117,7 +118,10 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
     startedAt: Number(entry.startedAt),
     ...(Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {}),
     outcome: entry.outcome as JournalOutcome,
-    ruleScore: Number.isFinite(entry.ruleScore) ? Number(entry.ruleScore) : 0,
+    ...(Number.isFinite(entry.ruleScore) ? { ruleScore: Number(entry.ruleScore) } : {}),
+    ...(Number.isFinite(entry.aiConfidence)
+      ? { aiConfidence: Math.max(0, Math.min(100, Math.round(Number(entry.aiConfidence)))) }
+      : {}),
     ...(Number.isFinite(entry.aiProbability)
       ? { aiProbability: Math.max(0, Math.min(1, Number(entry.aiProbability))) }
       : {}),
@@ -296,7 +300,8 @@ export function signalJournalCsv(entries: SignalJournalEntry[]) {
     ["closePrice", (entry) => entry.closePrice ?? ""],
     ["outcome", (entry) => entry.outcome],
     ["step", (entry) => entry.step],
-    ["ruleScore", (entry) => entry.ruleScore],
+    ["ruleScore", (entry) => entry.ruleScore ?? ""],
+    ["aiConfidence", (entry) => entry.aiConfidence ?? ""],
     ["aiProbability", (entry) => entry.aiProbability ?? ""],
     ["aiExpectedValue", (entry) => entry.aiExpectedValue ?? ""],
     ["aiBrierScore", (entry) => entry.aiBrierScore ?? ""],

@@ -27,24 +27,12 @@ type Search = {
   analysisSeconds: number;
   note: string;
   bars: Array<[number, number, number, number]>;
-  ruleScore: number;
-  aiProbability: number;
-  aiExpectedValue: number;
-  aiBrierScore: number;
-  aiBaselineBrier: number;
-  aiSamples: number;
-  aiValidationTrades: number;
-  aiValidationReturn: number;
+  aiConfidence: number | null;
   step: number;
   started: number;
 };
 
 const groups = new Set<Group>(["fx"]);
-
-function finiteOrZero(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
 
 function readBars(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -111,6 +99,7 @@ export const Route = createFileRoute("/signal")({
     const group: Group = "fx";
     const direction = search.direction === "put" ? "put" : "call";
     const parsedSeconds = Number(search.seconds);
+    const parsedConfidence = Number(search.aiConfidence);
     const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : 60;
     return {
       symbol: validGroup && typeof search.symbol === "string" ? search.symbol : "",
@@ -123,14 +112,9 @@ export const Route = createFileRoute("/signal")({
       analysisSeconds: analysisPeriodForExpiry(seconds),
       note: typeof search.note === "string" ? search.note : "",
       bars: readBars(search.bars),
-      ruleScore: Number(search.ruleScore) || 0,
-      aiProbability: Math.min(1, Math.max(0, finiteOrZero(search.aiProbability))),
-      aiExpectedValue: Math.min(1, Math.max(-1, finiteOrZero(search.aiExpectedValue))),
-      aiBrierScore: Math.min(1, Math.max(0, finiteOrZero(search.aiBrierScore))),
-      aiBaselineBrier: Math.min(1, Math.max(0, finiteOrZero(search.aiBaselineBrier))),
-      aiSamples: Math.max(0, Math.floor(finiteOrZero(search.aiSamples))),
-      aiValidationTrades: Math.max(0, Math.floor(finiteOrZero(search.aiValidationTrades))),
-      aiValidationReturn: Math.min(1, Math.max(-1, finiteOrZero(search.aiValidationReturn))),
+      aiConfidence: Number.isFinite(parsedConfidence)
+        ? Math.min(100, Math.max(0, Math.round(parsedConfidence)))
+        : null,
       step: Math.min(3, Math.max(0, Number(search.step) || 0)),
       started: Number(search.started) || Date.now(),
     };
@@ -238,20 +222,13 @@ function SignalCard({ search }: { search: Search }) {
       analysisSeconds: search.analysisSeconds,
       step: search.step,
       startedAt: search.started,
-      ruleScore: search.ruleScore,
-      aiProbability: search.aiProbability,
-      aiExpectedValue: search.aiExpectedValue,
-      aiBrierScore: search.aiBrierScore,
-      aiBaselineBrier: search.aiBaselineBrier,
-      aiSamples: search.aiSamples,
-      aiValidationTrades: search.aiValidationTrades,
-      aiValidationReturn: search.aiValidationReturn,
-      strategyVersion: "websocket-ml-v1",
+      aiConfidence: search.aiConfidence ?? undefined,
+      strategyVersion: "direct-ai-v1",
       note: search.note,
       bars: search.bars,
     });
     setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
-  }, [journalId, search.aiBaselineBrier, search.aiBrierScore, search.aiExpectedValue, search.aiProbability, search.aiSamples, search.aiValidationReturn, search.aiValidationTrades, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
+  }, [journalId, search.aiConfidence, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.seconds, search.started, search.step, search.symbol]);
 
   useEffect(() => {
     if (phase !== "run") return;
@@ -363,14 +340,7 @@ function SignalCard({ search }: { search: Search }) {
             analysisSeconds: result.analysisSeconds,
             note: result.note,
             bars: result.bars,
-            ruleScore: result.ruleScore,
-            aiProbability: result.aiProbability,
-            aiExpectedValue: result.aiExpectedValue,
-            aiBrierScore: result.aiBrierScore,
-            aiBaselineBrier: result.aiBaselineBrier,
-            aiSamples: result.aiSamples,
-            aiValidationTrades: result.aiValidationTrades,
-            aiValidationReturn: result.aiValidationReturn,
+            aiConfidence: result.aiConfidence,
             step: search.step + 1,
             started: Date.now(),
           },
@@ -470,30 +440,13 @@ function SignalCard({ search }: { search: Search }) {
               </li>
             ))}
         </ul>
-        {search.aiSamples > 0 ? (
+        {search.aiConfidence !== null ? (
           <section className="mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-4" aria-live="polite">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold tracking-[0.14em] text-blue-soft uppercase">{t("ai.title")}</p>
-              <p className="font-mono text-lg font-bold text-fg">{Math.round(search.aiProbability * 100)}%</p>
+              <p className="font-mono text-lg font-bold text-fg">{search.aiConfidence}/100</p>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.explanation")}</p>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              {t("ai.validated", {
-                samples: search.aiSamples,
-                brier: search.aiBrierScore.toFixed(3),
-              })}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              {t("ai.expectedValue", {
-                value: `${search.aiExpectedValue >= 0 ? "+" : ""}${search.aiExpectedValue.toFixed(3)}`,
-              })}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              {t("ai.validationDetails", {
-                trades: search.aiValidationTrades,
-                result: `${search.aiValidationReturn >= 0 ? "+" : ""}${search.aiValidationReturn.toFixed(3)}`,
-              })}
-            </p>
           </section>
         ) : null}
         <dl className="mt-4 grid grid-cols-2 gap-3">
