@@ -1,10 +1,10 @@
 ---
 name: Signal model
-description: Scope and safeguards for PRIME BOT's experimental machine-learning estimate.
+description: Scope and safeguards for PRIME BOT's WebSocket-candle direction model.
 ---
 
-The model learns from this browser's settled FX journal only. It must ignore pending, unverified, draw, and non-FX records; require a balanced minimum sample; use a chronological holdout; and show an estimate only when it beats the baseline on that later holdout. It is advisory only and must not change the heuristic signal direction or place trades.
+The server-side model must use historical candles received from Pocket Option through its WebSocket and choose the call/put direction itself. Do not train direction from the browser's settled journal or fall back to a heuristic. Keep the feed read-only. Split candle samples chronologically for training, calibration, and later validation; issue no signal unless the model beats the baseline and shows positive forward-test value with enough examples. The local settled journal measures actual app outcomes, not model inputs.
 
-**Why:** the app has no shared labeled dataset, and unsupported probability claims or model-driven entries could mislead users.
+**Why:** the user explicitly wants the AI to analyze WebSocket candle data and generate the signal; claiming high accuracy without later-candle validation would be misleading.
 
-**How to apply:** preserve local-only training, report sample count and forward-test quality, and keep the signal generator unchanged unless separately requested and validated.
+**How to apply:** preserve read-only market access, show sample and holdout diagnostics, keep probabilities experimental, and fail closed whenever history or validation is insufficient.

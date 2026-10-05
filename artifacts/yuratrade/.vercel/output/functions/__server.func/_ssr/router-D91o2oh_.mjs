@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
-import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-B3tUilyb.mjs";
+import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-BxofkO8c.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
 import { a as union, i as string, n as number, r as object, t as literal } from "../_libs/zod.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-C6jSBPUp.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-D91o2oh_.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -375,14 +375,14 @@ var copy = {
 		"PRIME BOT analyzes available Pocket Option currency pairs and shows direction, entry price, and expiry. It never places trades automatically."
 	],
 	"home.feature1.title": [
-		"Фильтр входа",
-		"Фільтр входу",
-		"Entry filter"
+		"ИИ-анализ свечей",
+		"ШІ-аналіз свічок",
+		"AI candle analysis"
 	],
 	"home.feature1.body": [
-		"Сверяет последние свечи и пропускает неподтверждённые сценарии.",
-		"Зіставляє останні свічки та відсіює непідтверджені сценарії.",
-		"Checks recent candles and skips unconfirmed setups."
+		"Выбирает направление по истории свечей Pocket Option, полученной через WebSocket.",
+		"Обирає напрямок за історією свічок Pocket Option, отриманою через WebSocket.",
+		"Chooses a direction from Pocket Option candle history received over WebSocket."
 	],
 	"home.feature2.title": [
 		"Только валюты",
@@ -450,14 +450,14 @@ var copy = {
 		"Connecting to Pocket Option…"
 	],
 	"signal.description": [
-		"Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; период свечей и окно анализа подстроятся под срок.",
-		"Перевіряються лише валютні пари з виплатою 92% і 80%. Оберіть експірацію від 1 хвилини до 4 годин; період свічок і вікно аналізу підлаштуються під строк.",
-		"Only currency pairs with 92% or 80% payout are checked. Choose an expiry from 1 minute to 4 hours; candle period and analysis window adapt to it."
+		"Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; ИИ выберет направление по истории свечей и проверит его на более поздних данных.",
+		"Перевіряються лише валютні пари з виплатою 92% і 80%. Оберіть експірацію від 1 хвилини до 4 годин; ШІ обере напрямок за історією свічок і перевірить його на пізніших даних.",
+		"Only currency pairs with 92% or 80% payout are checked. Choose an expiry from 1 minute to 4 hours; AI selects a direction from candle history and validates it on later data."
 	],
 	"signal.experimental": [
-		"Rule Score — экспериментальный фильтр, а не вероятность выигрыша. Сверяйте результаты с историей.",
-		"Rule Score — експериментальний фільтр, а не ймовірність виграшу. Перевіряйте результати в історії.",
-		"Rule Score is an experimental filter, not a win probability. Check outcomes in your history."
+		"ИИ сам выбирает направление по свечам WebSocket. Вероятность и ожидаемое значение — экспериментальные оценки, а не гарантия результата.",
+		"ШІ сам обирає напрямок за свічками WebSocket. Імовірність і очікуване значення — експериментальні оцінки, а не гарантія результату.",
+		"AI chooses the direction from WebSocket candles. Probability and expected value are experimental estimates, not a guarantee."
 	],
 	"signal.expiry": [
 		"Время экспирации",
@@ -465,9 +465,9 @@ var copy = {
 		"Expiry time"
 	],
 	"signal.analyzed": [
-		"Анализ подстроен: свечи {period}, окно {bars} свечей",
-		"Аналіз налаштовано: свічки {period}, вікно {bars} свічок",
-		"Analysis adjusted: {period} candles, {bars}-candle window"
+		"Интервал свечи {period}; ИИ проверяет до 512 свечей и использует последние 24 для признаков.",
+		"Інтервал свічки {period}; ШІ перевіряє до 512 свічок і використовує останні 24 для ознак.",
+		"Candle interval {period}; AI validates up to 512 candles and uses the latest 24 for features."
 	],
 	"signal.checking": [
 		"Проверяем пары…",
@@ -520,39 +520,29 @@ var copy = {
 		"There is no longer a confirmed entry for this pair. Request a new signal."
 	],
 	"ai.title": [
-		"ИИ-оценка (эксперимент)",
-		"Оцінка ШІ (експеримент)",
-		"AI estimate (experimental)"
+		"ИИ выбрал направление",
+		"ШІ обрав напрямок",
+		"AI-selected direction"
 	],
 	"ai.explanation": [
-		"Это экспериментальная оценка шанса выигрыша по направлению сигнала. Модель обучается только на закрытых сигналах, ранее отобранных текущим фильтром в этом браузере; направление не меняет.",
-		"Це експериментальна оцінка шансу виграшу за напрямком сигналу. Модель навчається лише на закритих сигналах, раніше відібраних поточним фільтром у цьому браузері; напрямок не змінює.",
-		"This experimental estimate predicts the signal direction's win chance. It trains only on completed signals previously selected by the current filter in this browser, and does not change the direction."
+		"Серверная модель выбрала это направление по историческим свечам Pocket Option WebSocket. Оценка экспериментальная и не гарантирует исход.",
+		"Серверна модель обрала цей напрямок за історичними свічками Pocket Option WebSocket. Оцінка експериментальна й не гарантує результат.",
+		"The server model selected this direction from Pocket Option WebSocket candle history. This experimental estimate does not guarantee the outcome."
 	],
 	"ai.validated": [
-		"Модель: {samples} исходов; проверка на более позднем отрезке, Brier {brier}.",
-		"Модель: {samples} результатів; перевірка на пізнішому відрізку, Brier {brier}.",
-		"Model: {samples} outcomes; forward-time validation, Brier score {brier}."
+		"Исторических примеров: {samples}; отложенная временная проверка, Brier {brier}.",
+		"Історичних прикладів: {samples}; відкладена часова перевірка, Brier {brier}.",
+		"Historical examples: {samples}; forward-time holdout, Brier score {brier}."
 	],
 	"ai.expectedValue": [
 		"Расчётное ожидание на ставку 1 ед.: {value} ед.",
 		"Розрахункове очікування на ставку 1 од.: {value} од.",
 		"Estimated value per 1-unit stake: {value} units."
 	],
-	"ai.collecting": [
-		"Для обучения и проверки нужно не менее {minimum} завершённых исходов; сейчас {samples}.",
-		"Для навчання та перевірки потрібно щонайменше {minimum} завершених результатів; зараз {samples}.",
-		"Training and validation need at least {minimum} completed outcomes; current count: {samples}."
-	],
-	"ai.classBalance": [
-		"Пока недостаточно побед и поражений для честного обучения и проверки. Сигнал по-прежнему формирует текущий фильтр.",
-		"Поки недостатньо перемог і поразок для чесного навчання та перевірки. Сигнал і далі формує поточний фільтр.",
-		"There are not enough wins and losses for a meaningful training and validation split. The current filter still generates the signal."
-	],
-	"ai.unreliable": [
-		"На отложенных по времени данных модель не превзошла базовый прогноз; оценка не показывается.",
-		"На відкладених за часом даних модель не перевершила базовий прогноз; оцінку не показано.",
-		"On later time-held-out data, the model did not beat the baseline; its estimate is hidden."
+	"ai.validationDetails": [
+		"На отложенной выборке: {trades} виртуальных входов; средний результат {result} ед. на вход, без учёта задержки и проскальзывания.",
+		"На відкладеній вибірці: {trades} віртуальних входів; середній результат {result} од. на вхід, без урахування затримки та прослизання.",
+		"On the holdout: {trades} simulated entries; average return {result} units per entry, excluding latency and slippage."
 	],
 	"signal.today": [
 		"Сегодня {used} из {cap}",
@@ -620,9 +610,9 @@ var copy = {
 		"Each entry is treated as a 1-unit stake"
 	],
 	"history.disclaimer": [
-		"Это локальный журнал фактических исходов, не прогноз. Сигнал формирует эвристический фильтр; экспериментальная ML-оценка обучается отдельно и не меняет направление. Условный итог не учитывает суммы ставок, комиссии или перекрытия.",
-		"Це локальний журнал фактичних результатів, а не прогноз. Сигнал формує евристичний фільтр; експериментальна ML-оцінка навчається окремо та не змінює напрямок. Умовний підсумок не враховує суми ставок, комісії чи перекриття.",
-		"This is a local record of actual outcomes, not a forecast. The heuristic filter still generates signals; the experimental ML estimate trains separately and does not change direction. Illustrative totals exclude stake sizes, fees, and recovery trades."
+		"Это локальный журнал фактических исходов, не прогноз. Направление выбирает экспериментальная модель по свечам WebSocket и временной проверке; прошлые данные не гарантируют будущих результатов. Условный итог не учитывает суммы ставок, комиссии или перекрытия.",
+		"Це локальний журнал фактичних результатів, а не прогноз. Напрямок обирає експериментальна модель за свічками WebSocket і часовою перевіркою; минулі дані не гарантують майбутніх результатів. Умовний підсумок не враховує суми ставок, комісії чи перекриття.",
+		"This is a local record of actual outcomes, not a forecast. An experimental model chooses direction from WebSocket candles and time-based validation; past data does not guarantee future results. Illustrative totals exclude stake sizes, fees, and recovery trades."
 	],
 	"history.byPair": [
 		"Разбивка по паре и сроку",
@@ -1570,6 +1560,13 @@ function normalizeEntry(value) {
 		...Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {},
 		outcome: entry.outcome,
 		ruleScore: Number.isFinite(entry.ruleScore) ? Number(entry.ruleScore) : 0,
+		...Number.isFinite(entry.aiProbability) ? { aiProbability: Math.max(0, Math.min(1, Number(entry.aiProbability))) } : {},
+		...Number.isFinite(entry.aiExpectedValue) ? { aiExpectedValue: Number(entry.aiExpectedValue) } : {},
+		...Number.isFinite(entry.aiBrierScore) ? { aiBrierScore: Number(entry.aiBrierScore) } : {},
+		...Number.isFinite(entry.aiBaselineBrier) ? { aiBaselineBrier: Number(entry.aiBaselineBrier) } : {},
+		...Number.isFinite(entry.aiSamples) ? { aiSamples: Math.max(0, Number(entry.aiSamples)) } : {},
+		...Number.isFinite(entry.aiValidationTrades) ? { aiValidationTrades: Math.max(0, Number(entry.aiValidationTrades)) } : {},
+		...Number.isFinite(entry.aiValidationReturn) ? { aiValidationReturn: Number(entry.aiValidationReturn) } : {},
 		strategyVersion: typeof entry.strategyVersion === "string" ? entry.strategyVersion : "unknown",
 		note: typeof entry.note === "string" ? entry.note.slice(0, 4e3) : "",
 		bars
@@ -1720,6 +1717,13 @@ function signalJournalCsv(entries) {
 		["outcome", (entry) => entry.outcome],
 		["step", (entry) => entry.step],
 		["ruleScore", (entry) => entry.ruleScore],
+		["aiProbability", (entry) => entry.aiProbability ?? ""],
+		["aiExpectedValue", (entry) => entry.aiExpectedValue ?? ""],
+		["aiBrierScore", (entry) => entry.aiBrierScore ?? ""],
+		["aiBaselineBrier", (entry) => entry.aiBaselineBrier ?? ""],
+		["aiSamples", (entry) => entry.aiSamples ?? ""],
+		["aiValidationTrades", (entry) => entry.aiValidationTrades ?? ""],
+		["aiValidationReturn", (entry) => entry.aiValidationReturn ?? ""],
 		["strategyVersion", (entry) => entry.strategyVersion],
 		["candles", (entry) => JSON.stringify(entry.bars)]
 	];
@@ -1945,16 +1949,20 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-BpfAJIsb.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-sanRfswJ.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-hIrGzEO5.mjs");
+var $$splitComponentImporter$3 = () => import("./history-CqJnQa0f.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-CPeC6JMB.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-CeF8B_Rs.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-BdsZ6qob.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-P5GdMESJ.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-BiFBPZbr.mjs");
+var $$splitComponentImporter = () => import("./signal-B84NbrXw.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
+function finiteOrZero(value) {
+	const number = Number(value);
+	return Number.isFinite(number) ? number : 0;
+}
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
 	const bars = [];
@@ -1997,6 +2005,13 @@ var Route$1 = createFileRoute("/signal")({
 			note: typeof search.note === "string" ? search.note : "",
 			bars: readBars(search.bars),
 			ruleScore: Number(search.ruleScore) || 0,
+			aiProbability: Math.min(1, Math.max(0, finiteOrZero(search.aiProbability))),
+			aiExpectedValue: Math.min(1, Math.max(-1, finiteOrZero(search.aiExpectedValue))),
+			aiBrierScore: Math.min(1, Math.max(0, finiteOrZero(search.aiBrierScore))),
+			aiBaselineBrier: Math.min(1, Math.max(0, finiteOrZero(search.aiBaselineBrier))),
+			aiSamples: Math.max(0, Math.floor(finiteOrZero(search.aiSamples))),
+			aiValidationTrades: Math.max(0, Math.floor(finiteOrZero(search.aiValidationTrades))),
+			aiValidationReturn: Math.min(1, Math.max(-1, finiteOrZero(search.aiValidationReturn))),
 			step: Math.min(3, Math.max(0, Number(search.step) || 0)),
 			started: Number(search.started) || Date.now()
 		};
@@ -2006,7 +2021,7 @@ var Route$1 = createFileRoute("/signal")({
 var Route = createFileRoute("/api/ticks")({ server: { handlers: { GET: async ({ request }) => {
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-g-NW964O.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-WyhYSHG3.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {

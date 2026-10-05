@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/expiry-B3tUilyb.js
+//#region node_modules/.nitro/vite/services/ssr/assets/expiry-BxofkO8c.js
 var ANALYSIS_PERIODS_SECONDS = [
 	60,
 	180,
@@ -15,10 +15,6 @@ function analysisPeriodForExpiry(expirySeconds) {
 	if (expiryMinutes <= 60) return 300;
 	return 900;
 }
-function lookbackForExpiry(expirySeconds, analysisSeconds) {
-	const barsPerExpiry = expirySeconds / analysisSeconds;
-	return Math.max(12, Math.min(28, Math.ceil(barsPerExpiry * 1.5)));
-}
 function formatExpiry(seconds) {
 	const minutes = Math.max(1, Math.round(seconds / 60));
 	const hours = Math.floor(minutes / 60);
@@ -27,4 +23,4 @@ function formatExpiry(seconds) {
 	return remainingMinutes === 0 ? `${hours} ч` : `${hours} ч ${remainingMinutes} мин`;
 }
 //#endregion
-export { lookbackForExpiry as a, isValidExpirySeconds as i, analysisPeriodForExpiry as n, formatExpiry as r, ANALYSIS_PERIODS_SECONDS as t };
+export { isValidExpirySeconds as i, analysisPeriodForExpiry as n, formatExpiry as r, ANALYSIS_PERIODS_SECONDS as t };

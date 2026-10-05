@@ -19,6 +19,13 @@ export type SignalJournalEntry = {
   settledAt?: number;
   outcome: JournalOutcome;
   ruleScore: number;
+  aiProbability?: number;
+  aiExpectedValue?: number;
+  aiBrierScore?: number;
+  aiBaselineBrier?: number;
+  aiSamples?: number;
+  aiValidationTrades?: number;
+  aiValidationReturn?: number;
   strategyVersion: string;
   note: string;
   bars: Array<[number, number, number, number]>;
@@ -111,6 +118,17 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
     ...(Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {}),
     outcome: entry.outcome as JournalOutcome,
     ruleScore: Number.isFinite(entry.ruleScore) ? Number(entry.ruleScore) : 0,
+    ...(Number.isFinite(entry.aiProbability)
+      ? { aiProbability: Math.max(0, Math.min(1, Number(entry.aiProbability))) }
+      : {}),
+    ...(Number.isFinite(entry.aiExpectedValue) ? { aiExpectedValue: Number(entry.aiExpectedValue) } : {}),
+    ...(Number.isFinite(entry.aiBrierScore) ? { aiBrierScore: Number(entry.aiBrierScore) } : {}),
+    ...(Number.isFinite(entry.aiBaselineBrier) ? { aiBaselineBrier: Number(entry.aiBaselineBrier) } : {}),
+    ...(Number.isFinite(entry.aiSamples) ? { aiSamples: Math.max(0, Number(entry.aiSamples)) } : {}),
+    ...(Number.isFinite(entry.aiValidationTrades)
+      ? { aiValidationTrades: Math.max(0, Number(entry.aiValidationTrades)) }
+      : {}),
+    ...(Number.isFinite(entry.aiValidationReturn) ? { aiValidationReturn: Number(entry.aiValidationReturn) } : {}),
     strategyVersion: typeof entry.strategyVersion === "string" ? entry.strategyVersion : "unknown",
     note: typeof entry.note === "string" ? entry.note.slice(0, 4000) : "",
     bars,
@@ -279,6 +297,13 @@ export function signalJournalCsv(entries: SignalJournalEntry[]) {
     ["outcome", (entry) => entry.outcome],
     ["step", (entry) => entry.step],
     ["ruleScore", (entry) => entry.ruleScore],
+    ["aiProbability", (entry) => entry.aiProbability ?? ""],
+    ["aiExpectedValue", (entry) => entry.aiExpectedValue ?? ""],
+    ["aiBrierScore", (entry) => entry.aiBrierScore ?? ""],
+    ["aiBaselineBrier", (entry) => entry.aiBaselineBrier ?? ""],
+    ["aiSamples", (entry) => entry.aiSamples ?? ""],
+    ["aiValidationTrades", (entry) => entry.aiValidationTrades ?? ""],
+    ["aiValidationReturn", (entry) => entry.aiValidationReturn ?? ""],
     ["strategyVersion", (entry) => entry.strategyVersion],
     ["candles", (entry) => JSON.stringify(entry.bars)],
   ];

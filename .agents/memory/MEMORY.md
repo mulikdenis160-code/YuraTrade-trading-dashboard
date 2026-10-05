@@ -1,3 +1,3 @@
-- [Market data feed](market-data-feed.md) — the user chose Pocket Option quotes; keep authorization in Secrets and the feed read-only.
+- [Market data feed](market-data-feed.md) — Pocket Option history pages cap near 150 candles; paginate read-only and keep authorization in Secrets.
 - [Signal preparation flow](signal-preparation.md) — reveal the selected currency pair, wait 10 seconds, then issue a fresh signal; copy pair names without OTC.
-- [Signal model](signal-model.md) — train only from this browser’s settled FX journal; keep the ML estimate experimental and separate from signal direction.
+- [Signal model](signal-model.md) — choose direction from Pocket Option WebSocket candles; require forward validation and fail closed.

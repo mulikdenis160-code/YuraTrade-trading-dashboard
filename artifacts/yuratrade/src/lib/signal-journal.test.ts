@@ -43,6 +43,13 @@ test("signal records are local, idempotent, and settle only once", () => {
     step: 0,
     startedAt: 1_750_000_000_000,
     ruleScore: 0.31,
+    aiProbability: 0.64,
+    aiExpectedValue: 0.22,
+    aiBrierScore: 0.19,
+    aiBaselineBrier: 0.25,
+    aiSamples: 420,
+    aiValidationTrades: 18,
+    aiValidationReturn: 0.14,
     strategyVersion: "consensus-filter-v1",
     note: "Trend agrees",
     bars: [[1.08, 1.09, 1.07, 1.0842]],
@@ -55,6 +62,7 @@ test("signal records are local, idempotent, and settle only once", () => {
   assert.equal(recordSignalOutcome(signal.id, 1.085, "win"), true);
   assert.equal(recordSignalOutcome(signal.id, 1.086, "loss"), false);
   assert.equal(readSignalJournal()[0].outcome, "win");
+  assert.equal(readSignalJournal()[0].aiProbability, 0.64);
 });
 
 test("journal statistics use payout-aware break-even and one-unit returns", () => {
@@ -95,6 +103,7 @@ test("CSV export escapes text fields and includes candle inputs", () => {
   assert.match(csv, /EUR\/USD ""OTC""/);
   assert.match(csv, /"candles"/);
   assert.match(csv, /"analysisSeconds"/);
+  assert.match(csv, /"aiProbability"/);
   assert.match(csv, /\[\[1\.08,1\.09,1\.07,1\.0842\]\]/);
 });
 

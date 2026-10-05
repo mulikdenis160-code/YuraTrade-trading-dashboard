@@ -1,11 +1,11 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
-import { a as lookbackForExpiry, n as analysisPeriodForExpiry } from "./expiry-B3tUilyb.mjs";
+import { n as analysisPeriodForExpiry } from "./expiry-BxofkO8c.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, b as isAdminId, f as loadFeed, g as levelForBalance, h as takeSignal, m as takeBest, v as markSignalUsed, x as usePocket, y as signalsUsedToday } from "./router-C6jSBPUp.mjs";
-import { t as StatRow } from "./stats-BfPZ2-Bm.mjs";
-import { t as AnalysisModal } from "./analysis-modal-pdo1vHbd.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BpfAJIsb.js
+import { C as useLanguage, S as formatExpiryForLanguage, b as isAdminId, f as loadFeed, g as levelForBalance, h as takeSignal, m as takeBest, v as markSignalUsed, x as usePocket, y as signalsUsedToday } from "./router-D91o2oh_.mjs";
+import { t as StatRow } from "./stats-Mv5rGbWT.mjs";
+import { t as AnalysisModal } from "./analysis-modal-BMk9_ZDE.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-sanRfswJ.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var expiryOptionsMinutes = [
@@ -71,7 +71,6 @@ function SignalDesk() {
 	const level = levelForBalance(balance);
 	const expirySeconds = expiryMinutes * 60;
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-	const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
 	const cap = admin ? null : level ? level.daily : 0;
 	const left = cap === null ? null : Math.max(0, cap - used);
 	const blocked = admin ? "" : balance === null ? t("signal.block.deposit") : !level ? t("signal.block.minimum") : left === 0 ? t("signal.block.limit") : "";
@@ -125,6 +124,13 @@ function SignalDesk() {
 					note: result.note,
 					bars: result.bars,
 					ruleScore: result.ruleScore,
+					aiProbability: result.aiProbability,
+					aiExpectedValue: result.aiExpectedValue,
+					aiBrierScore: result.aiBrierScore,
+					aiBaselineBrier: result.aiBaselineBrier,
+					aiSamples: result.aiSamples,
+					aiValidationTrades: result.aiValidationTrades,
+					aiValidationReturn: result.aiValidationReturn,
 					step: 0,
 					started: Date.now()
 				}
@@ -195,10 +201,7 @@ function SignalDesk() {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-2 text-xs leading-relaxed text-dim",
 								"aria-live": "polite",
-								children: t("signal.analyzed", {
-									period: expiryLabel(analysisSeconds),
-									bars: lookbackBars
-								})
+								children: t("signal.analyzed", { period: expiryLabel(analysisSeconds) })
 							})
 						]
 					}),

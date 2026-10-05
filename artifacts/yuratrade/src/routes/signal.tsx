@@ -4,16 +4,13 @@ import { AnalysisModal } from "@/components/analysis-modal";
 import { PairMark } from "@/components/pair-mark";
 import { readClose, takeSignal } from "@/lib/pocket-live";
 import {
-  readSignalJournal,
   recordSignalOutcome,
   recordSignalStarted,
   signalRecordId,
 } from "@/lib/signal-journal";
-import { assessSignalModel, type SignalModelAssessment } from "@/lib/signal-model";
 import {
   analysisPeriodForExpiry,
   isValidExpirySeconds,
-  lookbackForExpiry,
 } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
@@ -31,11 +28,23 @@ type Search = {
   note: string;
   bars: Array<[number, number, number, number]>;
   ruleScore: number;
+  aiProbability: number;
+  aiExpectedValue: number;
+  aiBrierScore: number;
+  aiBaselineBrier: number;
+  aiSamples: number;
+  aiValidationTrades: number;
+  aiValidationReturn: number;
   step: number;
   started: number;
 };
 
 const groups = new Set<Group>(["fx"]);
+
+function finiteOrZero(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
 
 function readBars(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -115,6 +124,13 @@ export const Route = createFileRoute("/signal")({
       note: typeof search.note === "string" ? search.note : "",
       bars: readBars(search.bars),
       ruleScore: Number(search.ruleScore) || 0,
+      aiProbability: Math.min(1, Math.max(0, finiteOrZero(search.aiProbability))),
+      aiExpectedValue: Math.min(1, Math.max(-1, finiteOrZero(search.aiExpectedValue))),
+      aiBrierScore: Math.min(1, Math.max(0, finiteOrZero(search.aiBrierScore))),
+      aiBaselineBrier: Math.min(1, Math.max(0, finiteOrZero(search.aiBaselineBrier))),
+      aiSamples: Math.max(0, Math.floor(finiteOrZero(search.aiSamples))),
+      aiValidationTrades: Math.max(0, Math.floor(finiteOrZero(search.aiValidationTrades))),
+      aiValidationReturn: Math.min(1, Math.max(-1, finiteOrZero(search.aiValidationReturn))),
       step: Math.min(3, Math.max(0, Number(search.step) || 0)),
       started: Number(search.started) || Date.now(),
     };
@@ -188,7 +204,6 @@ function SignalCard({ search }: { search: Search }) {
   const { language, t } = useLanguage();
   const navigate = useNavigate();
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
-  const lookbackBars = lookbackForExpiry(search.seconds, search.analysisSeconds);
   const [now, setNow] = useState(() => Date.now());
   const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
@@ -196,7 +211,6 @@ function SignalCard({ search }: { search: Search }) {
   const [prepLeft, setPrepLeft] = useState(10);
   const [error, setError] = useState("");
   const [journalWarning, setJournalWarning] = useState("");
-  const [aiAssessment, setAiAssessment] = useState<SignalModelAssessment | null>(null);
   const [live, setLive] = useState<number | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [liveMessage, setLiveMessage] = useState("");
@@ -225,23 +239,19 @@ function SignalCard({ search }: { search: Search }) {
       step: search.step,
       startedAt: search.started,
       ruleScore: search.ruleScore,
-      strategyVersion: "expiry-adaptive-filter-v1",
+      aiProbability: search.aiProbability,
+      aiExpectedValue: search.aiExpectedValue,
+      aiBrierScore: search.aiBrierScore,
+      aiBaselineBrier: search.aiBaselineBrier,
+      aiSamples: search.aiSamples,
+      aiValidationTrades: search.aiValidationTrades,
+      aiValidationReturn: search.aiValidationReturn,
+      strategyVersion: "websocket-ml-v1",
       note: search.note,
       bars: search.bars,
     });
     setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
-  }, [journalId, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
-
-  useEffect(() => {
-    setAiAssessment(assessSignalModel(readSignalJournal(), {
-      direction: search.direction,
-      payout: search.payout,
-      seconds: search.seconds,
-      step: search.step,
-      ruleScore: search.ruleScore,
-      bars: search.bars,
-    }));
-  }, [search.bars, search.direction, search.payout, search.ruleScore, search.seconds, search.step]);
+  }, [journalId, search.aiBaselineBrier, search.aiBrierScore, search.aiExpectedValue, search.aiProbability, search.aiSamples, search.aiValidationReturn, search.aiValidationTrades, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.ruleScore, search.seconds, search.started, search.step, search.symbol]);
 
   useEffect(() => {
     if (phase !== "run") return;
@@ -354,6 +364,13 @@ function SignalCard({ search }: { search: Search }) {
             note: result.note,
             bars: result.bars,
             ruleScore: result.ruleScore,
+            aiProbability: result.aiProbability,
+            aiExpectedValue: result.aiExpectedValue,
+            aiBrierScore: result.aiBrierScore,
+            aiBaselineBrier: result.aiBaselineBrier,
+            aiSamples: result.aiSamples,
+            aiValidationTrades: result.aiValidationTrades,
+            aiValidationReturn: result.aiValidationReturn,
             step: search.step + 1,
             started: Date.now(),
           },
@@ -436,7 +453,7 @@ function SignalCard({ search }: { search: Search }) {
           </span>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-dim">
-          {t("history.expiry")} {expiryLabel(search.seconds)} · {t("history.candles")} {expiryLabel(search.analysisSeconds)} · {lookbackBars} свечей
+          {t("history.expiry")} {expiryLabel(search.seconds)} · {t("history.candles")} {expiryLabel(search.analysisSeconds)}
         </p>
         {phase === "run" || phase === "check" ? (
           <p className="glow-text mt-4 text-center font-mono text-4xl font-bold text-fg sm:text-5xl">{phase === "check" ? "…" : clock(left)}</p>
@@ -453,38 +470,30 @@ function SignalCard({ search }: { search: Search }) {
               </li>
             ))}
         </ul>
-        {aiAssessment ? (
+        {search.aiSamples > 0 ? (
           <section className="mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-4" aria-live="polite">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold tracking-[0.14em] text-blue-soft uppercase">{t("ai.title")}</p>
-              {aiAssessment.status === "ready" && aiAssessment.probability !== undefined ? (
-                <p className="font-mono text-lg font-bold text-fg">{Math.round(aiAssessment.probability * 100)}%</p>
-              ) : null}
+              <p className="font-mono text-lg font-bold text-fg">{Math.round(search.aiProbability * 100)}%</p>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.explanation")}</p>
-            {aiAssessment.status === "ready" && aiAssessment.probability !== undefined ? (
-              <>
-                <p className="mt-2 text-xs leading-relaxed text-muted">
-                  {t("ai.validated", {
-                    samples: aiAssessment.sampleCount,
-                    brier: aiAssessment.brierScore?.toFixed(3) ?? "—",
-                  })}
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-muted">
-                  {t("ai.expectedValue", {
-                    value: `${(aiAssessment.expectedValue ?? 0) >= 0 ? "+" : ""}${(aiAssessment.expectedValue ?? 0).toFixed(3)}`,
-                  })}
-                </p>
-              </>
-            ) : aiAssessment.status === "unreliable" ? (
-              <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.unreliable")}</p>
-            ) : aiAssessment.reason === "class-balance" ? (
-              <p className="mt-2 text-xs leading-relaxed text-muted">{t("ai.classBalance", { samples: aiAssessment.sampleCount })}</p>
-            ) : (
-              <p className="mt-2 text-xs leading-relaxed text-muted">
-                {t("ai.collecting", { samples: aiAssessment.sampleCount, minimum: aiAssessment.minimumSamples })}
-              </p>
-            )}
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              {t("ai.validated", {
+                samples: search.aiSamples,
+                brier: search.aiBrierScore.toFixed(3),
+              })}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              {t("ai.expectedValue", {
+                value: `${search.aiExpectedValue >= 0 ? "+" : ""}${search.aiExpectedValue.toFixed(3)}`,
+              })}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              {t("ai.validationDetails", {
+                trades: search.aiValidationTrades,
+                result: `${search.aiValidationReturn >= 0 ? "+" : ""}${search.aiValidationReturn.toFixed(3)}`,
+              })}
+            </p>
           </section>
         ) : null}
         <dl className="mt-4 grid grid-cols-2 gap-3">

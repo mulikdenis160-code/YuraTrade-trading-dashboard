@@ -4,10 +4,7 @@ import { loadFeed, takeBest, takeSignal } from "@/lib/pocket-live";
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { AnalysisModal } from "@/components/analysis-modal";
-import {
-  analysisPeriodForExpiry,
-  lookbackForExpiry,
-} from "@/lib/expiry";
+import { analysisPeriodForExpiry } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 const expiryOptionsMinutes = [1, 2, 3, 5, 10, 15, 25, 30, 60, 120, 180, 240] as const;
@@ -68,7 +65,6 @@ export function SignalDesk() {
   const level = levelForBalance(balance);
   const expirySeconds = expiryMinutes * 60;
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
   const cap = admin ? null : level ? level.daily : 0;
   const left = cap === null ? null : Math.max(0, cap - used);
   const blocked = admin
@@ -130,6 +126,13 @@ export function SignalDesk() {
           note: result.note,
           bars: result.bars,
           ruleScore: result.ruleScore,
+          aiProbability: result.aiProbability,
+          aiExpectedValue: result.aiExpectedValue,
+          aiBrierScore: result.aiBrierScore,
+          aiBaselineBrier: result.aiBaselineBrier,
+          aiSamples: result.aiSamples,
+          aiValidationTrades: result.aiValidationTrades,
+          aiValidationReturn: result.aiValidationReturn,
           step: 0,
           started: Date.now(),
         },
@@ -201,7 +204,7 @@ export function SignalDesk() {
             })}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-dim" aria-live="polite">
-            {t("signal.analyzed", { period: expiryLabel(analysisSeconds), bars: lookbackBars })}
+            {t("signal.analyzed", { period: expiryLabel(analysisSeconds) })}
           </p>
         </section>
         <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked)} onClick={() => void ask()}>

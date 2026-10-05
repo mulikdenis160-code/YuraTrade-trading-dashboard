@@ -1,9 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { a as lookbackForExpiry } from "./expiry-B3tUilyb.mjs";
-import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, i as readSignalJournal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-C6jSBPUp.mjs";
-import { t as AnalysisModal } from "./analysis-modal-pdo1vHbd.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-BiFBPZbr.js
+import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-D91o2oh_.mjs";
+import { t as AnalysisModal } from "./analysis-modal-BMk9_ZDE.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-B84NbrXw.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -213,161 +212,6 @@ function PairMark({ symbol, name, group }) {
 		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Letter, { name })
 	});
 }
-function clamp(value, min, max) {
-	return Math.max(min, Math.min(max, value));
-}
-function featuresOf(input) {
-	const bars = input.bars.slice(-8);
-	if (bars.length < 3) return null;
-	const ranges = bars.map(([, high, low]) => Math.max(0, high - low));
-	const rangeSum = ranges.reduce((sum, value) => sum + value, 0);
-	const [firstOpen] = bars[0];
-	const [, , , lastClose] = bars[bars.length - 1];
-	const directionSign = input.direction === "call" ? 1 : -1;
-	const directionalCandles = bars.filter(([open, , , close]) => input.direction === "call" ? close >= open : close <= open).length;
-	const averageBodyRatio = bars.map(([open, high, low, close]) => {
-		const range = Math.max(high - low, Math.abs(close) * 1e-8, 1e-12);
-		return Math.abs(close - open) / range;
-	}).reduce((sum, value) => sum + value, 0) / bars.length;
-	const averageNormalizedRange = ranges.reduce((sum, value, index) => sum + value / Math.max(Math.abs(bars[index][3]), 1e-12), 0) / bars.length;
-	const momentum = rangeSum > 0 ? (lastClose - firstOpen) / rangeSum : 0;
-	return [
-		clamp(input.ruleScore, 0, 1),
-		clamp(input.payout / 100, 0, 1),
-		clamp(Math.log(Math.max(1, input.seconds / 60)) / Math.log(240), 0, 1),
-		directionSign,
-		clamp(input.step / 3, 0, 1),
-		clamp(momentum, -2, 2),
-		directionalCandles / bars.length,
-		averageBodyRatio,
-		clamp(averageNormalizedRange * 1e3, 0, 2)
-	];
-}
-function sigmoid(value) {
-	const safe = clamp(value, -30, 30);
-	return 1 / (1 + Math.exp(-safe));
-}
-function standardize(features, means, scales) {
-	return features.map((value, index) => (value - means[index]) / scales[index]);
-}
-function fitLogistic(examples) {
-	const featureCount = examples[0].features.length;
-	const means = Array.from({ length: featureCount }, (_, index) => examples.reduce((sum, example) => sum + example.features[index], 0) / examples.length);
-	const scales = Array.from({ length: featureCount }, (_, index) => {
-		const variance = examples.reduce((sum, example) => sum + (example.features[index] - means[index]) ** 2, 0) / examples.length;
-		return Math.sqrt(variance) || 1;
-	});
-	const rows = examples.map((example) => standardize(example.features, means, scales));
-	const positiveCount = examples.filter((example) => example.label === 1).length;
-	const negativeCount = examples.length - positiveCount;
-	const weights = Array(featureCount).fill(0);
-	let bias = Math.log((positiveCount + 1) / (negativeCount + 1));
-	for (let epoch = 0; epoch < 700; epoch += 1) {
-		const gradients = Array(featureCount).fill(0);
-		let biasGradient = 0;
-		for (let row = 0; row < rows.length; row += 1) {
-			const error = sigmoid(rows[row].reduce((sum, value, index) => sum + value * weights[index], bias)) - examples[row].label;
-			biasGradient += error;
-			for (let index = 0; index < featureCount; index += 1) gradients[index] += error * rows[row][index];
-		}
-		const rate = .08 / examples.length;
-		bias -= rate * biasGradient;
-		for (let index = 0; index < featureCount; index += 1) weights[index] -= rate * (gradients[index] + .02 * weights[index]);
-	}
-	return {
-		means,
-		scales,
-		weights,
-		bias
-	};
-}
-function logit(model, features) {
-	return standardize(features, model.means, model.scales).reduce((sum, value, index) => sum + value * model.weights[index], model.bias);
-}
-function fitCalibration(logits, labels) {
-	let slope = 1;
-	let intercept = 0;
-	for (let epoch = 0; epoch < 500; epoch += 1) {
-		let slopeGradient = 0;
-		let interceptGradient = 0;
-		for (let index = 0; index < logits.length; index += 1) {
-			const error = sigmoid(slope * logits[index] + intercept) - labels[index];
-			slopeGradient += error * logits[index];
-			interceptGradient += error;
-		}
-		const rate = .03 / logits.length;
-		slope -= rate * (slopeGradient + .02 * (slope - 1));
-		intercept -= rate * interceptGradient;
-	}
-	return {
-		slope,
-		intercept
-	};
-}
-function assessSignalModel(entries, candidate) {
-	const chronological = entries.filter((entry) => entry.group === "fx" && (entry.outcome === "win" || entry.outcome === "loss") && featuresOf(entry) !== null).sort((a, b) => a.startedAt - b.startedAt).map((entry) => ({
-		features: featuresOf(entry),
-		label: entry.outcome === "win" ? 1 : 0
-	}));
-	const sampleCount = chronological.length;
-	const trainCount = Math.floor(sampleCount * .7);
-	const calibrationEnd = Math.floor(sampleCount * .85);
-	const training = chronological.slice(0, trainCount);
-	const calibrationSet = chronological.slice(trainCount, calibrationEnd);
-	const validation = chronological.slice(calibrationEnd);
-	const collecting = () => ({
-		status: "collecting",
-		reason: "sample-count",
-		sampleCount,
-		minimumSamples: 120,
-		validationCount: validation.length
-	});
-	if (sampleCount < 120) return collecting();
-	const trainingWins = training.filter((example) => example.label === 1).length;
-	const calibrationWins = calibrationSet.filter((example) => example.label === 1).length;
-	const validationWins = validation.filter((example) => example.label === 1).length;
-	if (trainingWins < 25 || training.length - trainingWins < 25 || calibrationWins < 5 || calibrationSet.length - calibrationWins < 5 || validationWins < 5 || validation.length - validationWins < 5) return {
-		...collecting(),
-		reason: "class-balance"
-	};
-	const model = fitLogistic(training);
-	const calibration = fitCalibration(calibrationSet.map((example) => logit(model, example.features)), calibrationSet.map((example) => example.label));
-	const probabilities = validation.map((example) => logit(model, example.features)).map((value) => sigmoid(calibration.slope * value + calibration.intercept));
-	const baseRate = calibrationWins / calibrationSet.length;
-	const brierScore = probabilities.reduce((sum, value, index) => sum + (value - validation[index].label) ** 2, 0) / validation.length;
-	const baselineBrier = validation.reduce((sum, example) => sum + (baseRate - example.label) ** 2, 0) / validation.length;
-	if (brierScore >= baselineBrier) return {
-		status: "unreliable",
-		reason: "no-baseline-edge",
-		sampleCount,
-		minimumSamples: 120,
-		validationCount: validation.length,
-		brierScore,
-		baselineBrier
-	};
-	const candidateFeatures = featuresOf(candidate);
-	if (!candidateFeatures) return {
-		status: "unreliable",
-		reason: "no-baseline-edge",
-		sampleCount,
-		minimumSamples: 120,
-		validationCount: validation.length,
-		brierScore,
-		baselineBrier
-	};
-	const probability = sigmoid(calibration.slope * logit(model, candidateFeatures) + calibration.intercept);
-	const expectedValue = probability * (candidate.payout / 100) - (1 - probability);
-	return {
-		status: "ready",
-		sampleCount,
-		minimumSamples: 120,
-		validationCount: validation.length,
-		probability,
-		expectedValue,
-		brierScore,
-		baselineBrier
-	};
-}
 function CandleChart({ bars, entry, live }) {
 	if (bars.length < 2) return null;
 	const width = 320;
@@ -492,7 +336,6 @@ function SignalCard({ search }) {
 	const { language, t } = useLanguage();
 	const navigate = useNavigate();
 	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
-	const lookbackBars = lookbackForExpiry(search.seconds, search.analysisSeconds);
 	const [now, setNow] = (0, import_react.useState)(() => Date.now());
 	const [phase, setPhase] = (0, import_react.useState)("run");
 	const [copied, setCopied] = (0, import_react.useState)(false);
@@ -500,7 +343,6 @@ function SignalCard({ search }) {
 	const [prepLeft, setPrepLeft] = (0, import_react.useState)(10);
 	const [error, setError] = (0, import_react.useState)("");
 	const [journalWarning, setJournalWarning] = (0, import_react.useState)("");
-	const [aiAssessment, setAiAssessment] = (0, import_react.useState)(null);
 	const [live, setLive] = (0, import_react.useState)(null);
 	const [liveStatus, setLiveStatus] = (0, import_react.useState)("connecting");
 	const [liveMessage, setLiveMessage] = (0, import_react.useState)("");
@@ -528,13 +370,27 @@ function SignalCard({ search }) {
 			step: search.step,
 			startedAt: search.started,
 			ruleScore: search.ruleScore,
-			strategyVersion: "expiry-adaptive-filter-v1",
+			aiProbability: search.aiProbability,
+			aiExpectedValue: search.aiExpectedValue,
+			aiBrierScore: search.aiBrierScore,
+			aiBaselineBrier: search.aiBaselineBrier,
+			aiSamples: search.aiSamples,
+			aiValidationTrades: search.aiValidationTrades,
+			aiValidationReturn: search.aiValidationReturn,
+			strategyVersion: "websocket-ml-v1",
 			note: search.note,
 			bars: search.bars
 		});
 		setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
 	}, [
 		journalId,
+		search.aiBaselineBrier,
+		search.aiBrierScore,
+		search.aiExpectedValue,
+		search.aiProbability,
+		search.aiSamples,
+		search.aiValidationReturn,
+		search.aiValidationTrades,
 		search.analysisSeconds,
 		search.bars,
 		search.direction,
@@ -548,23 +404,6 @@ function SignalCard({ search }) {
 		search.started,
 		search.step,
 		search.symbol
-	]);
-	(0, import_react.useEffect)(() => {
-		setAiAssessment(assessSignalModel(readSignalJournal(), {
-			direction: search.direction,
-			payout: search.payout,
-			seconds: search.seconds,
-			step: search.step,
-			ruleScore: search.ruleScore,
-			bars: search.bars
-		}));
-	}, [
-		search.bars,
-		search.direction,
-		search.payout,
-		search.ruleScore,
-		search.seconds,
-		search.step
 	]);
 	(0, import_react.useEffect)(() => {
 		if (phase !== "run") return;
@@ -676,6 +515,13 @@ function SignalCard({ search }) {
 					note: result.note,
 					bars: result.bars,
 					ruleScore: result.ruleScore,
+					aiProbability: result.aiProbability,
+					aiExpectedValue: result.aiExpectedValue,
+					aiBrierScore: result.aiBrierScore,
+					aiBaselineBrier: result.aiBaselineBrier,
+					aiSamples: result.aiSamples,
+					aiValidationTrades: result.aiValidationTrades,
+					aiValidationReturn: result.aiValidationReturn,
 					step: search.step + 1,
 					started: Date.now()
 				}
@@ -802,10 +648,7 @@ function SignalCard({ search }) {
 							" · ",
 							t("history.candles"),
 							" ",
-							expiryLabel(search.analysisSeconds),
-							" · ",
-							lookbackBars,
-							" свечей"
+							expiryLabel(search.analysisSeconds)
 						]
 					}),
 					phase === "run" || phase === "check" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
@@ -829,7 +672,7 @@ function SignalCard({ search }) {
 							children: line
 						}, line))
 					}),
-					aiAssessment ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+					search.aiSamples > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 						className: "mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-4",
 						"aria-live": "polite",
 						children: [
@@ -838,35 +681,31 @@ function SignalCard({ search }) {
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-xs font-semibold tracking-[0.14em] text-blue-soft uppercase",
 									children: t("ai.title")
-								}), aiAssessment.status === "ready" && aiAssessment.probability !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 									className: "font-mono text-lg font-bold text-fg",
-									children: [Math.round(aiAssessment.probability * 100), "%"]
-								}) : null]
+									children: [Math.round(search.aiProbability * 100), "%"]
+								})]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-2 text-xs leading-relaxed text-muted",
 								children: t("ai.explanation")
 							}),
-							aiAssessment.status === "ready" && aiAssessment.probability !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-2 text-xs leading-relaxed text-muted",
 								children: t("ai.validated", {
-									samples: aiAssessment.sampleCount,
-									brier: aiAssessment.brierScore?.toFixed(3) ?? "—"
+									samples: search.aiSamples,
+									brier: search.aiBrierScore.toFixed(3)
 								})
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-1 text-xs leading-relaxed text-muted",
-								children: t("ai.expectedValue", { value: `${(aiAssessment.expectedValue ?? 0) >= 0 ? "+" : ""}${(aiAssessment.expectedValue ?? 0).toFixed(3)}` })
-							})] }) : aiAssessment.status === "unreliable" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-2 text-xs leading-relaxed text-muted",
-								children: t("ai.unreliable")
-							}) : aiAssessment.reason === "class-balance" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-2 text-xs leading-relaxed text-muted",
-								children: t("ai.classBalance", { samples: aiAssessment.sampleCount })
-							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-2 text-xs leading-relaxed text-muted",
-								children: t("ai.collecting", {
-									samples: aiAssessment.sampleCount,
-									minimum: aiAssessment.minimumSamples
+								children: t("ai.expectedValue", { value: `${search.aiExpectedValue >= 0 ? "+" : ""}${search.aiExpectedValue.toFixed(3)}` })
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-1 text-xs leading-relaxed text-muted",
+								children: t("ai.validationDetails", {
+									trades: search.aiValidationTrades,
+									result: `${search.aiValidationReturn >= 0 ? "+" : ""}${search.aiValidationReturn.toFixed(3)}`
 								})
 							})
 						]

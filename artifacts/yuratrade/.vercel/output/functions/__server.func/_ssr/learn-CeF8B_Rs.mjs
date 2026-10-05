@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as useLanguage } from "./router-C6jSBPUp.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/learn-CPeC6JMB.js
+import { C as useLanguage } from "./router-D91o2oh_.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/learn-CeF8B_Rs.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var lessons = [

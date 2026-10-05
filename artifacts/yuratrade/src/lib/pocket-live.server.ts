@@ -1,10 +1,14 @@
 import WebSocket from "ws";
-import { assessSignalQuality } from "./signal-quality";
+import {
+  AI_HISTORY_CANDLES,
+  analyzeCandleHistory,
+  MIN_AI_SAMPLES,
+  type AiCandleDecision,
+} from "./signal-model.server";
 import {
   analysisPeriodForExpiry,
   formatExpiry,
   isValidExpirySeconds,
-  lookbackForExpiry,
 } from "./expiry";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
@@ -13,6 +17,7 @@ const AUTH_MISSING_MESSAGE =
   "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
+const HISTORY_PAGE_CANDLES = 150;
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
 
@@ -32,13 +37,21 @@ export type FeedSignal = {
   note: string;
   bars: Array<[number, number, number, number]>;
   ruleScore: number;
+  aiProbability: number;
+  aiExpectedValue: number;
+  aiBrierScore: number;
+  aiBaselineBrier: number;
+  aiSamples: number;
+  aiValidationTrades: number;
+  aiValidationReturn: number;
 };
 
 type Candle = { open: number; close: number; high: number; low: number };
+type HistoricalCandle = Candle & { time: number };
 
 type Pending = {
   asset: string;
-  resolve: (candles: Candle[]) => void;
+  resolve: (candles: HistoricalCandle[]) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -99,8 +112,8 @@ function storeAssets(rows: unknown[]) {
   }
 }
 
-function asCandles(data: unknown[]) {
-  const candles: Array<Candle & { time: number }> = [];
+function asCandles(data: unknown[]): HistoricalCandle[] {
+  const candles: HistoricalCandle[] = [];
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
     const candle = row as { time?: number; open?: number; close?: number; high?: number; low?: number };
@@ -119,128 +132,65 @@ function asCandles(data: unknown[]) {
   return candles;
 }
 
-function rsiOf(closes: number[]) {
-  const period = 14;
-  if (closes.length < period + 1) return null;
-  const window = closes.slice(-period - 1);
-  let gain = 0;
-  let loss = 0;
-  for (let index = 1; index < window.length; index += 1) {
-    const diff = window[index] - window[index - 1];
-    if (diff >= 0) gain += diff;
-    else loss -= diff;
-  }
-  if (loss === 0) return 100;
-  const relative = gain / loss;
-  return 100 - 100 / (1 + relative);
-}
-
-function describe(input: {
-  direction: "call" | "put";
-  agree: boolean;
-  expirySeconds: number;
-  analysisSeconds: number;
-  lookbackBars: number;
-  greens: number;
-  rsi: number | null;
-  smaDelta: number;
-  band: number;
-  slope: number;
-}) {
-  const side = input.direction === "call" ? "вверх" : "вниз";
-  const rsiLine =
-    input.rsi === null
-      ? "RSI 14: мало свечей для расчёта"
-      : `RSI 14: ${input.rsi.toFixed(1)} — ${
-          input.rsi >= 70
-            ? "перекуплен, импульс выдыхается"
-            : input.rsi <= 30
-              ? "перепродан, импульс вниз выдыхается"
-              : input.rsi >= 50
-                ? "импульс вверх, перекупленности нет"
-                : "импульс вниз, перепроданности нет"
-        }`;
-  const slopeWord = input.slope > 0.05 ? "восходящий" : input.slope < -0.05 ? "нисходящий" : "плоский";
-  const bandWord = input.band >= 0.66 ? "верхней" : input.band <= 0.33 ? "нижней" : "средней";
-  return [
-    rsiLine,
-    `SMA 12: цена ${input.smaDelta >= 0 ? "выше" : "ниже"} средней на ${Math.abs(input.smaDelta).toFixed(3)}%`,
-    `Диапазон: цена в ${bandWord} трети окна`,
-    `Свечи: ${input.greens} бычьих и ${5 - input.greens} медвежьих из последних пяти`,
-    `Наклон: ${slopeWord}${input.agree ? ", совпадает со свечами" : ", свечи спорят с наклоном"}`,
-    `Экспирация ${formatExpiry(input.expirySeconds)}. Анализ: свечи ${formatExpiry(input.analysisSeconds)}, окно ${input.lookbackBars} свечей.`,
-    `Вход ${side}: этот сценарий сильнее обратного.`,
-  ].join("\n");
-}
-
-function judge(
-  candles: Candle[],
+function buildAiSignal(
+  candles: HistoricalCandle[],
   expirySeconds: number,
   analysisSeconds: number,
   name: string,
   payout: number,
-): FeedSignal & { strength: number; approved: boolean } {
-  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
-  const last = candles.slice(-lookbackBars);
-  const closes = last.map((candle) => candle.close);
-  const count = closes.length;
-  let sumX = 0;
-  let sumY = 0;
-  let sumXY = 0;
-  let sumXX = 0;
-  for (let index = 0; index < count; index += 1) {
-    sumX += index;
-    sumY += closes[index];
-    sumXY += index * closes[index];
-    sumXX += index * index;
-  }
-  const slope = (count * sumXY - sumX * sumY) / (count * sumXX - sumX * sumX || 1);
-  const high = Math.max(...last.map((candle) => candle.high));
-  const low = Math.min(...last.map((candle) => candle.low));
-  const range = high - low || Math.abs(closes[count - 1]) * 0.0001;
-  const slopeScore = Math.max(-1, Math.min(1, (slope * count) / range));
-  const bodies = last.slice(-5);
-  const greens = bodies.filter((candle) => candle.close >= candle.open).length;
-  const bodyScore = bodies.reduce((sum, candle) => sum + Math.sign(candle.close - candle.open), 0) / bodies.length;
-  const earlier = closes.slice(0, -1);
-  const average = earlier.reduce((sum, price) => sum + price, 0) / Math.max(1, earlier.length);
-  const levelScore = Math.max(-1, Math.min(1, ((closes[count - 1] - average) / range) * 2));
-  const score = slopeScore * 0.5 + bodyScore * 0.3 + levelScore * 0.2;
-  const quality = assessSignalQuality(score, slopeScore, bodyScore);
-  const direction = score >= 0 ? "call" : "put";
-  const agree = quality.agrees;
-  const full = candles.map((candle) => candle.close);
-  const price = full[full.length - 1];
-  const smaWindow = full.slice(-12);
-  const sma = smaWindow.reduce((sum, value) => sum + value, 0) / smaWindow.length;
-  const rsi = rsiOf(full);
+): FeedSignal | AiCandleDecision {
+  const decision = analyzeCandleHistory(candles, expirySeconds, analysisSeconds, payout);
+  if (decision.status !== "ready") return decision;
+
   const pack = candles.slice(-28);
+  const price = candles[candles.length - 1]?.close ?? 0;
   const sample = pack[pack.length - 1]?.close ?? price;
   const digits = sample >= 100 ? 2 : sample >= 10 ? 3 : 5;
   const cut = (value: number) => Number(value.toFixed(digits));
+  const directionLabel = decision.direction === "call" ? "вверх" : "вниз";
+  const signedValue = `${decision.expectedValue >= 0 ? "+" : ""}${decision.expectedValue.toFixed(3)}`;
+
   return {
     name,
     payout,
-    direction,
+    direction: decision.direction,
     openPrice: price,
     analysisSeconds,
-    ruleScore: quality.qualityScore,
-    note: describe({
-      direction,
-      agree,
-      expirySeconds,
-      analysisSeconds,
-      lookbackBars,
-      greens,
-      rsi,
-      smaDelta: ((price - sma) / (sma || 1)) * 100,
-      band: (price - low) / range,
-      slope: slopeScore,
-    }),
-    bars: pack.map((candle) => [cut(candle.open), cut(candle.high), cut(candle.low), cut(candle.close)]),
-    strength: quality.qualityScore,
-    approved: quality.eligible,
+    ruleScore: decision.probability,
+    aiProbability: decision.probability,
+    aiExpectedValue: decision.expectedValue,
+    aiBrierScore: decision.brierScore,
+    aiBaselineBrier: decision.baselineBrier,
+    aiSamples: decision.sampleCount,
+    aiValidationTrades: decision.validationTrades,
+    aiValidationReturn: decision.validationReturn,
+    note: [
+      `ИИ-модель выбрала направление ${directionLabel} по свечам Pocket Option WebSocket.`,
+      `Калиброванная вероятность выигрыша направления: ${(decision.probability * 100).toFixed(1)}%.`,
+      `Ожидаемое значение на ставку 1 ед.: ${signedValue} ед.`,
+      `Проверка на более поздних свечах: Brier ${decision.brierScore.toFixed(3)} против базовых ${decision.baselineBrier.toFixed(3)}; ${decision.validationTrades} проверочных входов.`,
+      `Экспирация ${formatExpiry(expirySeconds)}; интервал свечи ${formatExpiry(analysisSeconds)}.`,
+    ].join("\n"),
+    bars: pack.map((candle) => [
+      cut(candle.open),
+      cut(candle.high),
+      cut(candle.low),
+      cut(candle.close),
+    ]),
   };
+}
+
+function aiNotReadyMessage(decision: AiCandleDecision | null) {
+  if (!decision || decision.status === "no-edge" || decision.status === "ready") {
+    return "ИИ не нашёл направление с положительным ожидаемым значением.";
+  }
+  if (decision.reason === "insufficient-history") {
+    return `ИИ не получил достаточно исторических свечей для обучения и проверки (найдено ${decision.sampleCount} примеров, нужно не менее ${MIN_AI_SAMPLES}).`;
+  }
+  if (decision.reason === "class-balance") {
+    return "ИИ не может надёжно проверить модель: в исторических свечах недостаточно примеров обоих направлений.";
+  }
+  return "ИИ-модель не прошла проверку на более поздних свечах. Сигнал не выдан.";
 }
 
 function rememberTicks(message: string) {
@@ -443,34 +393,62 @@ export async function feedSnapshot() {
   };
 }
 
-async function loadCandles(symbol: string, seconds: number) {
+async function loadHistoryPage(symbol: string, seconds: number, time: number) {
   await ensureFeed();
   if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
   if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
   if (pending) failPending(new Error("Запрос сменён."));
   const current = socket;
-  return new Promise<Candle[]>((resolve, reject) => {
+  return new Promise<HistoricalCandle[]>((resolve, reject) => {
     const timer = setTimeout(() => {
-      if (pending?.asset === symbol) pending = null;
-      reject(new Error("Цена не пришла. Попробуйте ещё раз."));
+      if (pending?.asset === symbol) {
+        pending = null;
+        expectHistory = false;
+      }
+      reject(new Error("История свечей не пришла. Попробуйте ещё раз."));
     }, 12000);
     pending = { asset: symbol, resolve, reject, timer };
-    const now = Math.floor(Date.now() / 1000);
-    current.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: seconds }]));
-    current.send(
-      "42" +
-        JSON.stringify([
-          "loadHistoryPeriod",
-          {
-            asset: symbol,
-            index: 7000 + Math.floor(Math.random() * 2000),
-            time: now,
-            offset: Math.max(seconds * 40, 2400),
-            period: seconds,
-          },
-        ]),
-    );
+    try {
+      current.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: seconds }]));
+      current.send(
+        "42" +
+          JSON.stringify([
+            "loadHistoryPeriod",
+            {
+              asset: symbol,
+              index: 7000 + Math.floor(Math.random() * 2000),
+              time,
+              offset: seconds * HISTORY_PAGE_CANDLES,
+              period: seconds,
+            },
+          ]),
+      );
+    } catch {
+      clearTimeout(timer);
+      if (pending?.asset === symbol) pending = null;
+      expectHistory = false;
+      reject(new Error("Не удалось запросить историю свечей Pocket Option."));
+    }
   });
+}
+
+async function loadCandles(symbol: string, seconds: number) {
+  await ensureFeed();
+  const collected = new Map<number, HistoricalCandle>();
+  let cursor = Math.floor(Date.now() / 1000);
+  const maxPages = Math.ceil(AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
+  for (let page = 0; page < maxPages && collected.size < AI_HISTORY_CANDLES; page += 1) {
+    const candles = await loadHistoryPage(symbol, seconds, cursor);
+    if (candles.length === 0) break;
+    const previousSize = collected.size;
+    for (const candle of candles) collected.set(candle.time, candle);
+    const oldestTime = candles[0].time;
+    if (collected.size === previousSize || oldestTime <= 0 || oldestTime >= cursor) break;
+    cursor = oldestTime - 1;
+  }
+  return [...collected.values()]
+    .sort((a, b) => a.time - b.time)
+    .slice(-AI_HISTORY_CANDLES);
 }
 
 export function followQuote(symbol: string) {
@@ -512,48 +490,53 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   await ensureFeed();
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
   const candles = await loadCandles(symbol, analysisSeconds);
   const pair = pairs.get(symbol);
   if (!pair) throw new Error("Эта пара сейчас недоступна.");
-  if (candles.length < lookbackBars) throw new Error("Не удалось получить достаточно свечей для выбранной экспирации.");
-  const judged = judge(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
-  if (!judged.approved) return null;
-  judged.openPrice = await waitQuote(symbol);
-  const { strength: _strength, approved: _approved, ...signal } = judged;
-  return signal;
+  const evaluated = buildAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
+  if ("status" in evaluated) {
+    if (evaluated.status === "no-edge") return null;
+    throw new Error(aiNotReadyMessage(evaluated));
+  }
+  evaluated.openPrice = await waitQuote(symbol);
+  return evaluated;
 }
 
 export async function feedBest(expirySeconds: number) {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
   const ranked = [...pairs.values()]
     .filter((pair) => pair.payout === 92 || pair.payout === 80)
     .sort((a, b) => b.payout - a.payout);
   const live = ranked.filter((pair) => quotes.has(pair.symbol));
   const pool = (live.length >= 4 ? live : ranked).slice(0, 4);
   if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-  let best: { signal: FeedSignal; symbol: string; group: PairGroup; strength: number } | null = null;
-  let usableHistories = 0;
+  let best: { signal: FeedSignal; symbol: string; group: PairGroup } | null = null;
+  let validatedModels = 0;
+  let largestSampleCount = 0;
+  let latestDecision: AiCandleDecision | null = null;
   for (const pair of pool) {
     try {
       const candles = await loadCandles(pair.symbol, analysisSeconds);
-      if (candles.length < lookbackBars) continue;
-      usableHistories += 1;
-      const judged = judge(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
-      if (!judged.approved) continue;
-      if (!best || judged.strength > best.strength) {
-        const { strength, approved: _approved, ...signal } = judged;
-        best = { signal, symbol: pair.symbol, group: pair.group, strength };
+      const evaluated = buildAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout);
+      if ("status" in evaluated) {
+        largestSampleCount = Math.max(largestSampleCount, evaluated.sampleCount);
+        latestDecision = evaluated;
+        if (evaluated.status === "no-edge") validatedModels += 1;
+        continue;
+      }
+      validatedModels += 1;
+      if (!best || evaluated.aiExpectedValue > best.signal.aiExpectedValue) {
+        best = { signal: evaluated, symbol: pair.symbol, group: pair.group };
       }
     } catch {
-      /* this pair or history interval did not answer, try the next */
+      // Continue to another pair if its history request fails.
     }
   }
-  if (!best && usableHistories === 0) {
-    throw new Error("Не удалось загрузить достаточно свечей для этой экспирации. Попробуйте ещё раз.");
+  if (!best && validatedModels === 0) {
+    if (latestDecision) throw new Error(aiNotReadyMessage({ ...latestDecision, sampleCount: largestSampleCount }));
+    throw new Error("Не удалось получить исторические свечи Pocket Option по WebSocket.");
   }
   if (!best) return null;
   best.signal.openPrice = await waitQuote(best.symbol);
