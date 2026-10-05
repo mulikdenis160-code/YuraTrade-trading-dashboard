@@ -2,10 +2,10 @@ import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as analysisPeriodForExpiry } from "./expiry-BxofkO8c.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, h as takeBest, i as readSignalJournal, p as loadFeed, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-B-HySQXX.mjs";
-import { t as StatRow } from "./stats-CJ_iEbkw.mjs";
-import { t as AnalysisModal } from "./analysis-modal-CVJU2TS3.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-B7PyE_za.js
+import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, h as takeBest, i as readSignalJournal, p as loadFeed, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-CY6OXHeX.mjs";
+import { t as StatRow } from "./stats-BvVW88Wb.mjs";
+import { t as AnalysisModal } from "./analysis-modal-B-87OfVz.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CDeTSTsl.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var expiryOptionsMinutes = [
@@ -35,7 +35,8 @@ function SignalDesk() {
 	const [phase, setPhase] = (0, import_react.useState)("idle");
 	const [prepared, setPrepared] = (0, import_react.useState)(null);
 	const [countdown, setCountdown] = (0, import_react.useState)(10);
-	const [error, setError] = (0, import_react.useState)("");
+	const [feedError, setFeedError] = (0, import_react.useState)("");
+	const [searchError, setSearchError] = (0, import_react.useState)("");
 	const [notice, setNotice] = (0, import_react.useState)("");
 	const [balance, setBalance] = (0, import_react.useState)(null);
 	const [used, setUsed] = (0, import_react.useState)(0);
@@ -52,12 +53,12 @@ function SignalDesk() {
 				setReady(feed.pairs.length > 0);
 				setFeedStatus(feed.pairs.length > 0 ? "connected" : "error");
 				setBalance(feed.balance);
-				setError("");
+				setFeedError("");
 			}).catch((cause) => {
 				if (stop) return;
 				setReady(false);
 				setFeedStatus("error");
-				setError(cause instanceof Error ? cause.message : "Не удалось подключиться к Pocket Option.");
+				setFeedError(cause instanceof Error ? cause.message : "Не удалось подключиться к Pocket Option.");
 			});
 		};
 		pull();
@@ -79,7 +80,7 @@ function SignalDesk() {
 		if (phase !== "idle" || blocked || !ready) return;
 		const attempt = ++attemptRef.current;
 		setPhase("search");
-		setError("");
+		setSearchError("");
 		setNotice("");
 		try {
 			const candidate = await takeBest({ data: {
@@ -135,7 +136,7 @@ function SignalDesk() {
 			if (attemptRef.current !== attempt) return;
 			setPhase("idle");
 			setPrepared(null);
-			setError(cause instanceof Error ? cause.message : t("signal.none"));
+			setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
 		}
 	};
 	const cancelCountdown = () => {
@@ -156,6 +157,12 @@ function SignalDesk() {
 						"aria-live": "polite",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? t("signal.connected") : feedStatus === "error" ? t("signal.disconnected") : t("signal.connecting")]
 					}),
+					feedError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mb-3 text-center text-xs leading-relaxed text-loss",
+						role: "status",
+						"aria-live": "polite",
+						children: feedError
+					}) : null,
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm leading-relaxed text-muted",
 						children: t("signal.description")
@@ -215,15 +222,49 @@ function SignalDesk() {
 							cap
 						}))
 					}),
-					error ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-3 text-sm text-loss",
-						children: error
+					searchError ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 rounded-2xl border border-loss/30 bg-loss/8 p-4 text-left",
+						role: "alert",
+						"aria-live": "assertive",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-sm font-semibold text-loss",
+								children: t("signal.searchFailed")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-1 text-sm leading-relaxed text-muted",
+								children: searchError
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: "btn-ghost mt-3 min-h-10 w-full justify-center",
+								disabled: !ready || phase !== "idle" || Boolean(blocked),
+								onClick: () => void ask(),
+								children: t("signal.tryAgain")
+							})
+						]
 					}) : null,
-					notice ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-3 rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-sm leading-relaxed text-muted",
+					notice ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 rounded-2xl border border-blue/25 bg-blue/8 p-4 text-left",
 						role: "status",
 						"aria-live": "polite",
-						children: notice
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-sm font-semibold text-blue-soft",
+								children: t("common.notConfirmed")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-1 text-sm leading-relaxed text-muted",
+								children: notice
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: "btn-ghost mt-3 min-h-10 w-full justify-center",
+								disabled: !ready || phase !== "idle" || Boolean(blocked),
+								onClick: () => void ask(),
+								children: t("signal.tryAgain")
+							})
+						]
 					}) : null
 				]
 			}),
