@@ -10,7 +10,13 @@ const validReview = JSON.stringify({
   symbol: "EURUSD_otc",
   direction: "call",
   confidence: 84,
-  reason: "Короткий импульс вверх подтверждён несколькими последними свечами.",
+  explanation: {
+    pairSelection: "Пара прошла предварительную проверку; в запросе была одна пара, сравнения с другими не было.",
+    candleEvidence: "Несколько последних свечей закрылись выше открытия, диапазон не расширяется.",
+    directionRationale: "Последовательность свечей поддерживает краткосрочное движение вверх.",
+    riskFactors: "Короткий горизонт и смена импульса могут опровергнуть этот сценарий.",
+    invalidation: "Сценарий ослабнет, если следующие свечи закрепятся ниже недавних минимумов.",
+  },
 });
 
 test("direct AI review accepts only an allowed pair with a valid structured response", () => {
@@ -19,6 +25,7 @@ test("direct AI review accepts only an allowed pair with a valid structured resp
   if (review?.decision !== "signal") return;
   assert.equal(review.symbol, "EURUSD_otc");
   assert.equal(review.confidence, 84);
+  assert.match(review.explanation.candleEvidence, /свечей/);
 });
 
 test("direct AI review rejects malformed responses and pairs outside the candidate pool", () => {

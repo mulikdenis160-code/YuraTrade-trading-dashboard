@@ -16,7 +16,13 @@ const signalReviewSchema = z.object({
   symbol: z.string().min(1).max(80),
   direction: z.enum(["call", "put"]),
   confidence: z.number().int().min(0).max(100),
-  reason: z.string().trim().min(1).max(220),
+  explanation: z.object({
+    pairSelection: z.string().trim().min(1).max(240),
+    candleEvidence: z.string().trim().min(1).max(300),
+    directionRationale: z.string().trim().min(1).max(240),
+    riskFactors: z.string().trim().min(1).max(240),
+    invalidation: z.string().trim().min(1).max(240),
+  }).strict(),
 }).strict();
 
 const passReviewSchema = z.object({
@@ -117,7 +123,7 @@ export async function analyzeMarketCandidates(
         {
           role: "system",
           content:
-            "Ты анализируешь направление ближайшего движения по свечам OHLC для сигнала CALL/PUT. Используй только переданные данные, сравни доступные пары по вероятности верного направления и пропускай сомнительные ситуации. Не учитывай размер выплаты как причину повысить уверенность. Самооценка confidence не является статистически калиброванной вероятностью. Не обещай результат и не открывай сделки. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"reason\":\"кратко по-русски\"}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
+            "Ты анализируешь направление ближайшего движения по свечам OHLC для сигнала CALL/PUT. Используй только переданные данные, сравни доступные пары по вероятности верного направления и пропускай сомнительные ситуации. Не учитывай размер выплаты как причину повысить уверенность. Самооценка confidence не является статистически калиброванной вероятностью. Не обещай результат и не открывай сделки. Не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Все пять текстов explanation должны быть написаны тобой по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без указания выдуманной цены. Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
         },
         {
           role: "user",

@@ -199,7 +199,11 @@ function appendDirectAiReview(signal: FeedSignal, review: Extract<MarketAiReview
   signal.note = [
     signal.note,
     `Прямой анализ OpenAI ${DIRECT_AI_MODEL}: ${directionLabel}; самооценка уверенности ${review.confidence}/100.`,
-    `Комментарий OpenAI: ${review.reason}`,
+    `ИИ — выбор пары: ${review.explanation.pairSelection}`,
+    `ИИ — разбор свечей: ${review.explanation.candleEvidence}`,
+    `ИИ — аргумент направления: ${review.explanation.directionRationale}`,
+    `ИИ — риски сценария: ${review.explanation.riskFactors}`,
+    `ИИ — что ослабит сценарий: ${review.explanation.invalidation}`,
     "Самооценка OpenAI не является калиброванной исторической точностью; сигнал выдан только при совпадении со статистической проверкой.",
   ].join("\n");
 }
