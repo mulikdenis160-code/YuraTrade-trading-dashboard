@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import {
   AI_HISTORY_CANDLES,
   analyzeCandleHistory,
+  MIN_LIVE_WIN_PROBABILITY,
   MIN_AI_SAMPLES,
   type AiCandleDecision,
 } from "./signal-model.server";
@@ -168,7 +169,8 @@ function buildAiSignal(
       `ИИ-модель выбрала направление ${directionLabel} по свечам Pocket Option WebSocket.`,
       `Калиброванная вероятность выигрыша направления: ${(decision.probability * 100).toFixed(1)}%.`,
       `Ожидаемое значение на ставку 1 ед.: ${signedValue} ед.`,
-      `Проверка на более поздних свечах: Brier ${decision.brierScore.toFixed(3)} против базовых ${decision.baselineBrier.toFixed(3)}; ${decision.validationTrades} проверочных входов.`,
+      `Проверочный процент побед: ${(decision.validationWinRate * 100).toFixed(1)}% на ${decision.validationTrades} входах.`,
+      `Проверка калибровки на более поздних свечах: Brier ${decision.brierScore.toFixed(3)} против базовых ${decision.baselineBrier.toFixed(3)}.`,
       `Экспирация ${formatExpiry(expirySeconds)}; интервал свечи ${formatExpiry(analysisSeconds)}.`,
     ].join("\n"),
     bars: pack.map((candle) => [
@@ -181,8 +183,11 @@ function buildAiSignal(
 }
 
 function aiNotReadyMessage(decision: AiCandleDecision | null) {
-  if (!decision || decision.status === "no-edge" || decision.status === "ready") {
+  if (!decision || decision.status === "ready") {
     return "ИИ не нашёл направление с положительным ожидаемым значением.";
+  }
+  if (decision.status === "no-edge") {
+    return `Нет сигнала с вероятностью победы не ниже ${(MIN_LIVE_WIN_PROBABILITY * 100).toFixed(0)}% и положительным ожидаемым значением.`;
   }
   if (decision.reason === "insufficient-history") {
     return `ИИ не получил достаточно исторических свечей для обучения и проверки (найдено ${decision.sampleCount} примеров, нужно не менее ${MIN_AI_SAMPLES}).`;
@@ -527,7 +532,7 @@ export async function feedBest(expirySeconds: number) {
         continue;
       }
       validatedModels += 1;
-      if (!best || evaluated.aiExpectedValue > best.signal.aiExpectedValue) {
+      if (!best || evaluated.aiProbability > best.signal.aiProbability) {
         best = { signal: evaluated, symbol: pair.symbol, group: pair.group };
       }
     } catch {

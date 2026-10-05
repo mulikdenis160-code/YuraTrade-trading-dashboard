@@ -19,6 +19,7 @@ export type AiCandleDecision =
       baselineBrier: number;
       sampleCount: number;
       validationTrades: number;
+      validationWinRate: number;
       validationReturn: number;
     }
   | {
@@ -33,8 +34,10 @@ type LogisticModel = { means: number[]; scales: number[]; weights: number[]; bia
 type Calibration = { slope: number; intercept: number };
 
 const FEATURE_WINDOW = 24;
-const MIN_VALIDATION_TRADES = 12;
+const MIN_VALIDATION_TRADES = 30;
 const MIN_LIVE_EDGE = 0.02;
+export const MIN_LIVE_WIN_PROBABILITY = 0.65;
+const MIN_VALIDATION_WIN_RATE = 0.65;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -248,18 +251,22 @@ export function analyzeCandleHistory(
   const baselineBrier =
     validation.reduce((sum, sample) => sum + (baselineRate - sample.up) ** 2, 0) / validation.length;
   let validationTrades = 0;
+  let validationWins = 0;
   let validationReturn = 0;
   for (let index = 0; index < validation.length; index += 1) {
     const choice = bestSide(probabilities[index], payout);
-    if (choice.expectedValue < MIN_LIVE_EDGE) continue;
+    if (choice.probability < MIN_LIVE_WIN_PROBABILITY || choice.expectedValue < MIN_LIVE_EDGE) continue;
     validationTrades += 1;
     const won = choice.direction === "call" ? validation[index].up === 1 : validation[index].up === 0;
+    if (won) validationWins += 1;
     validationReturn += won ? payout / 100 : -1;
   }
   const averageValidationReturn = validationTrades ? validationReturn / validationTrades : 0;
+  const validationWinRate = validationTrades ? validationWins / validationTrades : 0;
   if (
     brierScore >= baselineBrier ||
     validationTrades < MIN_VALIDATION_TRADES ||
+    validationWinRate < MIN_VALIDATION_WIN_RATE ||
     averageValidationReturn <= 0
   ) {
     return { status: "not-ready", reason: "failed-validation", sampleCount };
@@ -271,7 +278,12 @@ export function analyzeCandleHistory(
     calibration.slope * score(model, currentFeatures) + calibration.intercept,
   );
   const choice = bestSide(currentProbabilityUp, payout);
-  if (choice.expectedValue < MIN_LIVE_EDGE) return { status: "no-edge", sampleCount };
+  if (
+    choice.probability < MIN_LIVE_WIN_PROBABILITY ||
+    choice.expectedValue < MIN_LIVE_EDGE
+  ) {
+    return { status: "no-edge", sampleCount };
+  }
   return {
     status: "ready",
     direction: choice.direction,
@@ -281,6 +293,7 @@ export function analyzeCandleHistory(
     baselineBrier,
     sampleCount,
     validationTrades,
+    validationWinRate,
     validationReturn: averageValidationReturn,
   };
 }

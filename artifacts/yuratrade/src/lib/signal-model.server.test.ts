@@ -26,13 +26,14 @@ test("AI model requires enough historical WebSocket candles", () => {
   if (result.status === "not-ready") assert.equal(result.reason, "insufficient-history");
 });
 
-test("AI model chooses the value-positive side only after forward validation", () => {
+test("AI model chooses high-win-probability signals only after forward validation", () => {
   const result = analyzeCandleHistory(candleHistory(AI_HISTORY_CANDLES), 60, 60, 92);
   assert.equal(result.status, "ready");
   if (result.status !== "ready") return;
-  assert.ok(result.probability >= 0 && result.probability <= 1);
+  assert.ok(result.probability >= 0.65 && result.probability <= 1);
   assert.ok(result.expectedValue >= 0.02);
   assert.ok(result.brierScore < result.baselineBrier);
-  assert.ok(result.validationTrades >= 12);
+  assert.ok(result.validationTrades >= 30);
+  assert.ok(result.validationWinRate >= 0.65);
   assert.ok(result.validationReturn > 0);
 });
