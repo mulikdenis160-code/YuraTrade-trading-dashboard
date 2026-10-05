@@ -1,8 +1,9 @@
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { MarketCandle } from "./signal-model.server.ts";
 
-export const DIRECT_AI_MODEL = "gpt-6-astra";
+export const DIRECT_AI_MODEL = "claude-opus-5-5";
+export const DIRECT_AI_MODEL_LABEL = "Claude Opus 5.5";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 30;
 
@@ -51,15 +52,15 @@ export const DIRECT_AI_SYSTEM_PROMPT = [
   "Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
 ].join(" ");
 
-let client: OpenAI | null = null;
+let client: Anthropic | null = null;
 
-function getOpenAiClient() {
-  const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+function getAnthropicClient() {
+  const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
   if (!apiKey || !baseURL) {
-    throw new Error("Подключение OpenAI не настроено. Сигнал не выдан.");
+    throw new Error("Подключение Anthropic через Replit AI Integrations не настроено. Сигнал не выдан.");
   }
-  if (!client) client = new OpenAI({ apiKey, baseURL, timeout: 45_000, maxRetries: 1 });
+  if (!client) client = new Anthropic({ apiKey, baseURL, timeout: 45_000, maxRetries: 1 });
   return client;
 }
 
@@ -260,7 +261,7 @@ function isValidCandle(candle: MarketCandle) {
 }
 
 export function marketAiApiErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.includes("Подключение OpenAI не настроено")) {
+  if (error instanceof Error && error.message.includes("Подключение Anthropic через Replit AI Integrations не настроено")) {
     return error.message;
   }
   const status = isRecord(error)
@@ -268,24 +269,24 @@ export function marketAiApiErrorMessage(error: unknown) {
     : Number.NaN;
   const name = error instanceof Error ? error.name.toLowerCase() : "";
   if (status === 401 || status === 403) {
-    return "OpenAI отклонил подключение. Проверьте настройки подключения; сигнал не выдан.";
+    return "Anthropic отклонил подключение. Проверьте настройки интеграции; сигнал не выдан.";
   }
   if (status === 429) {
-    return "OpenAI временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
+    return "Anthropic временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
   }
   if (status === 408 || status === 504 || name.includes("timeout")) {
-    return "Анализ OpenAI занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
+    return "Анализ Claude занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
   }
   if (status === 400) {
-    return "OpenAI отклонил формат запроса. Попробуйте ещё раз; если ошибка повторится, проверьте настройку модели.";
+    return "Anthropic отклонил формат запроса. Попробуйте ещё раз; если ошибка повторится, проверьте настройку модели.";
   }
   if (status === 404) {
-    return "Модель OpenAI сейчас недоступна. Попробуйте ещё раз позже.";
+    return "Модель Claude Opus 5.5 сейчас недоступна. Попробуйте ещё раз позже.";
   }
   if (status >= 500 || name.includes("connection")) {
-    return "Сервис OpenAI временно недоступен. Попробуйте ещё раз через минуту.";
+    return "Сервис Anthropic временно недоступен. Попробуйте ещё раз через минуту.";
   }
-  return "Не удалось завершить анализ OpenAI. Попробуйте ещё раз; сигнал не выдан.";
+  return "Не удалось завершить анализ Claude. Попробуйте ещё раз; сигнал не выдан.";
 }
 
 type ReviewMessage = {
@@ -302,11 +303,35 @@ type ReviewCompletion = { choices: ReviewChoice[] };
 type ReviewCompletionRequest = (messages: ReviewMessage[]) => Promise<ReviewCompletion>;
 
 function requestMarketAiCompletion(messages: ReviewMessage[]) {
-  return getOpenAiClient().chat.completions.create({
+  const system = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const requestMessages = messages.flatMap((message) => {
+    if (message.role === "system") return [];
+    return [{ role: message.role, content: message.content }];
+  });
+
+  return getAnthropicClient().messages.create({
     model: DIRECT_AI_MODEL,
-    max_completion_tokens: 8192,
-    response_format: { type: "json_object" },
-    messages,
+    max_tokens: 8192,
+    system,
+    messages: requestMessages,
+  }).then((response) => {
+    const content = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n");
+    const refusal = response.stop_reason === "refusal"
+      ? content || "Anthropic отказался выполнить анализ."
+      : null;
+
+    return {
+      choices: [{
+        message: { content: content || null, refusal },
+        finish_reason: response.stop_reason === "max_tokens" ? "length" : response.stop_reason,
+      }],
+    };
   });
 }
 
@@ -328,7 +353,7 @@ export async function requestMarketAiReviewWithRepair(
     : null;
   if (firstReview) return firstReview;
   if (firstChoice?.message.refusal) {
-    throw new Error("OpenAI отказался выполнить анализ. Сигнал не выдан.");
+    throw new Error("Claude отказался выполнить анализ. Сигнал не выдан.");
   }
 
   const repairMessages: ReviewMessage[] = [
@@ -356,15 +381,15 @@ export async function requestMarketAiReviewWithRepair(
     : null;
   if (retryReview) return retryReview;
   if (retryChoice?.message.refusal) {
-    throw new Error("OpenAI отказался выполнить анализ повторно. Сигнал не выдан.");
+    throw new Error("Claude отказался выполнить анализ повторно. Сигнал не выдан.");
   }
   if (firstChoice?.finish_reason === "length" || retryChoice?.finish_reason === "length") {
-    throw new Error("OpenAI оборвал ответ по лимиту длины. Повторите запрос; сигнал не выдан.");
+    throw new Error("Claude оборвал ответ по лимиту длины. Повторите запрос; сигнал не выдан.");
   }
   if (typeof firstContent !== "string" && typeof retryContent !== "string") {
-    throw new Error("OpenAI не вернул текст анализа после повторного запроса. Сигнал не выдан.");
+    throw new Error("Claude не вернул текст анализа после повторного запроса. Сигнал не выдан.");
   }
-  throw new Error("OpenAI дважды вернул ответ, который не удалось проверить. Повторите запрос; сигнал не выдан.");
+  throw new Error("Claude дважды вернул ответ, который не удалось проверить. Повторите запрос; сигнал не выдан.");
 }
 
 export async function analyzeMarketCandidates(

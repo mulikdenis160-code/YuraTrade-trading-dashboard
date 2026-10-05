@@ -4,6 +4,7 @@ import {
   analyzeMarketCandidates,
   DIRECT_AI_HISTORY_CANDLES,
   DIRECT_AI_MODEL,
+  DIRECT_AI_MODEL_LABEL,
   MIN_DIRECT_AI_CANDLES,
   type MarketAiReview,
 } from "./market-ai.server";
@@ -160,7 +161,7 @@ function buildDirectAiSignal(
     analysisSeconds,
     aiConfidence: review.confidence,
     note: [
-      `Прямой анализ OpenAI ${DIRECT_AI_MODEL} выбрал ${directionLabel}.`,
+      `Прямой анализ ${DIRECT_AI_MODEL_LABEL} (${DIRECT_AI_MODEL}) выбрал ${directionLabel}.`,
       `Самооценка ИИ: ${review.confidence}/100; это субъективная оценка, а не измеренная вероятность или историческая точность.`,
       `ИИ — выбор пары: ${review.explanation.pairSelection}`,
       `ИИ — разбор свечей: ${review.explanation.candleEvidence}`,

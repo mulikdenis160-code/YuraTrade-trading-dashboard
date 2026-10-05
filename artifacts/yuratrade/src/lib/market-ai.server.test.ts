@@ -3,12 +3,17 @@ import test from "node:test";
 import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
+  DIRECT_AI_MODEL,
   DIRECT_AI_SYSTEM_PROMPT,
   marketAiApiErrorMessage,
   MIN_DIRECT_AI_CANDLES,
   parseMarketAiReview,
   requestMarketAiReviewWithRepair,
 } from "./market-ai.server.ts";
+
+test("direct market analysis uses Claude Opus 5.5 through Replit AI Integrations", () => {
+  assert.equal(DIRECT_AI_MODEL, "claude-opus-5-5");
+});
 
 const validReview = JSON.stringify({
   decision: "signal",
@@ -149,13 +154,13 @@ test("direct AI rejects an otherwise large candle set when invalid rows leave to
   assert.equal(result.decision, "pass");
 });
 
-test("OpenAI request failures produce actionable messages without exposing raw errors", () => {
+test("Anthropic request failures produce actionable messages without exposing raw errors", () => {
   assert.match(marketAiApiErrorMessage({ status: 429 }), /ограничил запросы/);
   assert.match(marketAiApiErrorMessage({ status: 401 }), /отклонил подключение/);
   assert.match(marketAiApiErrorMessage({ status: 503 }), /временно недоступен/);
 });
 
-test("an unparseable OpenAI response is retried once and the repaired signal is returned", async () => {
+test("an unparseable Anthropic response is retried once and the repaired signal is returned", async () => {
   let calls = 0;
   const review = await requestMarketAiReviewWithRepair(
     async (messages) => {
