@@ -13,6 +13,7 @@ import {
   formatExpiry,
   isValidExpirySeconds,
 } from "./expiry";
+import { createRotatingCandidateSelector } from "./signal-candidate-pool.ts";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -21,6 +22,7 @@ const AUTH_MISSING_MESSAGE =
 const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 const HISTORY_PAGE_CANDLES = 150;
+const SIGNAL_CANDIDATES_PER_SEARCH = 4;
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
 
@@ -72,6 +74,7 @@ let expectAssets = false;
 let expectHistory = false;
 let expectBalance = false;
 const quotes = new Map<string, { price: number; at: number }>();
+const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
 let pending: Pending | null = null;
 
@@ -206,23 +209,42 @@ function subscribe(symbol: string) {
 }
 
 function waitQuote(symbol: string) {
-  subscribe(symbol);
   const started = Date.now();
+  subscribe(symbol);
   return new Promise<number>((resolve, reject) => {
-    const timer = setInterval(() => {
+    let settled = false;
+    let quoteTimer: ReturnType<typeof setInterval>;
+    let retryTimer: ReturnType<typeof setInterval>;
+    let stopTimer: ReturnType<typeof setTimeout>;
+    const clearTimers = () => {
+      clearInterval(quoteTimer);
+      clearInterval(retryTimer);
+      clearTimeout(stopTimer);
+    };
+    const accept = (price: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      resolve(price);
+    };
+    quoteTimer = setInterval(() => {
       const quote = quotes.get(symbol);
       if (quote && quote.at >= started - 250) {
-        clearInterval(timer);
-        clearTimeout(stop);
-        resolve(quote.price);
+        accept(quote.price);
       }
     }, 200);
-    const stop = setTimeout(() => {
-      clearInterval(timer);
+    retryTimer = setInterval(() => {
+      const quote = quotes.get(symbol);
+      if (!quote || Date.now() - quote.at > 2000) subscribe(symbol);
+    }, 500);
+    stopTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
       const quote = quotes.get(symbol);
       if (quote && Date.now() - quote.at <= 2000) resolve(quote.price);
-      else reject(new Error("Цена не пришла. Попробуйте ещё раз."));
-    }, 5000);
+      else reject(new Error(`Цена по паре ${symbol} не пришла за 12 секунд. Попробуйте ещё раз.`));
+    }, 12_000);
   });
 }
 
@@ -508,8 +530,7 @@ export async function feedBest(
   if (available.length === 0) {
     throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
   }
-  const live = available.filter((pair) => quotes.has(pair.symbol));
-  const pool = (live.length >= 4 ? live : available).slice(0, 4);
+  const pool = selectSignalCandidates(available);
   if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
   const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
   let historyResponses = 0;

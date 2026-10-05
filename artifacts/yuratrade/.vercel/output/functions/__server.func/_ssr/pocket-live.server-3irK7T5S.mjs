@@ -2,7 +2,7 @@ import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, r as formatExp
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as Anthropic } from "../_libs/@anthropic-ai/sdk+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DlLNwTY8.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-3irK7T5S.js
 var DIRECT_AI_MODEL = "claude-opus-5";
 var DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
 var signalReviewSchema = object({
@@ -372,11 +372,23 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates)
 		content: userPrompt
 	}], eligibleCandidates.map((candidate) => candidate.symbol));
 }
+function createRotatingCandidateSelector(batchSize) {
+	if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Candidate batch size must be a positive integer.");
+	let offset = 0;
+	return (items) => {
+		if (items.length === 0) return [];
+		const size = Math.min(batchSize, items.length);
+		const start = offset % items.length;
+		offset = (start + size) % items.length;
+		return Array.from({ length: size }, (_, index) => items[(start + index) % items.length]);
+	};
+}
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 var AUTH_REJECTED_MESSAGE = "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 var HISTORY_PAGE_CANDLES = 150;
+var SIGNAL_CANDIDATES_PER_SEARCH = 4;
 var pairs = /* @__PURE__ */ new Map();
 var balance = null;
 var socket = null;
@@ -387,6 +399,7 @@ var expectAssets = false;
 var expectHistory = false;
 var expectBalance = false;
 var quotes = /* @__PURE__ */ new Map();
+var selectSignalCandidates = createRotatingCandidateSelector(SIGNAL_CANDIDATES_PER_SEARCH);
 var expectStream = false;
 var pending = null;
 function textOf(data) {
@@ -510,23 +523,40 @@ function subscribe(symbol) {
 	}]));
 }
 function waitQuote(symbol) {
-	subscribe(symbol);
 	const started = Date.now();
+	subscribe(symbol);
 	return new Promise((resolve, reject) => {
-		const timer = setInterval(() => {
+		let settled = false;
+		let quoteTimer;
+		let retryTimer;
+		let stopTimer;
+		const clearTimers = () => {
+			clearInterval(quoteTimer);
+			clearInterval(retryTimer);
+			clearTimeout(stopTimer);
+		};
+		const accept = (price) => {
+			if (settled) return;
+			settled = true;
+			clearTimers();
+			resolve(price);
+		};
+		quoteTimer = setInterval(() => {
 			const quote = quotes.get(symbol);
-			if (quote && quote.at >= started - 250) {
-				clearInterval(timer);
-				clearTimeout(stop);
-				resolve(quote.price);
-			}
+			if (quote && quote.at >= started - 250) accept(quote.price);
 		}, 200);
-		const stop = setTimeout(() => {
-			clearInterval(timer);
+		retryTimer = setInterval(() => {
+			const quote = quotes.get(symbol);
+			if (!quote || Date.now() - quote.at > 2e3) subscribe(symbol);
+		}, 500);
+		stopTimer = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			clearTimers();
 			const quote = quotes.get(symbol);
 			if (quote && Date.now() - quote.at <= 2e3) resolve(quote.price);
-			else reject(/* @__PURE__ */ new Error("Цена не пришла. Попробуйте ещё раз."));
-		}, 5e3);
+			else reject(/* @__PURE__ */ new Error(`Цена по паре ${symbol} не пришла за 12 секунд. Попробуйте ещё раз.`));
+		}, 12e3);
 	});
 }
 function failPending(error) {
@@ -795,8 +825,7 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 	const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
 	const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
 	if (available.length === 0) throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
-	const live = available.filter((pair) => quotes.has(pair.symbol));
-	const pool = (live.length >= 4 ? live : available).slice(0, 4);
+	const pool = selectSignalCandidates(available);
 	if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
 	const candidates = [];
 	let historyResponses = 0;
