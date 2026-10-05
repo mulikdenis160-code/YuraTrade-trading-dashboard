@@ -6,15 +6,16 @@ import { isAdminId, usePocket } from "@/lib/pocket";
 import { AnalysisModal } from "@/components/analysis-modal";
 import {
   analysisPeriodForExpiry,
-  formatExpiry,
   lookbackForExpiry,
 } from "@/lib/expiry";
+import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 const expiryOptionsMinutes = [1, 2, 3, 5, 10, 15, 25, 30, 60, 120, 180, 240] as const;
 
 export function SignalDesk() {
   const navigate = useNavigate();
   const { id } = usePocket();
+  const { language, t } = useLanguage();
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
   const [feedStatus, setFeedStatus] = useState<"connecting" | "connected" | "error">("connecting");
@@ -61,12 +62,14 @@ export function SignalDesk() {
   const blocked = admin
     ? ""
     : balance === null
-      ? "Депозит ещё не прочитан"
+      ? t("signal.block.deposit")
       : !level
-        ? "Для сигналов нужен депозит от $60"
+        ? t("signal.block.minimum")
         : left === 0
-          ? "Лимит сигналов на сегодня закончился"
+          ? t("signal.block.limit")
           : "";
+
+  const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
 
   const ask = async () => {
     if (phase === "search" || blocked || !ready) return;
@@ -78,7 +81,7 @@ export function SignalDesk() {
       const result = await takeBest({ data: { expirySeconds } });
       if (!result) {
         setPhase("idle");
-        setNotice("Сейчас нет подходящего входа. Наклон и последние свечи должны совпасть; дождитесь следующей проверки.");
+          setNotice(t("signal.none"));
         return;
       }
       const wait = Math.max(0, 2400 - (Date.now() - started));
@@ -89,7 +92,7 @@ export function SignalDesk() {
         search: {
           symbol: result.symbol,
           name: result.name,
-          group: result.group,
+          group: "fx",
           direction: result.direction,
           open: result.openPrice,
           payout: result.payout,
@@ -104,7 +107,7 @@ export function SignalDesk() {
       });
     } catch (cause) {
       setPhase("idle");
-      setError(cause instanceof Error ? cause.message : "Не удалось получить сигнал.");
+          setError(cause instanceof Error ? cause.message : t("signal.none"));
     }
   };
 
@@ -120,32 +123,32 @@ export function SignalDesk() {
         >
           <span className={feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current"} />
           {feedStatus === "connected"
-            ? "Поток Pocket Option подключён"
+            ? t("signal.connected")
             : feedStatus === "error"
-              ? "Нет подключения к Pocket Option"
-              : "Подключаемся к Pocket Option…"}
+              ? t("signal.disconnected")
+              : t("signal.connecting")}
         </p>
         <p className="text-sm leading-relaxed text-muted">
-          Проверяются пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; интервал свечей и окно анализа подстроятся под срок. Фильтр пропускает спорные входы.
+          {t("signal.description")}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-dim">
-          Порог Rule Score 0,22 — экспериментальное правило, не вероятность выигрыша. Сверяйте его с фактическими результатами в журнале.
+          {t("signal.experimental")}
         </p>
-        <section className="mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3" aria-label="Настройка экспирации">
+        <section className="mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3" aria-label={t("signal.expiry")}>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-fg">Время экспирации</p>
-            <p className="text-sm font-bold text-blue-soft">{formatExpiry(expirySeconds)}</p>
+            <p className="text-sm font-semibold text-fg">{t("signal.expiry")}</p>
+            <p className="text-sm font-bold text-blue-soft">{expiryLabel(expirySeconds)}</p>
           </div>
           <div className="mt-3 grid grid-cols-4 gap-2">
             {expiryOptionsMinutes.map((minutes) => {
               const selected = expiryMinutes === minutes;
-              const label = minutes < 120 ? `${minutes} мин` : `${minutes / 60} ч`;
+              const label = expiryLabel(minutes * 60);
               return (
                 <button
                   key={minutes}
                   type="button"
                   aria-pressed={selected}
-                  title={formatExpiry(minutes * 60)}
+                  title={expiryLabel(minutes * 60)}
                   onClick={() => setExpiryMinutes(minutes)}
                   className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${
                     selected
@@ -159,14 +162,14 @@ export function SignalDesk() {
             })}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-dim" aria-live="polite">
-            Анализ подстроен: свечи {formatExpiry(analysisSeconds)}, окно {lookbackBars} свечей
+            {t("signal.analyzed", { period: expiryLabel(analysisSeconds), bars: lookbackBars })}
           </p>
         </section>
         <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase === "search" || Boolean(blocked)} onClick={() => void ask()}>
-          {phase === "search" ? "Проверяем пары…" : "Получить сигнал"}
+          {phase === "search" ? t("signal.checking") : t("signal.get")}
         </button>
         <p className={`mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`}>
-          {blocked || (admin || cap === null ? "Без лимита" : `Сегодня ${used} из ${cap}`)}
+          {blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", { used, cap }))}
         </p>
         {error ? <p className="mt-3 text-sm text-loss">{error}</p> : null}
         {notice ? (
@@ -175,7 +178,7 @@ export function SignalDesk() {
           </p>
         ) : null}
       </section>
-      {phase === "search" ? <AnalysisModal pair="Подбор пары" expiry={formatExpiry(expirySeconds)} /> : null}
+      {phase === "search" ? <AnalysisModal pair={t("home.eyebrow")} expiry={expiryLabel(expirySeconds)} /> : null}
     </div>
   );
 }

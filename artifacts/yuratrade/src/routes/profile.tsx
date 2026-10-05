@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { levels } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
+import { useLanguage } from "@/lib/language";
 
 export const Route = createFileRoute("/profile")({ component: ProfilePage });
 
 function ProfilePage() {
+  const { t } = useLanguage();
   const { id, leave } = usePocket();
   const admin = isAdminId(id);
 
@@ -13,17 +15,17 @@ function ProfilePage() {
       <section className="panel p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-[0.14em] text-dim uppercase">{admin ? "Админ" : "Профиль"}</p>
+            <p className="text-xs font-semibold tracking-[0.14em] text-dim uppercase">{admin ? t("profile.admin") : t("profile.title")}</p>
             <p className="mt-2 truncate font-mono text-2xl font-bold text-fg">{id}</p>
           </div>
           <button type="button" className="btn-ghost shrink-0 text-sm" onClick={leave}>
-            Выйти
+            {t("profile.signOut")}
           </button>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           {admin
-            ? "Админский ID. Лимита сигналов нет, депозит для входа не нужен."
-            : "Уровень зависит от депозита. Искра от $60 — 5 сигналов в день, Вектор от $200 — 20, Апекс от $500 — без лимита."}
+            ? t("profile.adminInfo")
+            : t("profile.userInfo")}
         </p>
       </section>
       {levels.map((level) => (

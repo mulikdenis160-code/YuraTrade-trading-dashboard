@@ -1,6 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/learn-NlbrSYfu.js
+import { C as useLanguage } from "./router-B1zMSVel.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/learn-CYd9kq1c.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var lessons = [
@@ -18,8 +19,8 @@ var lessons = [
 				type: "list",
 				items: [
 					"Нажмите строку пары. Откроется выбор, не весь экран.",
-					"Вкладки: валюты, криптовалюты, акции, сырьевые товары.",
-					"У валют сбоку флаги. У остальных — знак актива.",
+					"Сигналы формируются только по валютным парам.",
+					"OTC отмечен в имени пары.",
 					"В конце имени пары стоит OTC. Копировать нужно имя целиком.",
 					"Срок: 1, 3, 5 или 15 минут. Он выбирается до сигнала.",
 					"Кнопка «Получить сигнал» запускает разбор."
@@ -154,14 +155,12 @@ var lessons = [
 		id: "pairs",
 		title: "Пары",
 		minutes: 3,
-		lead: "Список приходит с котировок. Пустая вкладка значит, что эта категория сейчас не пришла, а не что её забыли.",
+		lead: "Бот автоматически проверяет доступные валютные пары. Список зависит от наличия котировок.",
 		blocks: [{
 			type: "list",
 			items: [
-				"Валюты — пары вроде EUR/USD, с флагами стран.",
-				"Криптовалюты — со знаком монеты.",
-				"Акции — со знаком бумаги.",
-				"Сырьевые товары — золото, нефть и похожие.",
+				"Валютные пары — например, EUR/USD и GBP/JPY.",
+				"Криптовалюты, акции и сырьевые товары в сигналы не входят.",
 				"OTC в конце имени обязательно. Без него это уже другая пара у брокера."
 			]
 		}, {
@@ -374,6 +373,7 @@ function readDone() {
 	}
 }
 function LearnPage() {
+	const { t } = useLanguage();
 	const [current, setCurrent] = (0, import_react.useState)(lessons[0].id);
 	const [done, setDone] = (0, import_react.useState)([]);
 	const [picked, setPicked] = (0, import_react.useState)({});
@@ -398,21 +398,18 @@ function LearnPage() {
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase",
-						children: "Курс"
+						children: t("learn.kicker")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
 						className: "mt-2 text-3xl font-bold tracking-tight text-fg sm:text-4xl",
-						children: "Обучение"
+						children: t("learn.title")
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 max-w-2xl text-base leading-relaxed text-muted",
-						children: [
-							"Как устроен VLADOS PRIME: пара, срок, карточка, таймер, ничья и перекрытие. Это не обещание дохода. Прочитано ",
-							done.length,
-							" из ",
-							lessons.length,
-							"."
-						]
+						children: t("learn.intro", {
+							done: done.length,
+							total: lessons.length
+						})
 					})
 				]
 			}),
@@ -435,20 +432,16 @@ function LearnPage() {
 								]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 								className: "mt-0.5 block text-xs text-dim",
-								children: [
-									item.minutes,
-									" мин",
-									done.includes(item.id) ? " · прочитано" : ""
-								]
+								children: [t("learn.minutes", { minutes: item.minutes }), done.includes(item.id) ? t("learn.read") : ""]
 							})]
 						}, item.id);
 					})
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
 					className: "panel rise rise-3 p-5",
 					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "text-xs font-semibold tracking-wide text-dim uppercase",
-							children: [lesson.minutes, " минут"]
+							children: t("learn.minutes", { minutes: lesson.minutes })
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 							className: "mt-2 text-2xl font-bold tracking-tight text-fg",
@@ -532,7 +525,7 @@ function LearnPage() {
 							type: "button",
 							className: "btn-prime mt-6",
 							onClick: mark,
-							children: done.includes(lesson.id) ? "Уже отмечено" : "Дальше"
+							children: done.includes(lesson.id) ? t("learn.done") : t("learn.next")
 						})
 					]
 				})]
@@ -542,11 +535,14 @@ function LearnPage() {
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 						className: "text-2xl font-bold tracking-tight text-fg",
-						children: "Проверка"
+						children: t("learn.quiz")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 text-sm text-muted",
-						children: answered === 0 ? "Шесть вопросов по темам выше." : `Верно ${score} из ${quiz.length}.`
+						children: answered === 0 ? t("learn.quizEmpty") : t("learn.correct", {
+							score,
+							total: quiz.length
+						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("ol", {
 						className: "mt-5 space-y-5",

@@ -88,7 +88,7 @@ function storeAssets(rows: unknown[]) {
     if (!String(row[1]).toLowerCase().includes("otc")) continue;
     const group = groupOf(String(row[3]));
     const payout = Number(row[5]);
-    if (!group || !Number.isFinite(payout)) continue;
+    if (group !== "fx" || !Number.isFinite(payout)) continue;
     const symbol = String(row[1]);
     next.set(symbol, { symbol, name: cleanName(String(row[2] || symbol)), payout, group });
   }

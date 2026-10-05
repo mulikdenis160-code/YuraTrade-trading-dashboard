@@ -1,8 +1,9 @@
 import { g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { c as levels, d as isAdminId, f as usePocket } from "./router-JJoB_525.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/profile-DUrB8oeu.js
+import { C as useLanguage, _ as levels, b as isAdminId, x as usePocket } from "./router-B1zMSVel.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/profile-B9xOiOD8.js
 var import_jsx_runtime = require_jsx_runtime();
 function ProfilePage() {
+	const { t } = useLanguage();
 	const { id, leave } = usePocket();
 	const admin = isAdminId(id);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -15,7 +16,7 @@ function ProfilePage() {
 					className: "min-w-0",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-xs font-semibold tracking-[0.14em] text-dim uppercase",
-						children: admin ? "Админ" : "Профиль"
+						children: admin ? t("profile.admin") : t("profile.title")
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 truncate font-mono text-2xl font-bold text-fg",
 						children: id
@@ -24,11 +25,11 @@ function ProfilePage() {
 					type: "button",
 					className: "btn-ghost shrink-0 text-sm",
 					onClick: leave,
-					children: "Выйти"
+					children: t("profile.signOut")
 				})]
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 				className: "mt-3 text-sm leading-relaxed text-muted",
-				children: admin ? "Админский ID. Лимита сигналов нет, депозит для входа не нужен." : "Уровень зависит от депозита. Искра от $60 — 5 сигналов в день, Вектор от $200 — 20, Апекс от $500 — без лимита."
+				children: admin ? t("profile.adminInfo") : t("profile.userInfo")
 			})]
 		}), levels.map((level) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
 			className: "panel arrive p-4",

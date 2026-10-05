@@ -4,22 +4,24 @@ import {
   subscribeToSignalJournal,
   summarizeSignals,
 } from "@/lib/signal-journal";
+import { useLanguage } from "@/lib/language";
 
 export function StatRow() {
+  const { t } = useLanguage();
   const [summary, setSummary] = useState(() => summarizeSignals([]));
 
   useEffect(() => {
-    const update = () => setSummary(summarizeSignals(readSignalJournal()));
+    const update = () => setSummary(summarizeSignals(readSignalJournal().filter((entry) => entry.group === "fx")));
     update();
     return subscribeToSignalJournal(update);
   }, []);
 
   const items = [
-    { label: "Завершено", value: String(summary.settled), tone: "text-fg" },
-    { label: "Побед", value: String(summary.wins), tone: "text-win" },
-    { label: "Поражений", value: String(summary.losses), tone: "text-loss" },
+    { label: t("stats.settled"), value: String(summary.settled), tone: "text-fg" },
+    { label: t("stats.wins"), value: String(summary.wins), tone: "text-win" },
+    { label: t("stats.losses"), value: String(summary.losses), tone: "text-loss" },
     {
-      label: "Успешность",
+      label: t("stats.rate"),
       value: summary.hitRate === null ? "—" : `${summary.hitRate.toFixed(1)}%`,
       tone: "text-blue-soft",
     },

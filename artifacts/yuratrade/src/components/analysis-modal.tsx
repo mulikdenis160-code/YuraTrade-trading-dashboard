@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLanguage } from "@/lib/language";
 
-const lines = ["Смотрим сильные пары", "Сверяем 1 и 2 минуты", "Оставляем самый чистый вход"];
+const lines = ["modal.step1", "modal.step2", "modal.step3"] as const;
 
 export function AnalysisModal({ pair, expiry }: { pair: string; expiry: string }) {
+  const { t } = useLanguage();
   const [line, setLine] = useState(0);
 
   useEffect(() => {
@@ -27,8 +29,8 @@ export function AnalysisModal({ pair, expiry }: { pair: string; expiry: string }
             ))}
           </div>
         </div>
-        <h2 className="mt-6 text-2xl font-bold text-fg">Готовим сигнал</h2>
-        <p className="mt-2 min-h-10 text-sm text-muted">{lines[line]}</p>
+        <h2 className="mt-6 text-2xl font-bold text-fg">{t("modal.title")}</h2>
+        <p className="mt-2 min-h-10 text-sm text-muted">{t(lines[line])}</p>
       </div>
     </div>,
     document.body,

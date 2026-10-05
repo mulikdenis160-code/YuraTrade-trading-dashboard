@@ -1,15 +1,17 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, n as require_react_dom } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/analysis-modal-BpAsIX59.js
+import { C as useLanguage } from "./router-B1zMSVel.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/analysis-modal-CSDgyEkL.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var import_react_dom = require_react_dom();
 var lines = [
-	"Смотрим сильные пары",
-	"Сверяем 1 и 2 минуты",
-	"Оставляем самый чистый вход"
+	"modal.step1",
+	"modal.step2",
+	"modal.step3"
 ];
 function AnalysisModal({ pair, expiry }) {
+	const { t } = useLanguage();
 	const [line, setLine] = (0, import_react.useState)(0);
 	(0, import_react.useEffect)(() => {
 		const timer = window.setInterval(() => setLine((current) => (current + 1) % lines.length), 900);
@@ -52,11 +54,11 @@ function AnalysisModal({ pair, expiry }) {
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 					className: "mt-6 text-2xl font-bold text-fg",
-					children: "Готовим сигнал"
+					children: t("modal.title")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-2 min-h-10 text-sm text-muted",
-					children: lines[line]
+					children: t(lines[line])
 				})
 			]
 		})

@@ -1,6 +1,6 @@
 import { a as lookbackForExpiry, i as isValidExpirySeconds, n as analysisPeriodForExpiry, r as formatExpiry } from "./expiry-B3tUilyb.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DCe28cVt.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-g-NW964O.js
 function assessSignalQuality(score, slopeScore, bodyScore) {
 	const qualityScore = Number.isFinite(score) ? Math.abs(score) : 0;
 	const trendDirection = Math.sign(slopeScore);
@@ -54,7 +54,7 @@ function storeAssets(rows) {
 		if (!String(row[1]).toLowerCase().includes("otc")) continue;
 		const group = groupOf(String(row[3]));
 		const payout = Number(row[5]);
-		if (!group || !Number.isFinite(payout)) continue;
+		if (group !== "fx" || !Number.isFinite(payout)) continue;
 		const symbol = String(row[1]);
 		next.set(symbol, {
 			symbol,

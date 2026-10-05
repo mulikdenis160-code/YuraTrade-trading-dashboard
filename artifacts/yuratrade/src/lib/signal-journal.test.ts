@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   readSignalJournal,
+  markExpiredPendingSignals,
   recordSignalOutcome,
   recordSignalStarted,
   signalJournalCsv,
@@ -95,6 +96,37 @@ test("CSV export escapes text fields and includes candle inputs", () => {
   assert.match(csv, /"candles"/);
   assert.match(csv, /"analysisSeconds"/);
   assert.match(csv, /\[\[1\.08,1\.09,1\.07,1\.0842\]\]/);
+});
+
+test("expired pending signals become unverified and stay out of hit-rate totals", () => {
+  const signal: StartedSignal = {
+    id: "",
+    symbol: "GBPUSD_otc",
+    name: "GBP/USD OTC",
+    group: "fx",
+    direction: "put",
+    openPrice: 1.27,
+    payout: 80,
+    seconds: 60,
+    analysisSeconds: 60,
+    step: 0,
+    startedAt: 1_750_000_100_000,
+    ruleScore: 0.2,
+    strategyVersion: "expiry-adaptive-filter-v1",
+    note: "",
+    bars: [],
+  };
+  signal.id = signalRecordId(signal);
+  recordSignalStarted(signal);
+
+  const entries = markExpiredPendingSignals(signal.startedAt + signal.seconds * 1000 + 120_001, 120_000);
+  const saved = entries.find((entry) => entry.id === signal.id);
+
+  assert.equal(saved?.outcome, "unverified");
+  const summary = summarizeSignals(saved ? [saved] : []);
+  assert.equal(summary.unverified, 1);
+  assert.equal(summary.settled, 0);
+  assert.equal(summary.hitRate, null);
 });
 
 test.after(() => {

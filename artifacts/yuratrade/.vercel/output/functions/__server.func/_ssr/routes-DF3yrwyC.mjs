@@ -1,11 +1,11 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { a as lookbackForExpiry, n as analysisPeriodForExpiry, r as formatExpiry } from "./expiry-B3tUilyb.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
-import { t as StatRow } from "./stats-CWuJX2kf.mjs";
+import { a as lookbackForExpiry, n as analysisPeriodForExpiry } from "./expiry-B3tUilyb.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { a as takeBest, d as isAdminId, f as usePocket, l as markSignalUsed, r as loadFeed, s as levelForBalance, u as signalsUsedToday } from "./router-JJoB_525.mjs";
-import { t as AnalysisModal } from "./analysis-modal-BpAsIX59.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-D1BNcEg0.js
+import { C as useLanguage, S as formatExpiryForLanguage, b as isAdminId, f as loadFeed, g as levelForBalance, m as takeBest, v as markSignalUsed, x as usePocket, y as signalsUsedToday } from "./router-B1zMSVel.mjs";
+import { t as StatRow } from "./stats-Bj81Q044.mjs";
+import { t as AnalysisModal } from "./analysis-modal-CSDgyEkL.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DF3yrwyC.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var expiryOptionsMinutes = [
@@ -25,6 +25,7 @@ var expiryOptionsMinutes = [
 function SignalDesk() {
 	const navigate = useNavigate();
 	const { id } = usePocket();
+	const { language, t } = useLanguage();
 	const admin = isAdminId(id);
 	const [ready, setReady] = (0, import_react.useState)(false);
 	const [feedStatus, setFeedStatus] = (0, import_react.useState)("connecting");
@@ -64,7 +65,8 @@ function SignalDesk() {
 	const lookbackBars = lookbackForExpiry(expirySeconds, analysisSeconds);
 	const cap = admin ? null : level ? level.daily : 0;
 	const left = cap === null ? null : Math.max(0, cap - used);
-	const blocked = admin ? "" : balance === null ? "Депозит ещё не прочитан" : !level ? "Для сигналов нужен депозит от $60" : left === 0 ? "Лимит сигналов на сегодня закончился" : "";
+	const blocked = admin ? "" : balance === null ? t("signal.block.deposit") : !level ? t("signal.block.minimum") : left === 0 ? t("signal.block.limit") : "";
+	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
 	const ask = async () => {
 		if (phase === "search" || blocked || !ready) return;
 		setPhase("search");
@@ -75,7 +77,7 @@ function SignalDesk() {
 			const result = await takeBest({ data: { expirySeconds } });
 			if (!result) {
 				setPhase("idle");
-				setNotice("Сейчас нет подходящего входа. Наклон и последние свечи должны совпасть; дождитесь следующей проверки.");
+				setNotice(t("signal.none"));
 				return;
 			}
 			const wait = Math.max(0, 2400 - (Date.now() - started));
@@ -86,7 +88,7 @@ function SignalDesk() {
 				search: {
 					symbol: result.symbol,
 					name: result.name,
-					group: result.group,
+					group: "fx",
 					direction: result.direction,
 					open: result.openPrice,
 					payout: result.payout,
@@ -101,7 +103,7 @@ function SignalDesk() {
 			});
 		} catch (cause) {
 			setPhase("idle");
-			setError(cause instanceof Error ? cause.message : "Не удалось получить сигнал.");
+			setError(cause instanceof Error ? cause.message : t("signal.none"));
 		}
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -113,55 +115,52 @@ function SignalDesk() {
 					className: `mb-3 flex items-center justify-center gap-2 text-xs font-semibold ${feedStatus === "connected" ? "text-win" : feedStatus === "error" ? "text-loss" : "text-dim"}`,
 					role: "status",
 					"aria-live": "polite",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? "Поток Pocket Option подключён" : feedStatus === "error" ? "Нет подключения к Pocket Option" : "Подключаемся к Pocket Option…"]
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? t("signal.connected") : feedStatus === "error" ? t("signal.disconnected") : t("signal.connecting")]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "text-sm leading-relaxed text-muted",
-					children: "Проверяются пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; интервал свечей и окно анализа подстроятся под срок. Фильтр пропускает спорные входы."
+					children: t("signal.description")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-2 text-xs leading-relaxed text-dim",
-					children: "Порог Rule Score 0,22 — экспериментальное правило, не вероятность выигрыша. Сверяйте его с фактическими результатами в журнале."
+					children: t("signal.experimental")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 					className: "mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3",
-					"aria-label": "Настройка экспирации",
+					"aria-label": t("signal.expiry"),
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "flex items-center justify-between gap-3",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "text-sm font-semibold text-fg",
-								children: "Время экспирации"
+								children: t("signal.expiry")
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "text-sm font-bold text-blue-soft",
-								children: formatExpiry(expirySeconds)
+								children: expiryLabel(expirySeconds)
 							})]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 							className: "mt-3 grid grid-cols-4 gap-2",
 							children: expiryOptionsMinutes.map((minutes) => {
 								const selected = expiryMinutes === minutes;
-								const label = minutes < 120 ? `${minutes} мин` : `${minutes / 60} ч`;
+								const label = expiryLabel(minutes * 60);
 								return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 									type: "button",
 									"aria-pressed": selected,
-									title: formatExpiry(minutes * 60),
+									title: expiryLabel(minutes * 60),
 									onClick: () => setExpiryMinutes(minutes),
 									className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"}`,
 									children: label
 								}, minutes);
 							})
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "mt-2 text-xs leading-relaxed text-dim",
 							"aria-live": "polite",
-							children: [
-								"Анализ подстроен: свечи ",
-								formatExpiry(analysisSeconds),
-								", окно ",
-								lookbackBars,
-								" свечей"
-							]
+							children: t("signal.analyzed", {
+								period: expiryLabel(analysisSeconds),
+								bars: lookbackBars
+							})
 						})
 					]
 				}),
@@ -170,11 +169,14 @@ function SignalDesk() {
 					className: "btn-prime mt-4 min-h-12 w-full",
 					disabled: !ready || phase === "search" || Boolean(blocked),
 					onClick: () => void ask(),
-					children: phase === "search" ? "Проверяем пары…" : "Получить сигнал"
+					children: phase === "search" ? t("signal.checking") : t("signal.get")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
-					children: blocked || (admin || cap === null ? "Без лимита" : `Сегодня ${used} из ${cap}`)
+					children: blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", {
+						used,
+						cap
+					}))
 				}),
 				error ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-3 text-sm text-loss",
@@ -188,8 +190,8 @@ function SignalDesk() {
 				}) : null
 			]
 		}), phase === "search" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
-			pair: "Подбор пары",
-			expiry: formatExpiry(expirySeconds)
+			pair: t("home.eyebrow"),
+			expiry: expiryLabel(expirySeconds)
 		}) : null]
 	});
 }
@@ -200,6 +202,7 @@ var risks = [
 	"5"
 ];
 function BalanceCalculator() {
+	const { t } = useLanguage();
 	const [open, setOpen] = (0, import_react.useState)(true);
 	const [balance, setBalance] = (0, import_react.useState)("");
 	const [risk, setRisk] = (0, import_react.useState)("2");
@@ -234,17 +237,17 @@ function BalanceCalculator() {
 			onClick: () => setOpen((v) => !v),
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 				className: "block text-sm font-semibold text-fg",
-				children: "Калькулятор риска"
+				children: t("calculator.title")
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 				className: "mt-1 block text-sm text-dim",
-				children: "Сумма входа и план удвоения"
+				children: t("calculator.subtitle")
 			})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: `size-4 text-muted transition-transform ${open ? "rotate-180" : ""}` })]
 		}), open ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "space-y-4 px-4 pb-4",
 			children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
 					className: "block text-sm text-muted",
-					children: ["Баланс, $", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+					children: [t("calculator.balance"), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 						inputMode: "decimal",
 						value: balance,
 						placeholder: "1000",
@@ -257,7 +260,7 @@ function BalanceCalculator() {
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mb-2 text-sm text-muted",
-					children: "Риск на сделку"
+					children: t("calculator.risk")
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 					className: "flex gap-2",
 					children: risks.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -272,7 +275,7 @@ function BalanceCalculator() {
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "text-sm text-muted",
-							children: "Рекомендуемая сумма"
+							children: t("calculator.recommended")
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 							className: "mt-1 font-mono text-3xl font-extrabold text-blue-soft",
@@ -293,18 +296,18 @@ function BalanceCalculator() {
 								localStorage.setItem("last_trade_amount", trade.toFixed(2));
 								setSaved(true);
 							},
-							children: saved ? "Сумма сохранена" : "Сохранить сумму"
+							children: saved ? t("calculator.saved") : t("calculator.save")
 						})
 					]
 				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 					className: "flex items-start gap-2 text-sm text-dim",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "mt-0.5 size-4 shrink-0 text-blue-soft" }), "Введите баланс, чтобы посчитать вход."]
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "mt-0.5 size-4 shrink-0 text-blue-soft" }), t("calculator.enterBalance")]
 				}),
 				balanceNum > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
 					className: `chip ${plan ? "on" : ""}`,
 					onClick: () => setPlan((v) => !v),
-					children: "План удвоения"
+					children: t("calculator.plan")
 				}), plan ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "mt-3 space-y-2",
 					children: [steps.map((row) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -312,7 +315,7 @@ function BalanceCalculator() {
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "text-blue-soft",
-								children: row.step === 1 ? "Вход" : `×${2 ** (row.step - 1)}`
+								children: row.step === 1 ? t("common.entryPrice") : `×${2 ** (row.step - 1)}`
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: ["$", row.amount.toFixed(2)] }),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
@@ -326,7 +329,7 @@ function BalanceCalculator() {
 						]
 					}, row.step)), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm leading-relaxed text-dim",
-						children: "Удвоение может перекрыть минус, но быстро съедает депозит. Дальше третьего шага лучше не идти."
+						children: t("calculator.warning")
 					})]
 				}) : null] }) : null
 			]
@@ -334,12 +337,54 @@ function BalanceCalculator() {
 	});
 }
 function Home() {
+	const { t } = useLanguage();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "space-y-5",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "rise",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatRow, {})
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+					className: "panel mb-4 overflow-hidden p-4 sm:p-5",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
+							children: t("home.eyebrow")
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+							className: "mt-2 text-2xl font-extrabold tracking-tight text-fg sm:text-3xl",
+							children: t("home.title")
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-2 max-w-2xl text-sm leading-relaxed text-muted sm:text-base",
+							children: t("home.body")
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "mt-4 grid gap-2 sm:grid-cols-3",
+							children: [
+								"feature1",
+								"feature2",
+								"feature3"
+							].map((feature) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "rounded-2xl border border-white/8 bg-white/4 px-3 py-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-sm font-semibold text-fg",
+									children: t(`home.${feature}.title`)
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-1 text-xs leading-relaxed text-dim",
+									children: t(`home.${feature}.body`)
+								})]
+							}, feature))
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-4 text-sm font-semibold text-blue-soft",
+							children: t("home.rateCaption")
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-1 text-xs leading-relaxed text-dim",
+							children: t("home.disclaimer")
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatRow, {})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "rise rise-2",

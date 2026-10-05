@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { lessons, quiz } from "@/lib/lessons";
+import { useLanguage } from "@/lib/language";
 
 export const Route = createFileRoute("/learn")({ component: LearnPage });
 
@@ -16,6 +17,7 @@ function readDone(): string[] {
 }
 
 function LearnPage() {
+  const { t } = useLanguage();
   const [current, setCurrent] = useState(lessons[0].id);
   const [done, setDone] = useState<string[]>([]);
   const [picked, setPicked] = useState<Record<number, number>>({});
@@ -40,10 +42,10 @@ function LearnPage() {
   return (
     <div className="space-y-5">
       <header className="rise">
-        <p className="text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase">Курс</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-fg sm:text-4xl">Обучение</h1>
+        <p className="text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("learn.kicker")}</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-fg sm:text-4xl">{t("learn.title")}</h1>
         <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted">
-          Как устроен VLADOS PRIME: пара, срок, карточка, таймер, ничья и перекрытие. Это не обещание дохода. Прочитано {done.length} из {lessons.length}.
+          {t("learn.intro", { done: done.length, total: lessons.length })}
         </p>
       </header>
 
@@ -62,7 +64,7 @@ function LearnPage() {
                   {index + 1}. {item.title}
                 </span>
                 <span className="mt-0.5 block text-xs text-dim">
-                  {item.minutes} мин{done.includes(item.id) ? " · прочитано" : ""}
+                  {t("learn.minutes", { minutes: item.minutes })}{done.includes(item.id) ? t("learn.read") : ""}
                 </span>
               </button>
             );
@@ -70,7 +72,7 @@ function LearnPage() {
         </nav>
 
         <article className="panel rise rise-3 p-5">
-          <p className="text-xs font-semibold tracking-wide text-dim uppercase">{lesson.minutes} минут</p>
+          <p className="text-xs font-semibold tracking-wide text-dim uppercase">{t("learn.minutes", { minutes: lesson.minutes })}</p>
           <h2 className="mt-2 text-2xl font-bold tracking-tight text-fg">{lesson.title}</h2>
           <p className="mt-3 text-base leading-relaxed text-muted">{lesson.lead}</p>
           <div className="mt-5 space-y-4">
@@ -132,15 +134,15 @@ function LearnPage() {
             })}
           </div>
           <button type="button" className="btn-prime mt-6" onClick={mark}>
-            {done.includes(lesson.id) ? "Уже отмечено" : "Дальше"}
+            {done.includes(lesson.id) ? t("learn.done") : t("learn.next")}
           </button>
         </article>
       </div>
 
       <section className="panel rise rise-4 p-5">
-        <h2 className="text-2xl font-bold tracking-tight text-fg">Проверка</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-fg">{t("learn.quiz")}</h2>
         <p className="mt-2 text-sm text-muted">
-          {answered === 0 ? "Шесть вопросов по темам выше." : `Верно ${score} из ${quiz.length}.`}
+          {answered === 0 ? t("learn.quizEmpty") : t("learn.correct", { score, total: quiz.length })}
         </p>
         <ol className="mt-5 space-y-5">
           {quiz.map((item, index) => {

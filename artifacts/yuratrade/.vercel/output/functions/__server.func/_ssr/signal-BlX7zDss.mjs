@@ -1,10 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { a as lookbackForExpiry, r as formatExpiry } from "./expiry-B3tUilyb.mjs";
-import { a as signalRecordId, n as recordSignalOutcome, r as recordSignalStarted } from "./signal-journal-B1ggs--X.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { i as readClose, n as Route$1, o as takeSignal } from "./router-JJoB_525.mjs";
-import { t as AnalysisModal } from "./analysis-modal-BpAsIX59.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-BABsRPyx.js
+import { a as lookbackForExpiry } from "./expiry-B3tUilyb.mjs";
+import { C as useLanguage, S as formatExpiryForLanguage, a as recordSignalOutcome, c as signalRecordId, h as takeSignal, n as Route$1, o as recordSignalStarted, p as readClose } from "./router-B1zMSVel.mjs";
+import { t as AnalysisModal } from "./analysis-modal-CSDgyEkL.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-BlX7zDss.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -310,6 +309,7 @@ function clock(ms) {
 	return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 function BackLink() {
+	const { t } = useLanguage();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Link, {
 		to: "/",
 		className: "press inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
@@ -325,7 +325,7 @@ function BackLink() {
 				strokeLinecap: "round",
 				strokeLinejoin: "round"
 			})
-		}), "Назад"]
+		}), t("common.back")]
 	});
 }
 function SignalRoute() {
@@ -333,7 +333,9 @@ function SignalRoute() {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SignalCard, { search }, `${search.started}-${search.step}`);
 }
 function SignalCard({ search }) {
+	const { language, t } = useLanguage();
 	const navigate = useNavigate();
+	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
 	const lookbackBars = lookbackForExpiry(search.seconds, search.analysisSeconds);
 	const [now, setNow] = (0, import_react.useState)(() => Date.now());
 	const [phase, setPhase] = (0, import_react.useState)("run");
@@ -524,7 +526,7 @@ function SignalCard({ search }) {
 		className: "mx-auto max-w-md",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BackLink, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "mt-4 text-muted",
-			children: "Сигнала нет."
+			children: t("common.noSignal")
 		})]
 	});
 	if (phase === "no-signal") return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -534,26 +536,26 @@ function SignalCard({ search }) {
 			children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
-					children: "Вход пропущен"
+					children: t("common.skipEntry")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
 					className: "mt-3 text-xl font-bold text-fg",
-					children: "Новый сигнал не подтверждён"
+					children: t("common.notConfirmed")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted",
-					children: "Фильтр не подтвердил повторный вход по этой паре. Новый сигнал не выдан; предыдущий результат сохранён в журнале."
+					children: t("common.skipReason")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
 						to: "/history",
 						className: "btn-ghost min-h-11 justify-center",
-						children: "Открыть историю"
+						children: t("common.openHistory")
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
 						to: "/",
 						className: "btn-prime min-h-11 justify-center",
-						children: "К сигналам"
+						children: t("common.toSignals")
 					})]
 				}),
 				journalWarning ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
@@ -591,7 +593,7 @@ function SignalCard({ search }) {
 									className: "mt-1 flex items-center gap-2",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 										className: "text-[11px] font-semibold tracking-[0.16em] text-blue-soft uppercase",
-										children: /\sOTC$/i.test(search.name) ? "OTC" : search.group === "fx" ? "Валюта" : search.group === "crypto" ? "Крипто" : search.group === "stock" ? "Акция" : "Сырьё"
+										children: /\sOTC$/i.test(search.name) ? "OTC" : t("common.categoryFx")
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "button",
 										className: "press min-h-10 shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-blue-soft",
@@ -601,7 +603,7 @@ function SignalCard({ search }) {
 												window.setTimeout(() => setCopied(false), 1400);
 											}).catch(() => setCopied(false));
 										},
-										children: copied ? "Скопировано" : "Копировать"
+										children: copied ? t("common.copied") : t("common.copy")
 									})]
 								})]
 							}),
@@ -609,7 +611,7 @@ function SignalCard({ search }) {
 								className: "flex shrink-0 flex-col items-end gap-1",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 									className: "rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-blue-soft",
-									children: formatExpiry(search.seconds)
+									children: expiryLabel(search.seconds)
 								}), search.step > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 									className: "text-[11px] font-semibold text-dim",
 									children: [search.step, "/3"]
@@ -620,11 +622,14 @@ function SignalCard({ search }) {
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "mt-3 text-xs leading-relaxed text-dim",
 						children: [
-							"Экспирация ",
-							formatExpiry(search.seconds),
-							" · свечи анализа ",
-							formatExpiry(search.analysisSeconds),
-							" · окно ",
+							t("history.expiry"),
+							" ",
+							expiryLabel(search.seconds),
+							" · ",
+							t("history.candles"),
+							" ",
+							expiryLabel(search.analysisSeconds),
+							" · ",
 							lookbackBars,
 							" свечей"
 						]
@@ -635,7 +640,7 @@ function SignalCard({ search }) {
 					}) : null,
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: `mt-3 text-3xl font-extrabold sm:text-4xl ${up ? "text-win" : "text-loss"}`,
-						children: up ? "Вверх" : "Вниз"
+						children: t(up ? "history.up" : "history.down")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CandleChart, {
 						bars: search.bars,
@@ -654,13 +659,13 @@ function SignalCard({ search }) {
 						className: "mt-4 grid grid-cols-2 gap-3",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", {
 							className: "text-xs text-dim",
-							children: "Цена входа"
+							children: t("common.entryPrice")
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", {
 							className: "mt-1 font-mono text-xl font-bold text-fg sm:text-2xl",
 							children: search.open.toFixed(digitsOf(search.open))
 						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", {
 							className: "text-xs text-dim",
-							children: "Выплата"
+							children: t("history.payout")
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("dd", {
 							className: "mt-1 font-mono text-xl font-bold text-fg sm:text-2xl",
 							children: [search.payout, "%"]
@@ -673,7 +678,7 @@ function SignalCard({ search }) {
 								className: `flex items-center justify-center gap-2 text-[11px] font-semibold tracking-[0.16em] uppercase ${liveStatus === "connected" ? "text-win" : liveStatus === "error" ? "text-loss" : "text-dim"}`,
 								role: "status",
 								"aria-live": "polite",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: liveStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), liveStatus === "connected" ? "Котировки Pocket Option активны" : liveStatus === "error" ? "Поток котировок недоступен" : "Ожидание котировки Pocket Option"]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: liveStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), liveStatus === "connected" ? t("common.quoteActive") : liveStatus === "error" ? t("common.quoteUnavailable") : t("common.quoteWaiting")]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: `mt-2 font-mono text-4xl font-extrabold tracking-tight sm:text-5xl ${live === null || live === search.open ? "text-fg" : live > search.open ? "text-win" : "text-loss"}`,
@@ -681,7 +686,7 @@ function SignalCard({ search }) {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: `mt-1 font-mono text-sm font-semibold ${live === null || live === search.open ? "text-dim" : live > search.open ? "text-win" : "text-loss"}`,
-								children: live === null ? "ждём котировку" : live === search.open ? "без изменения" : `${live > search.open ? "+" : "−"}${Math.abs(live - search.open).toFixed(digitsOf(search.open))} от входа`
+								children: live === null ? t("common.waitQuote") : live === search.open ? t("common.noChange") : `${live > search.open ? "+" : "−"}${Math.abs(live - search.open).toFixed(digitsOf(search.open))} ${t("common.fromEntry")}`
 							}),
 							liveMessage ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: `mt-2 text-xs ${liveStatus === "error" ? "text-loss" : "text-dim"}`,
@@ -729,11 +734,11 @@ function SignalCard({ search }) {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-4 text-sm font-semibold tracking-[0.18em] text-win uppercase",
-						children: "Победа"
+						children: t("common.win")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-1 text-2xl font-extrabold text-fg",
-						children: up ? "Цена выросла" : "Цена упала"
+						children: t(up ? "common.priceRose" : "common.priceFell")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "mt-4 font-mono text-lg text-fg",
@@ -753,11 +758,11 @@ function SignalCard({ search }) {
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase",
-						children: "Ничья"
+						children: t("common.draw")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 text-lg font-bold text-fg",
-						children: "Возврат"
+						children: t("common.refund")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "mt-3 font-mono text-sm text-muted",
@@ -769,7 +774,7 @@ function SignalCard({ search }) {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 text-sm text-dim",
-						children: "Цена не изменилась. Перекрытия нет."
+						children: t("common.priceUnchanged")
 					})
 				]
 			}) : null,
@@ -778,11 +783,11 @@ function SignalCard({ search }) {
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm font-semibold tracking-[0.16em] text-loss uppercase",
-						children: "Проигрыш"
+						children: t("common.loss")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 text-lg font-bold text-fg",
-						children: "Подготовьтесь к перекрытию"
+						children: t("common.prepareRecovery")
 					}),
 					close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "mt-2 font-mono text-sm text-loss",
@@ -796,9 +801,9 @@ function SignalCard({ search }) {
 						className: "mt-3 font-mono text-5xl font-bold text-fg",
 						children: prepLeft
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 text-sm text-dim",
-						children: ["Та же пара. Осталось попыток: ", 3 - search.step]
+						children: t("common.samePairAttempts", { count: 3 - search.step })
 					})
 				]
 			}) : null,
@@ -807,11 +812,11 @@ function SignalCard({ search }) {
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-sm font-semibold tracking-[0.16em] text-loss uppercase",
-						children: "Проигрыш"
+						children: t("common.loss")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-2 text-lg font-bold text-fg",
-						children: "Три перекрытия уже были"
+						children: t("common.recoveryStop")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "mt-3 font-mono text-sm text-muted",
@@ -825,7 +830,7 @@ function SignalCard({ search }) {
 			}) : null,
 			phase === "hunt" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
 				pair: search.name,
-				expiry: formatExpiry(search.seconds)
+				expiry: expiryLabel(search.seconds)
 			}) : null
 		]
 	});

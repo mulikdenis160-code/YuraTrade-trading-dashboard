@@ -5,6 +5,8 @@ description: User-stated requirement to connect live market data for signal gene
 
 The user chose Pocket Option as the signal dashboard's live quote source.
 
-**Why:** the user confirmed the live feed is needed and selected Pocket Option, then provided fresh authorization through Replit Secrets.
+Performance claims must come from completed FX signal outcomes in the local journal. Do not claim a fixed hit rate, turn missing close prices into wins or losses, or tune the filter to inflate results. The user wants to test currency-pair selection and history settlement before reconsidering signal quality.
 
-**How to apply:** keep the feed read-only; store authorization only in Replit Secrets, never in source files, and do not reuse credentials embedded in uploaded archives.
+**Why:** the user wants to evaluate real observations rather than a promised percentage, and the feed supports decision-making rather than automated trading.
+
+**How to apply:** keep Pocket Option access read-only; store authorization only in Replit Secrets, never in source files, and exclude pending or unverified records from hit-rate calculations.

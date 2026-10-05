@@ -4,6 +4,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Gate } from "@/components/gate";
 import { Shell } from "@/components/shell";
 import { PocketProvider, usePocket } from "@/lib/pocket";
+import { LanguageProvider } from "@/lib/language";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -11,7 +12,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "VLADOS PRIME" },
+      { title: "PRIME BOT" },
       { name: "theme-color", content: "#080b12" },
     ],
     links: [
@@ -34,7 +35,9 @@ export const Route = createRootRoute({
         <PreviewHostBridge />
         <AuthProvider>
           <PocketProvider>
-            <Frame />
+            <LanguageProvider>
+              <Frame />
+            </LanguageProvider>
           </PocketProvider>
         </AuthProvider>
         <Scripts />

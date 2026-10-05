@@ -10,12 +10,12 @@ import {
 } from "@/lib/signal-journal";
 import {
   analysisPeriodForExpiry,
-  formatExpiry,
   isValidExpirySeconds,
   lookbackForExpiry,
 } from "@/lib/expiry";
+import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
-type Group = "fx" | "crypto" | "stock" | "commodity";
+type Group = "fx";
 
 type Search = {
   symbol: string;
@@ -33,7 +33,7 @@ type Search = {
   started: number;
 };
 
-const groups = new Set<Group>(["fx", "crypto", "stock", "commodity"]);
+const groups = new Set<Group>(["fx"]);
 
 function readBars(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -96,13 +96,14 @@ function CandleChart({
 
 export const Route = createFileRoute("/signal")({
   validateSearch: (search: Record<string, unknown>): Search => {
-    const group = groups.has(search.group as Group) ? (search.group as Group) : "fx";
+    const validGroup = groups.has(search.group as Group);
+    const group: Group = "fx";
     const direction = search.direction === "put" ? "put" : "call";
     const parsedSeconds = Number(search.seconds);
     const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : 60;
     return {
-      symbol: typeof search.symbol === "string" ? search.symbol : "",
-      name: typeof search.name === "string" ? search.name : "",
+      symbol: validGroup && typeof search.symbol === "string" ? search.symbol : "",
+      name: validGroup && typeof search.name === "string" ? search.name : "",
       group,
       direction,
       open: Number(search.open) || 0,
@@ -161,6 +162,7 @@ function clock(ms: number) {
 }
 
 function BackLink() {
+  const { t } = useLanguage();
   return (
     <Link
       to="/"
@@ -169,7 +171,7 @@ function BackLink() {
       <svg viewBox="0 0 16 16" className="size-4 text-blue-soft" aria-hidden>
         <path d="M10.5 3.5 6 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      Назад
+      {t("common.back")}
     </Link>
   );
 }
@@ -180,7 +182,9 @@ function SignalRoute() {
 }
 
 function SignalCard({ search }: { search: Search }) {
+  const { language, t } = useLanguage();
   const navigate = useNavigate();
+  const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
   const lookbackBars = lookbackForExpiry(search.seconds, search.analysisSeconds);
   const [now, setNow] = useState(() => Date.now());
   const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop" | "no-signal">("run");
@@ -354,7 +358,7 @@ function SignalCard({ search }: { search: Search }) {
     return (
       <div className="mx-auto max-w-md">
         <BackLink />
-        <p className="mt-4 text-muted">Сигнала нет.</p>
+         <p className="mt-4 text-muted">{t("common.noSignal")}</p>
       </div>
     );
   }
@@ -364,14 +368,14 @@ function SignalCard({ search }: { search: Search }) {
       <div className="mx-auto w-full max-w-md">
         <BackLink />
         <section className="panel arrive mt-3 px-4 py-8 text-center sm:px-6">
-          <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">Вход пропущен</p>
-          <h1 className="mt-3 text-xl font-bold text-fg">Новый сигнал не подтверждён</h1>
+          <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("common.skipEntry")}</p>
+          <h1 className="mt-3 text-xl font-bold text-fg">{t("common.notConfirmed")}</h1>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted">
-            Фильтр не подтвердил повторный вход по этой паре. Новый сигнал не выдан; предыдущий результат сохранён в журнале.
+            {t("common.skipReason")}
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Link to="/history" className="btn-ghost min-h-11 justify-center">Открыть историю</Link>
-            <Link to="/" className="btn-prime min-h-11 justify-center">К сигналам</Link>
+            <Link to="/history" className="btn-ghost min-h-11 justify-center">{t("common.openHistory")}</Link>
+            <Link to="/" className="btn-prime min-h-11 justify-center">{t("common.toSignals")}</Link>
           </div>
           {journalWarning ? <p className="mt-4 text-xs leading-relaxed text-loss" role="status">{journalWarning}</p> : null}
         </section>
@@ -391,7 +395,7 @@ function SignalCard({ search }: { search: Search }) {
             <p className="truncate text-lg font-extrabold tracking-tight text-fg sm:text-xl">{search.name.replace(/\s+OTC$/i, "")}</p>
             <div className="mt-1 flex items-center gap-2">
               <p className="text-[11px] font-semibold tracking-[0.16em] text-blue-soft uppercase">
-                {/\sOTC$/i.test(search.name) ? "OTC" : search.group === "fx" ? "Валюта" : search.group === "crypto" ? "Крипто" : search.group === "stock" ? "Акция" : "Сырьё"}
+                {/\sOTC$/i.test(search.name) ? "OTC" : t("common.categoryFx")}
               </p>
               <button
                 type="button"
@@ -405,24 +409,24 @@ function SignalCard({ search }: { search: Search }) {
                     .catch(() => setCopied(false));
                 }}
               >
-                {copied ? "Скопировано" : "Копировать"}
+                {copied ? t("common.copied") : t("common.copy")}
               </button>
             </div>
           </div>
           <span className="flex shrink-0 flex-col items-end gap-1">
             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-blue-soft">
-              {formatExpiry(search.seconds)}
+              {expiryLabel(search.seconds)}
             </span>
             {search.step > 0 ? <span className="text-[11px] font-semibold text-dim">{search.step}/3</span> : null}
           </span>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-dim">
-          Экспирация {formatExpiry(search.seconds)} · свечи анализа {formatExpiry(search.analysisSeconds)} · окно {lookbackBars} свечей
+          {t("history.expiry")} {expiryLabel(search.seconds)} · {t("history.candles")} {expiryLabel(search.analysisSeconds)} · {lookbackBars} свечей
         </p>
         {phase === "run" || phase === "check" ? (
           <p className="glow-text mt-4 text-center font-mono text-4xl font-bold text-fg sm:text-5xl">{phase === "check" ? "…" : clock(left)}</p>
         ) : null}
-        <p className={`mt-3 text-3xl font-extrabold sm:text-4xl ${up ? "text-win" : "text-loss"}`}>{up ? "Вверх" : "Вниз"}</p>
+        <p className={`mt-3 text-3xl font-extrabold sm:text-4xl ${up ? "text-win" : "text-loss"}`}>{t(up ? "history.up" : "history.down")}</p>
         <CandleChart bars={search.bars} entry={search.open} live={phase === "run" ? live : close} />
         <ul className="mt-4 space-y-2">
           {search.note
@@ -436,11 +440,11 @@ function SignalCard({ search }: { search: Search }) {
         </ul>
         <dl className="mt-4 grid grid-cols-2 gap-3">
           <div>
-            <dt className="text-xs text-dim">Цена входа</dt>
+            <dt className="text-xs text-dim">{t("common.entryPrice")}</dt>
             <dd className="mt-1 font-mono text-xl font-bold text-fg sm:text-2xl">{search.open.toFixed(digitsOf(search.open))}</dd>
           </div>
           <div>
-            <dt className="text-xs text-dim">Выплата</dt>
+            <dt className="text-xs text-dim">{t("history.payout")}</dt>
             <dd className="mt-1 font-mono text-xl font-bold text-fg sm:text-2xl">{search.payout}%</dd>
           </div>
         </dl>
@@ -455,16 +459,16 @@ function SignalCard({ search }: { search: Search }) {
             >
               <span className={liveStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current"} />
               {liveStatus === "connected"
-                ? "Котировки Pocket Option активны"
+               ? t("common.quoteActive")
                 : liveStatus === "error"
-                  ? "Поток котировок недоступен"
-                  : "Ожидание котировки Pocket Option"}
+                 ? t("common.quoteUnavailable")
+                 : t("common.quoteWaiting")}
             </p>
             <p className={`mt-2 font-mono text-4xl font-extrabold tracking-tight sm:text-5xl ${live === null || live === search.open ? "text-fg" : live > search.open ? "text-win" : "text-loss"}`}>
               {live === null ? "…" : live.toFixed(digitsOf(live))}
             </p>
             <p className={`mt-1 font-mono text-sm font-semibold ${live === null || live === search.open ? "text-dim" : live > search.open ? "text-win" : "text-loss"}`}>
-              {live === null ? "ждём котировку" : live === search.open ? "без изменения" : `${live > search.open ? "+" : "−"}${Math.abs(live - search.open).toFixed(digitsOf(search.open))} от входа`}
+              {live === null ? t("common.waitQuote") : live === search.open ? t("common.noChange") : `${live > search.open ? "+" : "−"}${Math.abs(live - search.open).toFixed(digitsOf(search.open))} ${t("common.fromEntry")}`}
             </p>
             {liveMessage ? (
               <p className={`mt-2 text-xs ${liveStatus === "error" ? "text-loss" : "text-dim"}`}>{liveMessage}</p>
@@ -485,8 +489,8 @@ function SignalCard({ search }: { search: Search }) {
             <circle cx="36" cy="36" r="32" fill="none" stroke="#3dd68c" strokeWidth="3" />
             <path d="M22 37l10 10 18-20" fill="none" stroke="#3dd68c" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <p className="mt-4 text-sm font-semibold tracking-[0.18em] text-win uppercase">Победа</p>
-          <p className="mt-1 text-2xl font-extrabold text-fg">{up ? "Цена выросла" : "Цена упала"}</p>
+          <p className="mt-4 text-sm font-semibold tracking-[0.18em] text-win uppercase">{t("common.win")}</p>
+          <p className="mt-1 text-2xl font-extrabold text-fg">{t(up ? "common.priceRose" : "common.priceFell")}</p>
           <p className="mt-4 font-mono text-lg text-fg">
             {search.open.toFixed(digitsOf(search.open))}
             <span className="mx-2 text-win">→</span>
@@ -497,40 +501,40 @@ function SignalCard({ search }: { search: Search }) {
 
       {phase === "draw" && close !== null ? (
         <div className="panel arrive mt-4 px-6 py-8 text-center">
-          <p className="text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase">Ничья</p>
-          <p className="mt-2 text-lg font-bold text-fg">Возврат</p>
+          <p className="text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("common.draw")}</p>
+          <p className="mt-2 text-lg font-bold text-fg">{t("common.refund")}</p>
           <p className="mt-3 font-mono text-sm text-muted">
             {search.open.toFixed(digitsOf(search.open))} → {close.toFixed(digitsOf(close))}
           </p>
-          <p className="mt-2 text-sm text-dim">Цена не изменилась. Перекрытия нет.</p>
+          <p className="mt-2 text-sm text-dim">{t("common.priceUnchanged")}</p>
         </div>
       ) : null}
 
       {phase === "prep" ? (
         <div className="panel arrive mt-4 px-6 py-8 text-center">
-          <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">Проигрыш</p>
-          <p className="mt-2 text-lg font-bold text-fg">Подготовьтесь к перекрытию</p>
+          <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">{t("common.loss")}</p>
+          <p className="mt-2 text-lg font-bold text-fg">{t("common.prepareRecovery")}</p>
           {close !== null ? (
             <p className="mt-2 font-mono text-sm text-loss">
               {search.open.toFixed(digitsOf(search.open))} → {close.toFixed(digitsOf(close))}
             </p>
           ) : null}
           <p className="mt-3 font-mono text-5xl font-bold text-fg">{prepLeft}</p>
-          <p className="mt-2 text-sm text-dim">Та же пара. Осталось попыток: {3 - search.step}</p>
+          <p className="mt-2 text-sm text-dim">{t("common.samePairAttempts", { count: 3 - search.step })}</p>
         </div>
       ) : null}
 
       {phase === "stop" && close !== null ? (
         <div className="panel arrive mt-4 px-6 py-8 text-center">
-          <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">Проигрыш</p>
-          <p className="mt-2 text-lg font-bold text-fg">Три перекрытия уже были</p>
+          <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">{t("common.loss")}</p>
+          <p className="mt-2 text-lg font-bold text-fg">{t("common.recoveryStop")}</p>
           <p className="mt-3 font-mono text-sm text-muted">
             {search.open.toFixed(digitsOf(search.open))} → {close.toFixed(digitsOf(close))}
           </p>
         </div>
       ) : null}
 
-      {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={formatExpiry(search.seconds)} /> : null}
+      {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={expiryLabel(search.seconds)} /> : null}
     </div>
   );
 }

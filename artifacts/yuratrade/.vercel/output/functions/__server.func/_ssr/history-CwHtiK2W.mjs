@@ -1,20 +1,14 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { r as formatExpiry } from "./expiry-B3tUilyb.mjs";
-import { c as summarizeSignals, i as signalJournalCsv, o as subscribeToSignalJournal, s as summarizeByMarket, t as readSignalJournal } from "./signal-journal-B1ggs--X.mjs";
 import { _ as require_react, g as require_jsx_runtime, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { t as StatRow } from "./stats-CWuJX2kf.mjs";
 import { c as Download, o as History } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/history-DNLfnen7.js
+import { C as useLanguage, S as formatExpiryForLanguage, d as summarizeSignals, i as readSignalJournal, l as subscribeToSignalJournal, r as markExpiredPendingSignals, s as signalJournalCsv, u as summarizeByMarket } from "./router-B1zMSVel.mjs";
+import { t as StatRow } from "./stats-Bj81Q044.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/history-CwHtiK2W.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
-var outcomeLabels = {
-	pending: "В ожидании",
-	win: "Победа",
-	loss: "Поражение",
-	draw: "Ничья"
-};
 var outcomeStyles = {
 	pending: "border-white/10 bg-white/5 text-dim",
+	unverified: "border-white/10 bg-white/5 text-muted",
 	win: "border-win/20 bg-win/10 text-win",
 	loss: "border-loss/20 bg-loss/10 text-loss",
 	draw: "border-blue/20 bg-blue/10 text-blue-soft"
@@ -27,8 +21,9 @@ function price(value, entry) {
 	const digits = entry >= 100 ? 2 : entry >= 10 ? 3 : 5;
 	return value.toFixed(digits);
 }
-function formatDate(value) {
-	return new Intl.DateTimeFormat("ru", {
+function formatDate(value, language) {
+	const locale = language === "en" ? "en-GB" : language === "uk" ? "uk-UA" : "ru-RU";
+	return new Intl.DateTimeFormat(locale, {
 		day: "2-digit",
 		month: "short",
 		hour: "2-digit",
@@ -45,11 +40,13 @@ function exportCsv(entries) {
 	window.setTimeout(() => URL.revokeObjectURL(url), 1e3);
 }
 function HistoryPage() {
+	const { language, t } = useLanguage();
 	const [entries, setEntries] = (0, import_react.useState)([]);
 	const [loaded, setLoaded] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
 		const update = () => {
-			setEntries(readSignalJournal());
+			markExpiredPendingSignals();
+			setEntries(readSignalJournal().filter((entry) => entry.group === "fx"));
 			setLoaded(true);
 		};
 		update();
@@ -58,6 +55,14 @@ function HistoryPage() {
 	const summary = summarizeSignals(entries);
 	const markets = summarizeByMarket(entries);
 	const recent = entries.slice(0, 50);
+	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
+	const outcomeLabels = {
+		pending: t("outcome.pending"),
+		unverified: t("outcome.unverified"),
+		win: t("outcome.win"),
+		loss: t("outcome.loss"),
+		draw: t("outcome.draw")
+	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "space-y-4 sm:space-y-5",
 		children: [
@@ -68,15 +73,15 @@ function HistoryPage() {
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "text-sm font-semibold tracking-[0.16em] text-blue-soft uppercase",
-							children: "Журнал"
+							children: t("history.kicker")
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
 							className: "mt-2 text-3xl font-bold tracking-tight text-fg sm:text-4xl",
-							children: "История сигналов"
+							children: t("history.title")
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "mt-2 max-w-xl text-sm leading-relaxed text-muted sm:text-base",
-							children: "Фактические исходы сигналов, закрытых котировкой Pocket Option."
+							children: t("history.description")
 						})
 					]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -84,7 +89,7 @@ function HistoryPage() {
 					className: "btn-ghost min-h-11 w-full justify-center gap-2 sm:w-auto",
 					onClick: () => exportCsv(entries),
 					disabled: entries.length === 0,
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "size-4" }), "Экспорт CSV"]
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "size-4" }), t("history.export")]
 				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -100,7 +105,7 @@ function HistoryPage() {
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "text-xs font-semibold tracking-wide text-dim uppercase",
-								children: "Порог безубыточности"
+								children: t("history.breakEven")
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-2 font-mono text-2xl font-extrabold text-fg",
@@ -108,7 +113,7 @@ function HistoryPage() {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-1 text-xs leading-relaxed text-dim",
-								children: "Расчёт по выплате записанных входов"
+								children: t("history.breakEvenHelp")
 							})
 						]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -116,21 +121,21 @@ function HistoryPage() {
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "text-xs font-semibold tracking-wide text-dim uppercase",
-								children: "Условный итог"
+								children: t("history.net")
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: `mt-2 font-mono text-2xl font-extrabold ${summary.netUnits > 0 ? "text-win" : summary.netUnits < 0 ? "text-loss" : "text-fg"}`,
-								children: summary.settled === 0 ? "—" : `${summary.netUnits > 0 ? "+" : ""}${summary.netUnits.toFixed(2)} ед.`
+								children: summary.settled === 0 ? "—" : `${summary.netUnits > 0 ? "+" : ""}${summary.netUnits.toFixed(2)} ${t("history.units")}`
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "mt-1 text-xs leading-relaxed text-dim",
-								children: "Каждая запись считается ставкой 1 ед."
+								children: t("history.netHelp")
 							})
 						]
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-4 border-t border-white/8 pt-3 text-xs leading-relaxed text-muted",
-					children: "Это локальный журнал фактических исходов, не прогноз. Условный итог не учитывает реальные суммы ставок, комиссии или размер перекрытий. Алгоритм пока эвристический, не ML-модель; история загружается примерно на 40 свечей выбранного периода анализа, поэтому отдельный надёжный backtest не заявляется. CSV содержит период свечей и результаты для последующей проверки."
+					children: t("history.disclaimer")
 				})]
 			}),
 			markets.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
@@ -139,10 +144,10 @@ function HistoryPage() {
 					className: "mb-2 flex items-center justify-between gap-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 						className: "text-base font-bold text-fg",
-						children: "Разбивка по паре и сроку"
+						children: t("history.byPair")
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-xs text-dim",
-						children: "Ничьи не входят в успешность"
+						children: t("history.draws")
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 					className: "grid gap-2 sm:grid-cols-2",
@@ -159,13 +164,19 @@ function HistoryPage() {
 									className: "mt-1 text-xs text-dim",
 									children: [
 										market.symbol,
-										" · экспирация ",
-										formatExpiry(market.seconds)
+										" · ",
+										t("history.expiry"),
+										" ",
+										expiryLabel(market.seconds)
 									]
 								})]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 								className: "shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-mono text-muted",
-								children: [market.summary.decided, " решающих"]
+								children: [
+									market.summary.decided,
+									" ",
+									t("history.decided")
+								]
 							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "mt-3 grid grid-cols-2 gap-2",
@@ -173,7 +184,7 @@ function HistoryPage() {
 								className: "rounded-xl bg-white/4 px-3 py-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-[11px] text-dim",
-									children: "Успешность"
+									children: t("history.hitRate")
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "mt-1 font-mono font-bold text-fg",
 									children: percent(market.summary.hitRate)
@@ -182,7 +193,7 @@ function HistoryPage() {
 								className: "rounded-xl bg-white/4 px-3 py-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-[11px] text-dim",
-									children: "Порог безубыточности"
+									children: t("history.breakEven")
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "mt-1 font-mono font-bold text-fg",
 									children: percent(market.summary.breakEvenRate)
@@ -198,16 +209,16 @@ function HistoryPage() {
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(History, { className: "size-6 text-blue-soft" }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-3 text-base font-semibold text-fg",
-						children: !loaded ? "Загружаем журнал…" : "Записей пока нет"
+						children: !loaded ? t("history.loading") : t("history.empty")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-1 max-w-sm text-sm leading-relaxed text-dim",
-						children: !loaded ? "Читаем сохранённые в этом браузере исходы." : "Запись появится, когда сигнал завершится по котировке. Слабые сценарии пропускаются и не считаются сигналами."
+						children: !loaded ? t("history.reading") : t("history.emptyHelp")
 					}),
 					loaded && entries.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
 						to: "/",
 						className: "btn-prime mt-4 min-h-11 justify-center",
-						children: "Перейти к сигналам"
+						children: t("history.goSignals")
 					}) : null
 				]
 			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
@@ -216,10 +227,13 @@ function HistoryPage() {
 					className: "flex items-center justify-between gap-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 						className: "text-base font-bold text-fg",
-						children: "Последние сигналы"
+						children: t("history.latest")
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-xs text-dim",
-						children: entries.length > recent.length ? `Последние ${recent.length} из ${entries.length}` : `${entries.length} записей`
+						children: entries.length > recent.length ? t("history.lastOf", {
+							shown: recent.length,
+							total: entries.length
+						}) : t("history.records", { total: entries.length })
 					})]
 				}), recent.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
 					className: "panel min-w-0 p-3 sm:p-4",
@@ -233,11 +247,15 @@ function HistoryPage() {
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 								className: "mt-1 text-xs text-dim",
 								children: [
-									formatDate(entry.startedAt),
-									" · экспирация ",
-									formatExpiry(entry.seconds),
-									" · свечи ",
-									formatExpiry(entry.analysisSeconds)
+									formatDate(entry.startedAt, language),
+									" · ",
+									t("history.expiry"),
+									" ",
+									expiryLabel(entry.seconds),
+									" · ",
+									t("history.candles"),
+									" ",
+									expiryLabel(entry.analysisSeconds)
 								]
 							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
@@ -251,17 +269,17 @@ function HistoryPage() {
 								className: "rounded-xl bg-white/4 px-3 py-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-dim",
-									children: "Направление"
+									children: t("history.direction")
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: `mt-1 font-semibold ${entry.direction === "call" ? "text-win" : "text-loss"}`,
-									children: entry.direction === "call" ? "Вверх" : "Вниз"
+									children: t(entry.direction === "call" ? "history.up" : "history.down")
 								})]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "rounded-xl bg-white/4 px-3 py-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-dim",
-									children: "Цена"
+									children: t("history.price")
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 									className: "mt-1 font-mono font-semibold text-fg",
 									children: [
@@ -275,7 +293,7 @@ function HistoryPage() {
 								className: "rounded-xl bg-white/4 px-3 py-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-dim",
-									children: "Выплата"
+									children: t("history.payout")
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 									className: "mt-1 font-mono font-semibold text-fg",
 									children: [entry.payout, "%"]
@@ -285,10 +303,13 @@ function HistoryPage() {
 								className: "rounded-xl bg-white/4 px-3 py-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "text-dim",
-									children: "Попытка"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									children: t("history.step")
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "mt-1 font-semibold text-fg",
-									children: [entry.step + 1, " из 4"]
+									children: t("history.attemptCount", {
+										current: entry.step + 1,
+										total: 4
+									})
 								})]
 							})
 						]

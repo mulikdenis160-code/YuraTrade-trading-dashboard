@@ -1,7 +1,7 @@
 import { analysisPeriodForExpiry, ANALYSIS_PERIODS_SECONDS } from "./expiry.ts";
 
 export type JournalGroup = "fx" | "crypto" | "stock" | "commodity";
-export type JournalOutcome = "pending" | "win" | "loss" | "draw";
+export type JournalOutcome = "pending" | "unverified" | "win" | "loss" | "draw";
 
 export type SignalJournalEntry = {
   id: string;
@@ -30,6 +30,7 @@ export type SignalSummary = {
   total: number;
   settled: number;
   pending: number;
+  unverified: number;
   wins: number;
   losses: number;
   draws: number;
@@ -43,7 +44,7 @@ const STORAGE_KEY = "vprime_signal_journal_v1";
 const JOURNAL_EVENT = "vprime:signal-journal-updated";
 const MAX_ENTRIES = 500;
 const groups = new Set<JournalGroup>(["fx", "crypto", "stock", "commodity"]);
-const outcomes = new Set<JournalOutcome>(["pending", "win", "loss", "draw"]);
+const outcomes = new Set<JournalOutcome>(["pending", "unverified", "win", "loss", "draw"]);
 
 export function signalRecordId(signal: Pick<StartedSignal, "symbol" | "startedAt" | "step">) {
   return `${signal.startedAt}:${signal.step}:${signal.symbol}`;
@@ -168,11 +169,26 @@ export function recordSignalOutcome(
   return writeSignalJournal(next);
 }
 
+export function markExpiredPendingSignals(now = Date.now(), graceMs = 120_000) {
+  const entries = readSignalJournal();
+  let changed = false;
+  const next = entries.map((entry) => {
+    if (entry.outcome !== "pending" || now <= entry.startedAt + entry.seconds * 1000 + graceMs) {
+      return entry;
+    }
+    changed = true;
+    return { ...entry, outcome: "unverified" as const };
+  });
+  if (changed) writeSignalJournal(next);
+  return changed ? next : entries;
+}
+
 export function summarizeSignals(entries: SignalJournalEntry[]): SignalSummary {
   let wins = 0;
   let losses = 0;
   let draws = 0;
   let pending = 0;
+  let unverified = 0;
   let netUnits = 0;
   let breakEvenTotal = 0;
   let decided = 0;
@@ -180,6 +196,10 @@ export function summarizeSignals(entries: SignalJournalEntry[]): SignalSummary {
   for (const entry of entries) {
     if (entry.outcome === "pending") {
       pending += 1;
+      continue;
+    }
+    if (entry.outcome === "unverified") {
+      unverified += 1;
       continue;
     }
     if (entry.outcome === "draw") {
@@ -202,6 +222,7 @@ export function summarizeSignals(entries: SignalJournalEntry[]): SignalSummary {
     total: entries.length,
     settled,
     pending,
+    unverified,
     wins,
     losses,
     draws,

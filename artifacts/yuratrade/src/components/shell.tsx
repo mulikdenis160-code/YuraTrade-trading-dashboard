@@ -1,23 +1,35 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { GraduationCap, History, LayoutDashboard, UserRound } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandName } from "@/components/brand";
 import { levels } from "@/lib/levels";
-import { loadFeed } from "@/lib/pocket-live";
+import { loadFeed, readClose } from "@/lib/pocket-live";
 import { isAdminId, usePocket } from "@/lib/pocket";
+import { useLanguage } from "@/lib/language";
+import {
+  markExpiredPendingSignals,
+  readSignalJournal,
+  recordSignalOutcome,
+} from "@/lib/signal-journal";
 
 const links = [
-  { to: "/", label: "Сигналы", icon: LayoutDashboard },
-  { to: "/history", label: "История", icon: History },
-  { to: "/learn", label: "Обучение", icon: GraduationCap },
-  { to: "/profile", label: "Профиль", icon: UserRound },
+  { to: "/", label: "nav.signals", icon: LayoutDashboard },
+  { to: "/history", label: "nav.history", icon: History },
+  { to: "/learn", label: "nav.learn", icon: GraduationCap },
+  { to: "/profile", label: "nav.profile", icon: UserRound },
 ] as const;
 
 export function Shell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const { id } = usePocket();
+  const { language, setLanguage, t } = useLanguage();
   const admin = isAdminId(id);
-  const [levelName, setLevelName] = useState("Без уровня");
+  const [levelName, setLevelName] = useState("");
+  const pathRef = useRef(path);
+
+  useEffect(() => {
+    pathRef.current = path;
+  }, [path]);
 
   useEffect(() => {
     let stop = false;
@@ -27,7 +39,7 @@ export function Shell({ children }: { children: ReactNode }) {
           if (stop || feed.balance === null) return;
           if (admin) return;
           const level = [...levels].reverse().find((item) => feed.balance !== null && feed.balance >= item.deposit);
-          setLevelName(level ? `${level.name} · $${level.deposit}` : "Без уровня");
+          setLevelName(level ? `${level.name} · $${level.deposit}` : "");
         })
         .catch(() => {});
     };
@@ -39,6 +51,53 @@ export function Shell({ children }: { children: ReactNode }) {
     };
   }, [admin]);
 
+  useEffect(() => {
+    let stopped = false;
+    let busy = false;
+    const lastAttempt = new Map<string, number>();
+    const settleExpired = async () => {
+      if (stopped || busy || pathRef.current === "/signal") return;
+      busy = true;
+      const now = Date.now();
+      try {
+        markExpiredPendingSignals(now, 120_000);
+        const due = readSignalJournal().filter(
+          (entry) =>
+            entry.outcome === "pending" &&
+            now >= entry.startedAt + entry.seconds * 1000 + 1500 &&
+            now <= entry.startedAt + entry.seconds * 1000 + 120_000,
+        );
+        for (const entry of due) {
+          const last = lastAttempt.get(entry.id) ?? 0;
+          if (now - last < 8000) continue;
+          lastAttempt.set(entry.id, now);
+          try {
+            const quote = await readClose({ data: { symbol: entry.symbol } });
+            const digits = Math.max(
+              entry.openPrice >= 100 ? 2 : entry.openPrice >= 10 ? 3 : 5,
+              quote.close >= 100 ? 2 : quote.close >= 10 ? 3 : 5,
+            );
+            const start = Number(entry.openPrice.toFixed(digits));
+            const finish = Number(quote.close.toFixed(digits));
+            const move = finish === start ? 0 : finish > start ? 1 : -1;
+            const won = entry.direction === "call" ? move > 0 : move < 0;
+            recordSignalOutcome(entry.id, quote.close, move === 0 ? "draw" : won ? "win" : "loss");
+          } catch {
+            // The entry stays pending briefly, then is marked unverified rather than guessed.
+          }
+        }
+      } finally {
+        busy = false;
+      }
+    };
+    void settleExpired();
+    const timer = window.setInterval(() => void settleExpired(), 5000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   return (
     <div className="stage min-h-dvh">
       <div className="aurora" aria-hidden>
@@ -47,20 +106,31 @@ export function Shell({ children }: { children: ReactNode }) {
         <span />
       </div>
       <header className="sticky top-0 z-20 border-b border-white/6 bg-bg/55 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-lg items-center gap-1.5 px-3 sm:h-16 sm:gap-2 sm:px-4">
-          <BrandName className="min-w-0 truncate text-[15px] sm:text-lg" />
-          <nav className="ml-6 hidden items-center lg:flex">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-6">
+          <BrandName className="shrink-0 text-[15px] sm:text-lg" />
+          <nav className="ml-auto hidden min-w-0 items-center justify-end lg:flex">
             {links.map((item) => {
               const on = item.to === "/" ? path === "/" : path.startsWith(item.to);
               return (
                 <Link key={item.to} to={item.to} className={`nav-link ${on ? "on" : ""}`}>
-                  {item.label}
+                  {t(item.label)}
                 </Link>
               );
             })}
           </nav>
-          <Link to="/profile" className="chip on ml-auto max-w-[7.5rem] shrink-0 truncate text-[11px] sm:max-w-[11rem] sm:text-xs">
-            {admin ? "Админ" : levelName}
+          <select
+            aria-label={t("language.label")}
+            title={t("language.label")}
+            value={language}
+            onChange={(event) => setLanguage(event.target.value as typeof language)}
+            className="h-9 shrink-0 rounded-full border border-white/10 bg-[#111723] px-2 text-xs font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-blue-soft"
+          >
+            <option value="ru">RU</option>
+            <option value="uk">UA</option>
+            <option value="en">EN</option>
+          </select>
+          <Link to="/profile" className="chip on max-w-[6.5rem] shrink-0 truncate text-[11px] sm:max-w-[11rem] sm:text-xs">
+            {admin ? t("nav.admin") : levelName || t("nav.noLevel")}
           </Link>
         </div>
       </header>
@@ -76,7 +146,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 className={`flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-none font-semibold ${on ? "text-blue-soft" : "text-dim"}`}
               >
                 <item.icon className="size-4" />
-                {item.label}
+                  {t(item.label)}
               </Link>
             );
           })}

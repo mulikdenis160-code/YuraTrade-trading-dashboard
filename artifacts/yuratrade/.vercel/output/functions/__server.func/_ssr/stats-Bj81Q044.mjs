@@ -1,34 +1,35 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { c as summarizeSignals, o as subscribeToSignalJournal, t as readSignalJournal } from "./signal-journal-B1ggs--X.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/stats-CWuJX2kf.js
+import { C as useLanguage, d as summarizeSignals, i as readSignalJournal, l as subscribeToSignalJournal } from "./router-B1zMSVel.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/stats-Bj81Q044.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function StatRow() {
+	const { t } = useLanguage();
 	const [summary, setSummary] = (0, import_react.useState)(() => summarizeSignals([]));
 	(0, import_react.useEffect)(() => {
-		const update = () => setSummary(summarizeSignals(readSignalJournal()));
+		const update = () => setSummary(summarizeSignals(readSignalJournal().filter((entry) => entry.group === "fx")));
 		update();
 		return subscribeToSignalJournal(update);
 	}, []);
 	const items = [
 		{
-			label: "Завершено",
+			label: t("stats.settled"),
 			value: String(summary.settled),
 			tone: "text-fg"
 		},
 		{
-			label: "Побед",
+			label: t("stats.wins"),
 			value: String(summary.wins),
 			tone: "text-win"
 		},
 		{
-			label: "Поражений",
+			label: t("stats.losses"),
 			value: String(summary.losses),
 			tone: "text-loss"
 		},
 		{
-			label: "Успешность",
+			label: t("stats.rate"),
 			value: summary.hitRate === null ? "—" : `${summary.hitRate.toFixed(1)}%`,
 			tone: "text-blue-soft"
 		}
