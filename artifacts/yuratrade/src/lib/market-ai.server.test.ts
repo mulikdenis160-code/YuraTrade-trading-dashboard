@@ -8,6 +8,7 @@ import {
   DIRECT_AI_SYSTEM_PROMPT,
   marketAiApiErrorMessage,
   MIN_DIRECT_AI_CANDLES,
+  MIN_SIGNAL_ADX14,
   parseMarketAiReview,
   requestMarketAiReviewOnce,
 } from "./market-ai.server.ts";
@@ -222,6 +223,67 @@ test("analysis request transfers verified OHLC, indicators, quality, higher time
   assert.ok(input.trend.changePercent > 0);
   assert.equal(input.volatility.periodCandles, 12);
   assert.ok(input.volatility.standardDeviation > 0);
+});
+
+test("weak ADX returns no signal without calling Gemini", async () => {
+  const candles = Array.from({ length: 64 }, (_, index) => ({
+    time: 6_000 + index * 60,
+    open: 1.1,
+    high: 1.10005,
+    low: 1.09995,
+    close: 1.1,
+  }));
+  let called = false;
+  const result = await analyzeMarketCandidates(
+    120,
+    60,
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: 1.1,
+      quoteAgeMs: 0,
+    }],
+    {
+      nowSeconds: candles.at(-1)!.time + 30,
+      request: async () => {
+        called = true;
+        return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
+      },
+    },
+  );
+
+  assert.equal(MIN_SIGNAL_ADX14, 20);
+  assert.equal(result.decision, "pass");
+  if (result.decision === "pass") assert.match(result.reason, /ADX\(14\).*ниже 20/);
+  assert.equal(called, false);
+});
+
+test("missing ADX history returns no signal without calling Gemini", async () => {
+  const candles = risingCandles(20);
+  let called = false;
+  const result = await analyzeMarketCandidates(
+    120,
+    60,
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: candles.at(-1)!.close,
+      quoteAgeMs: 0,
+    }],
+    {
+      nowSeconds: candles.at(-1)!.time + 30,
+      request: async () => {
+        called = true;
+        return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
+      },
+    },
+  );
+
+  assert.equal(result.decision, "pass");
+  if (result.decision === "pass") assert.match(result.reason, /недостаточно.*ADX\(14\)/i);
+  assert.equal(called, false);
 });
 
 test("analysis submits only one pair even when multiple candidates are provided", async () => {

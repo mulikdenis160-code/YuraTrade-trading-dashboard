@@ -1,7 +1,7 @@
 import { a as formatExpiry, i as analysisPeriodForExpiry, o as isValidExpirySeconds } from "./expiry-Wv4yeTgP.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-9qRbq7vK.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CNkxbgNH.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -303,6 +303,7 @@ var DIRECT_AI_SYSTEM_PROMPT = [
 	"Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
 	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
 	"Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
+	"Сервер перед этим запросом уже пропускает ситуации с ADX(14) ниже 20; анализируй оставшиеся данные без выдуманных подтверждений.",
 	"При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
 	"Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
 ].join(" ");
@@ -600,6 +601,36 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		decision: "pass",
 		reason: "Не удалось подготовить данные выбранной пары. Сигнал не выдан."
 	};
+	const adx14 = candidate.context.technicalIndicators.directionalMovement.adx14;
+	if (adx14 === null) {
+		console.info("[signal-adx-filter]", JSON.stringify({
+			symbol: candidate.symbol,
+			decision: "pass",
+			reason: "ADX(14) недоступен",
+			closedCandleCount: candidate.context.dataQuality.closedCandleCount,
+			missingIntervals: candidate.context.dataQuality.missingIntervals,
+			threshold: 20
+		}));
+		return {
+			decision: "pass",
+			reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее 34. Сигнал не выдан.`
+		};
+	}
+	if (adx14 < 20) {
+		console.info("[signal-adx-filter]", JSON.stringify({
+			symbol: candidate.symbol,
+			decision: "pass",
+			reason: "ADX ниже минимального значения",
+			adx14,
+			threshold: 20,
+			closedCandleCount: candidate.context.dataQuality.closedCandleCount,
+			missingIntervals: candidate.context.dataQuality.missingIntervals
+		}));
+		return {
+			decision: "pass",
+			reason: `Слабый тренд: ADX(14) ${adx14} ниже 20. Сигнал не выдан.`
+		};
+	}
 	const closes = candidate.context.candles.slice(-30).map((candle) => candle.close);
 	const recentCandles = candidate.context.candles.slice(-30).map((candle) => ({
 		time: candle.time,
