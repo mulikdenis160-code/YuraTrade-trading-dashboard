@@ -2,7 +2,7 @@ import { a as isValidExpirySeconds, i as formatExpiry, r as analysisPeriodForExp
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as Anthropic } from "../_libs/@anthropic-ai/sdk+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-EGBVvXWm.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-28ZKEtPL.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -221,7 +221,7 @@ function buildMarketAnalysisContext(inputCandles, candleSeconds, nowSeconds = Ma
 }
 var DIRECT_AI_MODEL = "claude-opus-5";
 var DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
-var DIRECT_AI_VISIBLE_CANDLES = 64;
+var DIRECT_AI_VISIBLE_CANDLES = 32;
 var DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES = 16;
 var signalReviewSchema = object({
 	decision: literal("signal"),
@@ -573,7 +573,7 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		expirySeconds,
 		candleSeconds,
 		horizonCandles: expirySeconds / candleSeconds,
-		candleFormat: "Массив candles содержит до 64 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
+		candleFormat: "Массив candles содержит до 32 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
 		indicatorFormat: {
 			recentReturnBps: "Изменение close за указанное число свечей в basis points.",
 			ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",
@@ -663,7 +663,7 @@ var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 var AUTH_REJECTED_MESSAGE = "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 var HISTORY_PAGE_CANDLES = 150;
-var SIGNAL_CANDIDATES_PER_SEARCH = 8;
+var SIGNAL_CANDIDATES_PER_SEARCH = 4;
 var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
 var runHistoryRequest = createKeyedAsyncQueue();
 var pairs = /* @__PURE__ */ new Map();
@@ -1094,57 +1094,117 @@ async function feedSignal(symbol, expirySeconds) {
 	};
 }
 async function feedBest(expirySeconds, excludedSymbols = []) {
-	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
-	await ensureFeed();
-	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-	const ranked = [...pairs.values()].filter((pair) => pair.payout === 92 || pair.payout === 80).sort((a, b) => b.payout - a.payout);
-	if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-	const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
-	const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
-	if (available.length === 0) throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
-	const pool = selectSignalCandidates(available);
-	if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-	const candidates = [];
+	const startedAt = performance.now();
+	let stage = "validation";
+	let feedMs = 0;
+	let historyMs = 0;
+	let analysisMs = 0;
+	let quoteMs = 0;
+	let poolSize = 0;
 	let historyResponses = 0;
-	let historyFailure = "";
-	const historyResults = await loadCandidatesInParallel(pool, (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS));
-	for (const result of historyResults) {
-		if (!result.ok) {
-			if (!historyFailure && result.error instanceof Error) historyFailure = result.error.message;
-			continue;
+	let candidateCount = 0;
+	const logTiming = (decision, error) => {
+		console.info("[signal-search]", JSON.stringify({
+			decision,
+			stage,
+			totalMs: Math.round(performance.now() - startedAt),
+			feedMs: Math.round(feedMs),
+			historyMs: Math.round(historyMs),
+			analysisMs: Math.round(analysisMs),
+			quoteMs: Math.round(quoteMs),
+			poolSize,
+			historyResponses,
+			candidateCount,
+			...error ? { errorType: error instanceof Error ? error.name : typeof error } : {}
+		}));
+	};
+	try {
+		if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+		stage = "feed";
+		const feedStartedAt = performance.now();
+		await ensureFeed();
+		feedMs = performance.now() - feedStartedAt;
+		const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+		const ranked = [...pairs.values()].filter((pair) => pair.payout === 92 || pair.payout === 80).sort((a, b) => b.payout - a.payout);
+		if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+		const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
+		const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
+		if (available.length === 0) throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
+		const pool = selectSignalCandidates(available);
+		poolSize = pool.length;
+		if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+		const candidates = [];
+		let historyFailure = "";
+		stage = "history";
+		const historyStartedAt = performance.now();
+		let historyResults;
+		try {
+			historyResults = await loadCandidatesInParallel(pool, (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS));
+		} finally {
+			historyMs = performance.now() - historyStartedAt;
 		}
-		historyResponses += 1;
-		if (result.value.length < 30) continue;
-		candidates.push({
-			pair: result.item,
-			candles: result.value
-		});
+		for (const result of historyResults) {
+			if (!result.ok) {
+				if (!historyFailure && result.error instanceof Error) historyFailure = result.error.message;
+				continue;
+			}
+			historyResponses += 1;
+			if (result.value.length < 30) continue;
+			candidates.push({
+				pair: result.item,
+				candles: result.value
+			});
+		}
+		candidateCount = candidates.length;
+		if (candidates.length === 0) {
+			if (historyResponses === 0 && historyFailure) throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
+			throw new Error(`Не удалось получить по Pocket Option минимум 30 исторических свечей ни для одной пары.`);
+		}
+		stage = "analysis";
+		const analysisStartedAt = performance.now();
+		let review;
+		try {
+			review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, candidates.map((candidate) => ({
+				symbol: candidate.pair.symbol,
+				name: candidate.pair.name,
+				candles: candidate.candles
+			})));
+		} finally {
+			analysisMs = performance.now() - analysisStartedAt;
+		}
+		if (review.decision === "pass") {
+			stage = "complete";
+			logTiming("pass");
+			return review;
+		}
+		const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
+		if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) {
+			stage = "complete";
+			logTiming("pass");
+			return {
+				decision: "pass",
+				reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан."
+			};
+		}
+		const signal = buildDirectAiSignal(best.candles, expirySeconds, analysisSeconds, best.pair.name, best.pair.payout, review);
+		stage = "fresh-quote";
+		const quoteStartedAt = performance.now();
+		signal.openPrice = await waitQuote(best.pair.symbol);
+		quoteMs = performance.now() - quoteStartedAt;
+		stage = "complete";
+		logTiming("signal");
+		return {
+			decision: "signal",
+			...signal,
+			symbol: best.pair.symbol,
+			group: best.pair.group,
+			seconds: expirySeconds,
+			analysisSeconds
+		};
+	} catch (error) {
+		logTiming("error", error);
+		throw error;
 	}
-	if (candidates.length === 0) {
-		if (historyResponses === 0 && historyFailure) throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
-		throw new Error(`Не удалось получить по Pocket Option минимум 30 исторических свечей ни для одной пары.`);
-	}
-	const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, candidates.map((candidate) => ({
-		symbol: candidate.pair.symbol,
-		name: candidate.pair.name,
-		candles: candidate.candles
-	})));
-	if (review.decision === "pass") return review;
-	const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
-	if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) return {
-		decision: "pass",
-		reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан."
-	};
-	const signal = buildDirectAiSignal(best.candles, expirySeconds, analysisSeconds, best.pair.name, best.pair.payout, review);
-	signal.openPrice = await waitQuote(best.pair.symbol);
-	return {
-		decision: "signal",
-		...signal,
-		symbol: best.pair.symbol,
-		group: best.pair.group,
-		seconds: expirySeconds,
-		analysisSeconds
-	};
 }
 //#endregion
 export { feedBest, feedClose, feedSignal, feedSnapshot, followQuote, quoteStatus };

@@ -7,7 +7,7 @@ export const DIRECT_AI_MODEL = "claude-opus-5";
 export const DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 30;
-const DIRECT_AI_VISIBLE_CANDLES = 64;
+const DIRECT_AI_VISIBLE_CANDLES = 32;
 const DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES = 16;
 
 export type MarketAiCandidate = {
@@ -417,7 +417,7 @@ export async function analyzeMarketCandidates(
     expirySeconds,
     candleSeconds,
     horizonCandles: expirySeconds / candleSeconds,
-    candleFormat: "Массив candles содержит до 64 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
+    candleFormat: "Массив candles содержит до 32 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
     indicatorFormat: {
       recentReturnBps: "Изменение close за указанное число свечей в basis points.",
       ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",

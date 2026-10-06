@@ -161,7 +161,7 @@ test("analysis request supplies closed candles, indicators, and completed higher
     }>;
   };
   assert.equal(input.horizonCandles, 10);
-  assert.equal(input.candidates[0]?.candles.length, 64);
+  assert.equal(input.candidates[0]?.candles.length, 32);
   assert.equal(input.candidates[0]?.dataQuality.closedCandleCount, 100);
   assert.equal(input.candidates[0]?.dataQuality.isFresh, true);
   assert.equal(input.candidates[0]?.technicalIndicators.rsi14, 100);

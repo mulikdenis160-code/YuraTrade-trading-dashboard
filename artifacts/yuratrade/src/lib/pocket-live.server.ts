@@ -26,7 +26,7 @@ const AUTH_MISSING_MESSAGE =
 const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 const HISTORY_PAGE_CANDLES = 150;
-const SIGNAL_CANDIDATES_PER_SEARCH = 8;
+const SIGNAL_CANDIDATES_PER_SEARCH = 4;
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
 const runHistoryRequest = createKeyedAsyncQueue();
 
@@ -529,71 +529,130 @@ export async function feedBest(
   expirySeconds: number,
   excludedSymbols: string[] = [],
 ): Promise<FeedBestResult> {
-  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
-  await ensureFeed();
-  const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const ranked = [...pairs.values()]
-    .filter((pair) => pair.payout === 92 || pair.payout === 80)
-    .sort((a, b) => b.payout - a.payout);
-  if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-  const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
-  const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
-  if (available.length === 0) {
-    throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
-  }
-  const pool = selectSignalCandidates(available);
-  if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-  const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
+  const startedAt = performance.now();
+  let stage = "validation";
+  let feedMs = 0;
+  let historyMs = 0;
+  let analysisMs = 0;
+  let quoteMs = 0;
+  let poolSize = 0;
   let historyResponses = 0;
-  let historyFailure = "";
-  const historyResults = await loadCandidatesInParallel(
-    pool,
-    (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS),
-  );
-  for (const result of historyResults) {
-    if (!result.ok) {
-      if (!historyFailure && result.error instanceof Error) historyFailure = result.error.message;
-      continue;
-    }
-    historyResponses += 1;
-    if (result.value.length < MIN_DIRECT_AI_CANDLES) continue;
-    candidates.push({ pair: result.item, candles: result.value });
-  }
-  if (candidates.length === 0) {
-    if (historyResponses === 0 && historyFailure) {
-      throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
-    }
-    throw new Error(`Не удалось получить по Pocket Option минимум ${MIN_DIRECT_AI_CANDLES} исторических свечей ни для одной пары.`);
-  }
-  const review = await analyzeMarketCandidates(
-    expirySeconds,
-    analysisSeconds,
-    candidates.map((candidate) => ({
-      symbol: candidate.pair.symbol,
-      name: candidate.pair.name,
-      candles: candidate.candles,
-    })),
-  );
-  if (review.decision === "pass") return review;
-  const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
-  if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) {
-    return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
-  }
-  const signal = buildDirectAiSignal(
-    best.candles,
-    expirySeconds,
-    analysisSeconds,
-    best.pair.name,
-    best.pair.payout,
-    review,
-  );
-  signal.openPrice = await waitQuote(best.pair.symbol);
-  return {
-    decision: "signal",
-    ...signal,
-    symbol: best.pair.symbol,
-    group: best.pair.group,
-    seconds: expirySeconds,
-    analysisSeconds,
+  let candidateCount = 0;
+  const logTiming = (decision: "signal" | "pass" | "error", error?: unknown) => {
+    console.info("[signal-search]", JSON.stringify({
+      decision,
+      stage,
+      totalMs: Math.round(performance.now() - startedAt),
+      feedMs: Math.round(feedMs),
+      historyMs: Math.round(historyMs),
+      analysisMs: Math.round(analysisMs),
+      quoteMs: Math.round(quoteMs),
+      poolSize,
+      historyResponses,
+      candidateCount,
+      ...(error ? { errorType: error instanceof Error ? error.name : typeof error } : {}),
+    }));
   };
+
+  try {
+    if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+    stage = "feed";
+    const feedStartedAt = performance.now();
+    await ensureFeed();
+    feedMs = performance.now() - feedStartedAt;
+    const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+    const ranked = [...pairs.values()]
+      .filter((pair) => pair.payout === 92 || pair.payout === 80)
+      .sort((a, b) => b.payout - a.payout);
+    if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+    const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
+    const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
+    if (available.length === 0) {
+      throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
+    }
+    const pool = selectSignalCandidates(available);
+    poolSize = pool.length;
+    if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+    const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
+    let historyFailure = "";
+    stage = "history";
+    const historyStartedAt = performance.now();
+    let historyResults: Awaited<ReturnType<typeof loadCandidatesInParallel<FeedPair, HistoricalCandle[]>>>;
+    try {
+      historyResults = await loadCandidatesInParallel(
+        pool,
+        (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS),
+      );
+    } finally {
+      historyMs = performance.now() - historyStartedAt;
+    }
+    for (const result of historyResults) {
+      if (!result.ok) {
+        if (!historyFailure && result.error instanceof Error) historyFailure = result.error.message;
+        continue;
+      }
+      historyResponses += 1;
+      if (result.value.length < MIN_DIRECT_AI_CANDLES) continue;
+      candidates.push({ pair: result.item, candles: result.value });
+    }
+    candidateCount = candidates.length;
+    if (candidates.length === 0) {
+      if (historyResponses === 0 && historyFailure) {
+        throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
+      }
+      throw new Error(`Не удалось получить по Pocket Option минимум ${MIN_DIRECT_AI_CANDLES} исторических свечей ни для одной пары.`);
+    }
+    stage = "analysis";
+    const analysisStartedAt = performance.now();
+    let review: MarketAiReview;
+    try {
+      review = await analyzeMarketCandidates(
+        expirySeconds,
+        analysisSeconds,
+        candidates.map((candidate) => ({
+          symbol: candidate.pair.symbol,
+          name: candidate.pair.name,
+          candles: candidate.candles,
+        })),
+      );
+    } finally {
+      analysisMs = performance.now() - analysisStartedAt;
+    }
+    if (review.decision === "pass") {
+      stage = "complete";
+      logTiming("pass");
+      return review;
+    }
+    const best = candidates.find((candidate) => candidate.pair.symbol === review.symbol);
+    if (!best || !acceptsMarketAiReview(review, candidates.map((candidate) => candidate.pair.symbol))) {
+      stage = "complete";
+      logTiming("pass");
+      return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
+    }
+    const signal = buildDirectAiSignal(
+      best.candles,
+      expirySeconds,
+      analysisSeconds,
+      best.pair.name,
+      best.pair.payout,
+      review,
+    );
+    stage = "fresh-quote";
+    const quoteStartedAt = performance.now();
+    signal.openPrice = await waitQuote(best.pair.symbol);
+    quoteMs = performance.now() - quoteStartedAt;
+    stage = "complete";
+    logTiming("signal");
+    return {
+      decision: "signal",
+      ...signal,
+      symbol: best.pair.symbol,
+      group: best.pair.group,
+      seconds: expirySeconds,
+      analysisSeconds,
+    };
+  } catch (error) {
+    logTiming("error", error);
+    throw error;
+  }
 }
