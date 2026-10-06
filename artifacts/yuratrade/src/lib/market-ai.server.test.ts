@@ -532,8 +532,8 @@ test("an unparseable Gemini response fails after exactly one model request", asy
   assert.equal(calls, 1);
 });
 
-test("a Gemini analysis request is stopped at the five-second budget", async () => {
-  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 5_000);
+test("a Gemini analysis request is stopped at the six-second budget", async () => {
+  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 6_000);
   const request = async () => new Promise<{ choices: never[] }>(() => {});
   await assert.rejects(
     requestMarketAiReviewOnce(request, [], ["EURUSD_otc"], 10),

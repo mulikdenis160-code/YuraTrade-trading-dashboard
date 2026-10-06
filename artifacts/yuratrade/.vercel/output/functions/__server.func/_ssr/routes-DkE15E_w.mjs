@@ -1,11 +1,12 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { c as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, o as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-Be9OTVwm.mjs";
+import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-CAHRvRJV.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as usePocket, S as isAdminId, T as useLanguage, _ as takeSignal, a as recentlyUsedSignalSymbols, b as markSignalUsed, h as loadFeed, i as readSignalJournal, m as confirmSignalEntry, p as chooseSignalPair, v as levelForBalance, w as formatExpiryForLanguage, x as signalsUsedToday } from "./router-HJZJ8ZXu.mjs";
-import { t as StatRow } from "./stats-kEKXC6us.mjs";
-import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-CjdWO2Fz.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-O0VfSNYL.js
+import { C as usePocket, S as isAdminId, T as useLanguage, _ as takeSignal, a as recentlyUsedSignalSymbols, b as markSignalUsed, h as loadFeed, i as readSignalJournal, m as confirmSignalEntry, p as chooseSignalPair, v as levelForBalance, w as formatExpiryForLanguage, x as signalsUsedToday } from "./router-oX0ediug.mjs";
+import { t as StatRow } from "./stats-dlW-Logs.mjs";
+import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BSZP0gdJ.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DkE15E_w.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -110,6 +111,7 @@ function SignalDesk() {
 	const ask = async () => {
 		if (phase !== "idle" || blocked || !ready) return;
 		const attempt = ++attemptRef.current;
+		const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 		setPhase("choosing");
 		setSearchError("");
 		setNotice("");
@@ -121,14 +123,18 @@ function SignalDesk() {
 			let prepared = null;
 			let lastReason = "";
 			for (let index = 0; index < 4; index += 1) {
-				const candidate = await chooseSignalPair({ data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] } });
+				const candidateBudgetMs = preparationDeadlineAtMs - Date.now();
+				if (candidateBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
+				const candidate = await waitForSignalRequest(settleSignalRequest(chooseSignalPair({ data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] } })), candidateBudgetMs, t("signal.analysisTimeout"));
 				if (attemptRef.current !== attempt) return;
 				if (checkedSymbols.has(candidate.symbol)) break;
 				checkedSymbols.add(candidate.symbol);
+				const signalBudgetMs = preparationDeadlineAtMs - Date.now();
+				if (signalBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
 				const result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
 					symbol: candidate.symbol,
 					expirySeconds
-				} })), SIGNAL_PREPARATION_TIMEOUT_MS, t("signal.analysisTimeout"));
+				} })), signalBudgetMs, t("signal.analysisTimeout"));
 				if (attemptRef.current !== attempt) return;
 				if (result.decision === "pass") {
 					lastReason = result.reason;

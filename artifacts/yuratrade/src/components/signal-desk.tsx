@@ -149,6 +149,7 @@ export function SignalDesk() {
   const ask = async () => {
     if (phase !== "idle" || blocked || !ready) return;
     const attempt = ++attemptRef.current;
+    const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
     setPhase("choosing");
     setSearchError("");
     setNotice("");
@@ -161,18 +162,26 @@ export function SignalDesk() {
       let lastReason = "";
 
       for (let index = 0; index < SIGNAL_PAIR_SEARCH_LIMIT; index += 1) {
-        const candidate = await chooseSignalPair({
-          data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] },
-        });
+        const candidateBudgetMs = preparationDeadlineAtMs - Date.now();
+        if (candidateBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
+        const candidate = await waitForSignalRequest(
+          settleSignalRequest(chooseSignalPair({
+            data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] },
+          })),
+          candidateBudgetMs,
+          t("signal.analysisTimeout"),
+        );
         if (attemptRef.current !== attempt) return;
         if (checkedSymbols.has(candidate.symbol)) break;
         checkedSymbols.add(candidate.symbol);
 
+        const signalBudgetMs = preparationDeadlineAtMs - Date.now();
+        if (signalBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
         const result = await waitForSignalRequest(
           settleSignalRequest(takeSignal({
             data: { symbol: candidate.symbol, expirySeconds },
           })),
-          SIGNAL_PREPARATION_TIMEOUT_MS,
+          signalBudgetMs,
           t("signal.analysisTimeout"),
         );
         if (attemptRef.current !== attempt) return;

@@ -25,9 +25,13 @@ import {
 import {
   MAX_QUOTE_AGE_MS,
   MIN_ENTRY_BUFFER_MS,
+  SIGNAL_ANALYSIS_TIMEOUT_MS,
+  SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
+  SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
 import { nextCandleEntryWindow } from "./signal-entry-window";
+import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import { signalReleaseAt } from "./signal-release-time";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
@@ -41,7 +45,17 @@ const SIGNAL_CANDIDATES_PER_SEARCH = 1;
 const MAX_ELIGIBLE_PAIRS = 20;
 const MIN_SIGNAL_PAYOUT = 92;
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
+const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
+  "Поиск сигнала не завершился за 7 секунд. Сигнал не выдан.";
 const runHistoryRequest = createKeyedAsyncQueue();
+
+function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
+  return waitForSignalRequest(
+    settleSignalRequest(request),
+    Math.max(0, deadlineAtMs - Date.now()),
+    SIGNAL_PREPARATION_TIMEOUT_MESSAGE,
+  );
+}
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
 
@@ -637,7 +651,8 @@ export async function feedSignal(
 ): Promise<FeedSignalResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   const pipelineStartedAt = performance.now();
-  await ensureFeed();
+  const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+  await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
   const pair = pairs.get(symbol);
   if (
     !pair ||
@@ -650,13 +665,16 @@ export async function feedSignal(
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const historyStartedAt = performance.now();
-  const history = await loadCandles(
-    symbol,
-    analysisSeconds,
-    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-    1,
+  const inputQuoteStartedAt = historyStartedAt;
+  const [history, inputQuote] = await waitForSignalPreparation(
+    Promise.all([
+      loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1),
+      waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS),
+    ]),
+    preparationDeadlineAtMs,
   );
   const historyMs = Math.round(performance.now() - historyStartedAt);
+  const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
   const candles = history.candles;
   console.info("[signal-history]", JSON.stringify({
     symbol,
@@ -667,19 +685,32 @@ export async function feedSignal(
     lastReceivedCandle: candles.at(-1) ?? null,
     ...summarizeCandleCadence([candles], analysisSeconds),
   }));
-  const inputQuoteStartedAt = performance.now();
-  const inputQuote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
-  const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
+  const entryHistoryRequest = settleSignalRequest(
+    loadCandles(symbol, 60, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1),
+  );
+  const remainingAnalysisMs = Math.min(
+    SIGNAL_ANALYSIS_TIMEOUT_MS,
+    preparationDeadlineAtMs - Date.now() - 100,
+  );
+  if (remainingAnalysisMs <= 0) {
+    throw new Error(SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
+  }
   const analysisStartedAt = performance.now();
-  const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [
-    {
-      symbol,
-      name: pair.name,
-      candles,
-      currentPrice: inputQuote.price,
-      quoteAgeMs: inputQuote.ageMs,
-    },
-  ]);
+  const review = await waitForSignalPreparation(
+    analyzeMarketCandidates(
+      expirySeconds,
+      analysisSeconds,
+      [{
+        symbol,
+        name: pair.name,
+        candles,
+        currentPrice: inputQuote.price,
+        quoteAgeMs: inputQuote.ageMs,
+      }],
+      { timeoutMs: remainingAnalysisMs },
+    ),
+    preparationDeadlineAtMs,
+  );
   const analysisMs = Math.round(performance.now() - analysisStartedAt);
   console.info("[signal-pipeline]", JSON.stringify({
     symbol,
@@ -693,11 +724,10 @@ export async function feedSignal(
   if (!acceptsMarketAiReview(review, [symbol])) {
     return { decision: "pass", reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан." };
   }
-  const entryHistory = await loadCandles(
-    symbol,
-    60,
-    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-    1,
+  const entryHistory = await waitForSignalRequest(
+    entryHistoryRequest,
+    Math.max(0, preparationDeadlineAtMs - Date.now()),
+    SIGNAL_PREPARATION_TIMEOUT_MESSAGE,
   );
   const releaseAtMs = signalReleaseAt(entryHistory.candles, Date.now());
   if (releaseAtMs === null) {

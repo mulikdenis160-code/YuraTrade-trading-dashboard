@@ -1,7 +1,8 @@
-import { a as SIGNAL_COPY_DELAY_MS, c as analysisPeriodForExpiry, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as formatExpiry, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_QUOTE_WAIT_MS, u as isValidExpirySeconds } from "./expiry-Be9OTVwm.mjs";
+import { a as SIGNAL_COPY_DELAY_MS, c as SIGNAL_QUOTE_WAIT_MS, d as isValidExpirySeconds, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./expiry-CAHRvRJV.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
+import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-BZOzs3nU.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B7ikjGVl.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -305,7 +306,7 @@ var DIRECT_AI_SYSTEM_PROMPT = [
 	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
 	"Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
 	"При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
-	"Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
+	"Верни только один компактный JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"одно короткое предложение на русском, не более 160 символов\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
 ].join(" ");
 function activeGeminiModel(env = process.env) {
 	const hasProxyBase = Boolean(env.AI_INTEGRATIONS_GEMINI_BASE_URL);
@@ -709,7 +710,7 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		role: "user",
 		content: userPrompt
 	}];
-	return requestMarketAiReviewOnce(options.request ?? requestMarketAiCompletion, baseMessages, [candidate.symbol]);
+	return requestMarketAiReviewOnce(options.request ?? requestMarketAiCompletion, baseMessages, [candidate.symbol], options.timeoutMs);
 }
 function createKeyedAsyncQueue() {
 	const tails = /* @__PURE__ */ new Map();
@@ -826,7 +827,11 @@ var SIGNAL_CANDIDATES_PER_SEARCH = 1;
 var MAX_ELIGIBLE_PAIRS = 20;
 var MIN_SIGNAL_PAYOUT = 92;
 var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
+var SIGNAL_PREPARATION_TIMEOUT_MESSAGE = "Поиск сигнала не завершился за 7 секунд. Сигнал не выдан.";
 var runHistoryRequest = createKeyedAsyncQueue();
+function waitForSignalPreparation(request, deadlineAtMs) {
+	return waitForSignalRequest(settleSignalRequest(request), Math.max(0, deadlineAtMs - Date.now()), SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
+}
 var pairs = /* @__PURE__ */ new Map();
 var balance = null;
 var socket = null;
@@ -1294,14 +1299,17 @@ function summarizeCandleCadence(series, expectedSeconds) {
 async function feedSignal(symbol, expirySeconds) {
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
 	const pipelineStartedAt = performance.now();
-	await ensureFeed();
+	const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+	await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
 	const pair = pairs.get(symbol);
 	if (!pair || pair.group !== "fx" || !pair.symbol.toLowerCase().includes("otc") || pair.payout < MIN_SIGNAL_PAYOUT) throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
 	subscribe(symbol);
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 	const historyStartedAt = performance.now();
-	const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+	const inputQuoteStartedAt = historyStartedAt;
+	const [history, inputQuote] = await waitForSignalPreparation(Promise.all([loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1), waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS)]), preparationDeadlineAtMs);
 	const historyMs = Math.round(performance.now() - historyStartedAt);
+	const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
 	const candles = history.candles;
 	console.info("[signal-history]", JSON.stringify({
 		symbol,
@@ -1312,17 +1320,17 @@ async function feedSignal(symbol, expirySeconds) {
 		lastReceivedCandle: candles.at(-1) ?? null,
 		...summarizeCandleCadence([candles], analysisSeconds)
 	}));
-	const inputQuoteStartedAt = performance.now();
-	const inputQuote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
-	const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
+	const entryHistoryRequest = settleSignalRequest(loadCandles(symbol, 60, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1));
+	const remainingAnalysisMs = Math.min(SIGNAL_ANALYSIS_TIMEOUT_MS, preparationDeadlineAtMs - Date.now() - 100);
+	if (remainingAnalysisMs <= 0) throw new Error(SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
 	const analysisStartedAt = performance.now();
-	const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [{
+	const review = await waitForSignalPreparation(analyzeMarketCandidates(expirySeconds, analysisSeconds, [{
 		symbol,
 		name: pair.name,
 		candles,
 		currentPrice: inputQuote.price,
 		quoteAgeMs: inputQuote.ageMs
-	}]);
+	}], { timeoutMs: remainingAnalysisMs }), preparationDeadlineAtMs);
 	const analysisMs = Math.round(performance.now() - analysisStartedAt);
 	console.info("[signal-pipeline]", JSON.stringify({
 		symbol,
@@ -1337,7 +1345,7 @@ async function feedSignal(symbol, expirySeconds) {
 		decision: "pass",
 		reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан."
 	};
-	const releaseAtMs = signalReleaseAt((await loadCandles(symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1)).candles, Date.now());
+	const releaseAtMs = signalReleaseAt((await waitForSignalRequest(entryHistoryRequest, Math.max(0, preparationDeadlineAtMs - Date.now()), SIGNAL_PREPARATION_TIMEOUT_MESSAGE)).candles, Date.now());
 	if (releaseAtMs === null) return {
 		decision: "pass",
 		reason: "Не удалось подготовить безопасное окно входа. Сигнал не выдан."

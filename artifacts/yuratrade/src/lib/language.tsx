@@ -134,9 +134,9 @@ const copy = {
   "signal.countdownUnit": ["до сигнала", "до сигналу", "until the signal"],
   "signal.finalizing": ["Проверяем вход…", "Перевіряємо вхід…", "Checking the entry…"],
   "signal.analysisTimeout": [
-    "Анализ не завершился за 5 секунд. Попробуйте ещё раз; сигнал не выдан.",
-    "Аналіз не завершився за 5 секунд. Спробуйте ще раз; сигнал не видано.",
-    "Analysis did not finish within 5 seconds. Try again; no signal was issued.",
+    "Поиск сигнала не завершился за 7 секунд. Попробуйте ещё раз; сигнал не выдан.",
+    "Пошук сигналу не завершився за 7 секунд. Спробуйте ще раз; сигнал не видано.",
+    "Signal search did not finish within 7 seconds. Try again; no signal was issued.",
   ],
   "signal.pairNoLongerReady": [
     "При повторном анализе ИИ не подтвердил направление по этой паре. Получите новый сигнал.",
