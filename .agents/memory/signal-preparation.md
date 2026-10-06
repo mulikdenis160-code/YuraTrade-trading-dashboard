@@ -3,8 +3,8 @@ name: Signal preparation flow
 description: User-requested timing and clipboard behavior before issuing PRIME BOT signals.
 ---
 
-Before a signal is issued, show the selected currency pair without direction and run a 10-second countdown so the trader can select that pair at the broker. Recheck the same pair after the countdown before showing the direction. Copy the pair name without its trailing OTC label. Preserve the post-loss same-pair recovery flow with its 10-second preparation and up to three recovery attempts; do not remove it unless the user explicitly asks.
+Issue a quality-checked new signal immediately using its fresh entry quote: do not add a pair-selection countdown, repeat the same analysis, or automatically scan other expirations after an abstention. Show the abstention reason right away so the user can choose another expiry manually. After a loss, keep same-pair recovery bounded to three attempts and start it without preparation or display delays. Keep candle-quality and quote-freshness checks, the selected trade expiry, and copying the pair name without its trailing OTC label.
 
-**Why:** the user wants time to choose the matching broker pair and enter promptly when the signal appears; the OTC label should not be included in the copied pair name. The user explicitly said to keep the recovery system.
+**Why:** the user asked to eliminate application-added waits; using the already validated result avoids a redundant analysis while retaining the data-quality safeguards and bounded recovery.
 
-**How to apply:** keep direction and the entry timer hidden until the countdown ends, use a fresh result for the same pair, and do not record a signal before it is actually issued. After a loss, retain the automatic same-pair reanalysis and bounded recovery sequence.
+**How to apply:** preserve closed-candle, minimum-history, and fresh-quote checks; allow the AI to abstain; do not open trades automatically or shorten the user's chosen expiry. Keep recovery on the same pair, up to three attempts, without adding timers.

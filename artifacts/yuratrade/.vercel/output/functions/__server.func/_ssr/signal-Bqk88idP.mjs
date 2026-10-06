@@ -1,8 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as formatExpiryForLanguage, g as takeSignal, l as signalRecordId, m as readClose, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-e0nTTW-D.mjs";
-import { t as AnalysisModal } from "./analysis-modal-cIq3IRqX.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-BXHLte-t.js
+import { C as formatExpiryForLanguage, g as takeSignal, l as signalRecordId, m as readClose, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-Biu5RFSJ.mjs";
+import { t as AnalysisModal } from "./analysis-modal-Doak8aSJ.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-Bqk88idP.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -340,7 +340,6 @@ function SignalCard({ search }) {
 	const [phase, setPhase] = (0, import_react.useState)("run");
 	const [copied, setCopied] = (0, import_react.useState)(false);
 	const [close, setClose] = (0, import_react.useState)(null);
-	const [prepLeft, setPrepLeft] = (0, import_react.useState)(10);
 	const [error, setError] = (0, import_react.useState)("");
 	const [journalWarning, setJournalWarning] = (0, import_react.useState)("");
 	const [live, setLive] = (0, import_react.useState)(null);
@@ -442,7 +441,7 @@ function SignalCard({ search }) {
 				setPhase("draw");
 				return;
 			}
-			setPhase(won ? "win" : search.step >= 3 ? "stop" : "prep");
+			setPhase(won ? "win" : search.step >= 3 ? "stop" : "hunt");
 		}).catch((cause) => {
 			setPhase("run");
 			settled.current = false;
@@ -457,22 +456,8 @@ function SignalCard({ search }) {
 		up
 	]);
 	(0, import_react.useEffect)(() => {
-		if (phase !== "prep") return;
-		const ends = Date.now() + 1e4;
-		const timer = window.setInterval(() => {
-			const left = Math.max(0, Math.ceil((ends - Date.now()) / 1e3));
-			setPrepLeft(left);
-			if (left <= 0) {
-				window.clearInterval(timer);
-				setPhase("hunt");
-			}
-		}, 200);
-		return () => window.clearInterval(timer);
-	}, [phase]);
-	(0, import_react.useEffect)(() => {
 		if (phase !== "hunt") return;
 		let stop = false;
-		const started = Date.now();
 		takeSignal({ data: {
 			symbol: search.symbol,
 			expirySeconds: search.seconds
@@ -483,8 +468,6 @@ function SignalCard({ search }) {
 				setError(result.reason);
 				return;
 			}
-			const wait = Math.max(0, 2200 - (Date.now() - started));
-			await new Promise((resolve) => window.setTimeout(resolve, wait));
 			if (stop) return;
 			await navigate({
 				to: "/signal",
@@ -507,7 +490,7 @@ function SignalCard({ search }) {
 			});
 		}).catch((cause) => {
 			if (stop) return;
-			setPhase("prep");
+			setPhase("no-signal");
 			setError(cause instanceof Error ? cause.message : "Не удалось дать перекрытие.");
 		});
 		return () => {
@@ -741,35 +724,6 @@ function SignalCard({ search }) {
 					}) : null
 				]
 			}),
-			phase === "prep" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "panel arrive mt-4 px-6 py-8 text-center",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "text-sm font-semibold tracking-[0.16em] text-loss uppercase",
-						children: t("common.loss")
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-2 text-lg font-bold text-fg",
-						children: t("common.prepareRecovery")
-					}),
-					close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "mt-2 font-mono text-sm text-loss",
-						children: [
-							search.open.toFixed(digitsOf(search.open)),
-							" → ",
-							close.toFixed(digitsOf(close))
-						]
-					}) : null,
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-3 font-mono text-5xl font-bold text-fg",
-						children: prepLeft
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-2 text-sm text-dim",
-						children: t("common.samePairAttempts", { count: 3 - search.step })
-					})
-				]
-			}) : null,
 			phase === "win" && close !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "win-screen",
 				children: [

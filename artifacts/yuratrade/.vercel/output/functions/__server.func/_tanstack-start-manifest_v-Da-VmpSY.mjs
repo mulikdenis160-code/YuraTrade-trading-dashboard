@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-3XrMSOpT.js
+//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-Da-VmpSY.js
 var tsrStartManifest = () => ({ routes: {
 	__root__: {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/__root.tsx",
@@ -11,32 +11,32 @@ var tsrStartManifest = () => ({ routes: {
 			"/api/ticks"
 		],
 		preloads: [
-			"/assets/index-BHkSb7SC.js",
+			"/assets/index-nkijzzRq.js",
 			"/assets/language-C0hXw6Oq.js",
-			"/assets/pocket-live-BfWgC4Yn.js",
-			"/assets/link-BjTmRefP.js",
-			"/assets/signal-journal-ClhhYzpO.js",
+			"/assets/pocket-live-DbuQo-6I.js",
+			"/assets/link-DICjpczd.js",
+			"/assets/signal-journal-9t7idpY2.js",
 			"/assets/createLucideIcon-DX2avhg0.js"
 		],
 		scripts: [{ attrs: {
 			type: "module",
 			async: !0,
-			src: "/assets/index-BHkSb7SC.js"
+			src: "/assets/index-nkijzzRq.js"
 		} }]
 	},
 	"/": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/index.tsx",
 		children: void 0,
 		preloads: [
-			"/assets/routes-BrVqY6tm.js",
-			"/assets/stats-pVsSeXVl.js",
-			"/assets/analysis-modal-CYLWM0p1.js"
+			"/assets/routes-BfHCivaR.js",
+			"/assets/stats-DrxM86zC.js",
+			"/assets/analysis-modal-DsJyn4FW.js"
 		]
 	},
 	"/history": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/history.tsx",
 		children: void 0,
-		preloads: ["/assets/history-CTWbzy1H.js", "/assets/stats-pVsSeXVl.js"]
+		preloads: ["/assets/history-BY0ThvB5.js", "/assets/stats-DrxM86zC.js"]
 	},
 	"/learn": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/learn.tsx",
@@ -46,12 +46,12 @@ var tsrStartManifest = () => ({ routes: {
 	"/profile": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/profile.tsx",
 		children: void 0,
-		preloads: ["/assets/profile-B1LSX5Ne.js"]
+		preloads: ["/assets/profile-CyuTn318.js"]
 	},
 	"/signal": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/signal.tsx",
 		children: void 0,
-		preloads: ["/assets/signal-BnvwyZAF.js", "/assets/analysis-modal-CYLWM0p1.js"]
+		preloads: ["/assets/signal-UMpzHFlx.js", "/assets/analysis-modal-DsJyn4FW.js"]
 	}
 } });
 //#endregion

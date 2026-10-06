@@ -1,23 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { loadFeed, takeBest, takeSignal } from "@/lib/pocket-live";
+import { loadFeed, takeBest } from "@/lib/pocket-live";
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { readSignalJournal, recentlyUsedSignalSymbols } from "@/lib/signal-journal";
 import { AnalysisModal } from "@/components/analysis-modal";
 import {
-  alternativeExpiryMinutes,
   analysisPeriodForExpiry,
   EXPIRY_OPTIONS_MINUTES,
 } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 type PreparedSignal = Extract<Awaited<ReturnType<typeof takeBest>>, { decision: "signal" }>;
-type ExpirySuggestion = { minutes: number; candidate: PreparedSignal };
-
-function pairLabel(name: string) {
-  return name.replace(/\s+OTC$/i, "").trim();
-}
 
 export function SignalDesk() {
   const navigate = useNavigate();
@@ -26,15 +20,10 @@ export function SignalDesk() {
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
   const [feedStatus, setFeedStatus] = useState<"connecting" | "connected" | "error">("connecting");
-  const [phase, setPhase] = useState<"idle" | "search" | "alternatives" | "countdown" | "finalizing">("idle");
-  const [prepared, setPrepared] = useState<PreparedSignal | null>(null);
-  const [countdown, setCountdown] = useState(10);
+  const [phase, setPhase] = useState<"idle" | "search">("idle");
   const [feedError, setFeedError] = useState("");
   const [searchError, setSearchError] = useState("");
   const [notice, setNotice] = useState("");
-  const [suggestedSignals, setSuggestedSignals] = useState<ExpirySuggestion[]>([]);
-  const [alternativesChecked, setAlternativesChecked] = useState(false);
-  const [alternativeSearchError, setAlternativeSearchError] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
   const [used, setUsed] = useState(0);
   const [expiryMinutes, setExpiryMinutes] = useState(1);
@@ -88,94 +77,23 @@ export function SignalDesk() {
 
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
 
-  const checkAlternativeExpiries = async (reason: string, selectedExpirySeconds: number, attempt: number) => {
-    setPrepared(null);
-    setNotice(reason);
-    setSearchError("");
-    setSuggestedSignals([]);
-    setAlternativeSearchError("");
-    setAlternativesChecked(false);
-
-    const alternatives = alternativeExpiryMinutes(selectedExpirySeconds / 60);
-    if (alternatives.length === 0) {
-      setAlternativesChecked(true);
-      setPhase("idle");
-      return;
-    }
-
-    setPhase("alternatives");
-    const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
-    const found: ExpirySuggestion[] = [];
-    let firstError = "";
-
-    const results = await Promise.all(alternatives.map(async (minutes) => {
-      if (attemptRef.current !== attempt) return { minutes, result: null, error: "" };
-      try {
-        const result = await takeBest({
-          data: {
-            expirySeconds: minutes * 60,
-            excludedSymbols,
-          },
-        });
-        return { minutes, result, error: "" };
-      } catch (cause) {
-        return {
-          minutes,
-          result: null,
-          error: cause instanceof Error ? cause.message : t("signal.none"),
-        };
-      }
-    }));
-
+  const openSignal = async (candidate: PreparedSignal, attempt: number) => {
     if (attemptRef.current !== attempt) return;
-    for (const outcome of results) {
-      if (outcome.result?.decision === "signal") {
-        found.push({ minutes: outcome.minutes, candidate: outcome.result });
-      }
-      if (!firstError && outcome.error) firstError = outcome.error;
-    }
-    setSuggestedSignals(found);
-    setAlternativeSearchError(firstError);
-    setAlternativesChecked(true);
-    setPhase("idle");
-  };
-
-  const prepareSignal = async (candidate: PreparedSignal, selectedExpirySeconds: number, attempt: number) => {
-    setExpiryMinutes(selectedExpirySeconds / 60);
-    setPrepared(candidate);
-    setCountdown(10);
-    setPhase("countdown");
-
-    for (let seconds = 10; seconds > 0; seconds -= 1) {
-      if (attemptRef.current !== attempt) return;
-      setCountdown(seconds);
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
-    }
-    if (attemptRef.current !== attempt) return;
-
-    setPhase("finalizing");
-    const result = await takeSignal({ data: { symbol: candidate.symbol, expirySeconds: selectedExpirySeconds } });
-    if (attemptRef.current !== attempt) return;
-    if (result.decision === "pass") {
-      await checkAlternativeExpiries(result.reason, selectedExpirySeconds, attempt);
-      return;
-    }
-
     if (cap !== null) setUsed(markSignalUsed());
     await navigate({
       to: "/signal",
       search: {
         symbol: candidate.symbol,
-        name: result.name,
+        name: candidate.name,
         group: "fx",
-        direction: result.direction,
-        open: result.openPrice,
-        payout: result.payout,
-        seconds: selectedExpirySeconds,
-        analysisSeconds: result.analysisSeconds,
-        note: result.note,
-        bars: result.bars,
-        aiConfidence: result.aiConfidence,
+        direction: candidate.direction,
+        open: candidate.openPrice,
+        payout: candidate.payout,
+        seconds: candidate.seconds,
+        analysisSeconds: candidate.analysisSeconds,
+        note: candidate.note,
+        bars: candidate.bars,
+        aiConfidence: candidate.aiConfidence,
         step: 0,
         started: Date.now(),
       },
@@ -185,7 +103,6 @@ export function SignalDesk() {
   const showSearchError = (cause: unknown, attempt: number) => {
     if (attemptRef.current !== attempt) return;
     setPhase("idle");
-    setPrepared(null);
     setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
   };
 
@@ -195,9 +112,6 @@ export function SignalDesk() {
     setPhase("search");
     setSearchError("");
     setNotice("");
-    setSuggestedSignals([]);
-    setAlternativesChecked(false);
-    setAlternativeSearchError("");
     try {
       const candidate = await takeBest({
         data: {
@@ -207,29 +121,14 @@ export function SignalDesk() {
       });
       if (attemptRef.current !== attempt) return;
       if (candidate.decision === "pass") {
-        await checkAlternativeExpiries(candidate.reason, expirySeconds, attempt);
+        setNotice(candidate.reason);
+        setPhase("idle");
         return;
       }
-      await prepareSignal(candidate, expirySeconds, attempt);
+      await openSignal(candidate, attempt);
     } catch (cause) {
       showSearchError(cause, attempt);
     }
-  };
-
-  const selectExpirySuggestion = (suggestion: ExpirySuggestion) => {
-    if (phase !== "idle" || blocked) return;
-    const attempt = ++attemptRef.current;
-    setSearchError("");
-    void prepareSignal(suggestion.candidate, suggestion.minutes * 60, attempt).catch((cause: unknown) => {
-      showSearchError(cause, attempt);
-    });
-  };
-
-  const cancelCountdown = () => {
-    attemptRef.current += 1;
-    setPrepared(null);
-    setPhase("idle");
-    setCountdown(10);
   };
 
   return (
@@ -293,15 +192,7 @@ export function SignalDesk() {
           </p>
         </section>
         <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked)} onClick={() => void ask()}>
-          {phase === "search"
-            ? t("signal.checking")
-            : phase === "alternatives"
-              ? t("signal.alternativesChecking")
-            : phase === "countdown"
-              ? t("signal.pairReady")
-              : phase === "finalizing"
-                ? t("signal.finalizing")
-                : t("signal.get")}
+          {phase === "search" ? t("signal.checking") : t("signal.get")}
         </button>
         <p className={`mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`}>
           {blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", { used, cap }))}
@@ -333,7 +224,6 @@ export function SignalDesk() {
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold tracking-[0.16em] text-blue-soft uppercase">{t("signal.alternativeSearchKicker")}</p>
                 <h3 className="mt-1 text-base font-bold leading-snug text-fg sm:text-lg">{t("common.notConfirmed")}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted">
                   {t("signal.noSignalAtExpiry", { expiry: expiryLabel(expirySeconds) })}
@@ -347,44 +237,6 @@ export function SignalDesk() {
                 <p className="mt-1.5 whitespace-pre-line break-words text-sm leading-relaxed text-muted">{notice}</p>
               </div>
 
-              {suggestedSignals.length > 0 ? (
-                <div className="space-y-2.5">
-                  <div>
-                    <p className="text-sm font-bold text-fg">{t("signal.alternativesFound")}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted">{t("signal.alternativesFoundBody")}</p>
-                  </div>
-                  <div className="space-y-2">
-                    {suggestedSignals.map((suggestion) => (
-                      <button
-                        key={suggestion.minutes}
-                        type="button"
-                        className="group flex min-h-16 w-full items-center justify-between gap-3 rounded-2xl border border-blue/20 bg-[#121b29] px-3.5 py-3 text-left transition hover:border-blue/45 hover:bg-blue/8 disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={!ready || phase !== "idle" || Boolean(blocked)}
-                        onClick={() => selectExpirySuggestion(suggestion)}
-                      >
-                        <span className="min-w-0">
-                          <span className="block text-base font-bold text-fg">{expiryLabel(suggestion.minutes * 60)}</span>
-                          <span className="mt-0.5 block text-xs text-muted">{t("signal.alternativeChoose")}</span>
-                        </span>
-                        <span className="shrink-0 rounded-full border border-blue/20 bg-blue/10 px-2.5 py-1 text-xs font-semibold text-blue-soft">
-                          {t("signal.alternativePayout", { payout: suggestion.candidate.payout })}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : alternativesChecked && !alternativeSearchError ? (
-                <p className="rounded-2xl border border-white/8 bg-white/3 p-3.5 text-sm leading-relaxed text-muted">
-                  {t("signal.alternativesNone")}
-                </p>
-              ) : null}
-
-              {alternativeSearchError ? (
-                <p className="rounded-2xl border border-loss/25 bg-loss/5 p-3.5 text-sm leading-relaxed text-muted" role="status">
-                  {t("signal.alternativesPartial", { error: alternativeSearchError })}
-                </p>
-              ) : null}
-
               <button
                 type="button"
                 className="btn-ghost min-h-11 w-full justify-center"
@@ -397,35 +249,7 @@ export function SignalDesk() {
           </section>
         ) : null}
       </section>
-      {phase === "countdown" && prepared ? (
-        <section className="panel rise p-5 text-center" role="status" aria-live="polite">
-          <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("signal.pairChosen")}</p>
-          <div className="mt-2 flex items-center justify-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-fg">{pairLabel(prepared.name)}</h2>
-            {/\sOTC$/i.test(prepared.name) ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold tracking-wide text-muted">OTC</span>
-            ) : null}
-          </div>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted">{t("signal.choosePair")}</p>
-          <p className="mt-4 font-mono text-6xl font-extrabold tabular-nums text-blue-soft" aria-label={t("signal.countdownRemaining", { seconds: countdown })}>
-            {countdown}
-          </p>
-          <p className="mt-1 text-xs text-dim">{t("signal.countdownUnit")}</p>
-          <button type="button" className="btn-ghost mt-4 min-h-10 justify-center" onClick={cancelCountdown}>
-            {t("common.cancel")}
-          </button>
-        </section>
-      ) : null}
       {phase === "search" ? <AnalysisModal pair={t("home.eyebrow")} expiry={expiryLabel(expirySeconds)} /> : null}
-      {phase === "alternatives" ? (
-        <AnalysisModal
-          pair={t("signal.alternativeSearchKicker")}
-          expiry={expiryLabel(expirySeconds)}
-          title={t("signal.alternativesChecking")}
-          description={t("signal.alternativesCheckingBody")}
-        />
-      ) : null}
-      {phase === "finalizing" && prepared ? <AnalysisModal pair={pairLabel(prepared.name)} expiry={expiryLabel(expirySeconds)} /> : null}
     </div>
   );
 }

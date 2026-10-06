@@ -3844,7 +3844,7 @@ var RawStream = class {
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-3XrMSOpT.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-Da-VmpSY.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -3866,19 +3866,19 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab": {
 		functionName: "takeBest_createServerFn_handler",
-		importer: () => import("./pocket-live-ITozwkGI.mjs")
+		importer: () => import("./pocket-live-Bec4ADLm.mjs")
 	},
 	"c3bf91de64f793a1fdff73992de93db6878fb230b41776a1663843f0dd5e02d1": {
 		functionName: "readClose_createServerFn_handler",
-		importer: () => import("./pocket-live-ITozwkGI.mjs")
+		importer: () => import("./pocket-live-Bec4ADLm.mjs")
 	},
 	"e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857": {
 		functionName: "takeSignal_createServerFn_handler",
-		importer: () => import("./pocket-live-ITozwkGI.mjs")
+		importer: () => import("./pocket-live-Bec4ADLm.mjs")
 	},
 	"fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043": {
 		functionName: "loadFeed_createServerFn_handler",
-		importer: () => import("./pocket-live-ITozwkGI.mjs")
+		importer: () => import("./pocket-live-Bec4ADLm.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -6516,7 +6516,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-e0nTTW-D.mjs").then((n) => n.t),
+		import("./router-Biu5RFSJ.mjs").then((n) => n.t),
 		import("./start-D337KBoP.mjs"),
 		import("./empty-plugin-adapters-CInA4tz9.mjs")
 	]);
