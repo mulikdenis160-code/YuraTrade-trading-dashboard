@@ -1,7 +1,7 @@
-import { a as formatExpiry, i as analysisPeriodForExpiry, o as isValidExpirySeconds } from "./expiry-Wv4yeTgP.mjs";
+import { a as SIGNAL_QUOTE_WAIT_MS, c as isValidExpirySeconds, i as SIGNAL_COPY_DELAY_MS, o as analysisPeriodForExpiry, r as SIGNAL_ANALYSIS_TIMEOUT_MS, s as formatExpiry } from "./expiry-S4GaUEZi.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CT5K972H.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-7vjy6U2m.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -334,10 +334,14 @@ function getGeminiClient() {
 	if (!client || clientIdentity !== identity) {
 		client = new GoogleGenAI({
 			apiKey,
-			...model.proxyBaseUrl ? { httpOptions: {
-				apiVersion: "",
-				baseUrl: model.proxyBaseUrl
-			} } : {}
+			httpOptions: {
+				...model.proxyBaseUrl ? {
+					apiVersion: "",
+					baseUrl: model.proxyBaseUrl
+				} : {},
+				timeout: SIGNAL_ANALYSIS_TIMEOUT_MS,
+				retryOptions: { attempts: 1 }
+			}
 		});
 		clientIdentity = identity;
 	}
@@ -545,7 +549,7 @@ function marketAiApiErrorMessage(error) {
 	const name = error instanceof Error ? error.name.toLowerCase() : "";
 	if (status === 401 || status === 403) return "Gemini отклонил подключение. Проверьте API key или настройки proxy; сигнал не выдан.";
 	if (status === 429) return "Gemini временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
-	if (status === 408 || status === 504 || name.includes("timeout")) return "Анализ Gemini занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
+	if (status === 408 || status === 504 || name.includes("timeout") || name.includes("abort")) return "Анализ Gemini занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
 	if (status === 400) return "Gemini отклонил формат запроса. Проверьте настройку модели и повторите попытку.";
 	if (status === 404) return "Выбранная модель Gemini сейчас недоступна. Проверьте имя модели и повторите попытку.";
 	if (status >= 500 || name.includes("connection")) return "Сервис Gemini временно недоступен. Попробуйте ещё раз через минуту.";
@@ -564,19 +568,41 @@ function requestMarketAiCompletion(messages) {
 		config: {
 			systemInstruction: system,
 			responseMimeType: "application/json",
-			maxOutputTokens: 8192
+			maxOutputTokens: 512
 		}
 	}).then((response) => ({ choices: [{
 		message: { content: response.text || null },
 		finish_reason: String(response.candidates?.[0]?.finishReason ?? "STOP")
 	}] }));
 }
-async function requestMarketAiReviewOnce(request, baseMessages, allowedSymbols) {
+function withTimeout(request, timeoutMs) {
+	let timer;
+	const timeout = new Promise((_, reject) => {
+		timer = setTimeout(() => {
+			const error = /* @__PURE__ */ new Error(`Gemini request exceeded ${timeoutMs} ms.`);
+			error.name = "TimeoutError";
+			reject(error);
+		}, timeoutMs);
+	});
+	return Promise.race([request, timeout]).finally(() => {
+		if (timer) clearTimeout(timer);
+	});
+}
+async function requestMarketAiReviewOnce(request, baseMessages, allowedSymbols, timeoutMs = SIGNAL_ANALYSIS_TIMEOUT_MS) {
 	let choice;
+	const startedAt = performance.now();
+	let timedOut = false;
 	try {
-		choice = (await request(baseMessages)).choices[0];
+		choice = (await withTimeout(request(baseMessages), timeoutMs)).choices[0];
 	} catch (error) {
+		timedOut = error instanceof Error && error.name.toLowerCase().includes("timeout");
 		throw new Error(marketAiApiErrorMessage(error));
+	} finally {
+		console.info("[signal-ai-duration]", JSON.stringify({
+			durationMs: Math.round(performance.now() - startedAt),
+			timeoutMs,
+			timedOut
+		}));
 	}
 	const content = choice?.message.content;
 	const review = typeof content === "string" ? parseMarketAiReview(content, allowedSymbols) : null;
@@ -930,7 +956,7 @@ function subscribe(symbol) {
 		period: 1
 	}]));
 }
-function waitQuote(symbol) {
+function waitQuote(symbol, timeoutMs = 12e3) {
 	const current = quotes.get(symbol);
 	if (current && Date.now() - current.at <= 2e3) return Promise.resolve(current.price);
 	const started = Date.now();
@@ -965,20 +991,23 @@ function waitQuote(symbol) {
 			clearTimers();
 			const quote = quotes.get(symbol);
 			if (quote && Date.now() - quote.at <= 2e3) resolve(quote.price);
-			else reject(/* @__PURE__ */ new Error(`Цена по паре ${symbol} не пришла за 12 секунд. Попробуйте ещё раз.`));
-		}, 12e3);
+			else reject(/* @__PURE__ */ new Error(`Цена по паре ${symbol} не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
+		}, timeoutMs);
 	});
 }
-async function waitFreshQuote(symbol) {
-	const waitedPrice = await waitQuote(symbol);
+function freshQuoteFromCache(symbol) {
 	const quote = quotes.get(symbol);
 	if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) throw new Error(`Не удалось получить живую котировку по паре ${symbol}.`);
 	const ageMs = Date.now() - quote.at;
 	if (ageMs < 0 || ageMs > 2e4) throw new Error(`Котировка по паре ${symbol} старше 20 секунд. Сигнал не выдан.`);
 	return {
-		price: quote.price || waitedPrice,
+		price: quote.price,
 		ageMs
 	};
+}
+async function waitFreshQuote(symbol, timeoutMs = 12e3) {
+	await waitQuote(symbol, timeoutMs);
+	return freshQuoteFromCache(symbol);
 }
 function entryWindowFailure(candles, nowMs = Date.now()) {
 	const window = nextCandleEntryWindow(candles, nowMs);
@@ -1195,12 +1224,12 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 		});
 	});
 }
-async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3) {
+async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 	await ensureFeed();
 	const collected = /* @__PURE__ */ new Map();
 	let rejectedRows = 0;
 	let cursor = Math.floor(Date.now() / 1e3);
-	const maxPages = Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
+	const maxPages = pageLimit ?? Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
 	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
 		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
 		rejectedRows += history.rejectedRows;
@@ -1281,14 +1310,22 @@ function summarizeCandleCadence(series, expectedSeconds) {
 		estimatedMissingIntervals
 	};
 }
-async function feedSignal(symbol, expirySeconds) {
+async function waitUntil(timestampMs) {
+	const remainingMs = timestampMs - Date.now();
+	if (remainingMs > 0) await new Promise((resolve) => setTimeout(resolve, remainingMs));
+}
+async function feedSignal(symbol, expirySeconds, duringCopyWindow = false) {
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+	const signalReadyAtMs = Date.now() + (duringCopyWindow ? SIGNAL_COPY_DELAY_MS : 0);
+	const pipelineStartedAt = performance.now();
 	await ensureFeed();
 	const pair = pairs.get(symbol);
 	if (!pair || pair.group !== "fx" || !pair.symbol.toLowerCase().includes("otc") || pair.payout < MIN_SIGNAL_PAYOUT) throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
 	subscribe(symbol);
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-	const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
+	const historyStartedAt = performance.now();
+	const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+	const historyMs = Math.round(performance.now() - historyStartedAt);
 	const candles = history.candles;
 	console.info("[signal-history]", JSON.stringify({
 		symbol,
@@ -1299,9 +1336,10 @@ async function feedSignal(symbol, expirySeconds) {
 		lastReceivedCandle: candles.at(-1) ?? null,
 		...summarizeCandleCadence([candles], analysisSeconds)
 	}));
-	const initialWindowFailure = entryWindowFailure(candles);
-	if (initialWindowFailure) return initialWindowFailure;
-	const inputQuote = await waitFreshQuote(symbol);
+	const inputQuoteStartedAt = performance.now();
+	const inputQuote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+	const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
+	const analysisStartedAt = performance.now();
 	const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [{
 		symbol,
 		name: pair.name,
@@ -1309,18 +1347,41 @@ async function feedSignal(symbol, expirySeconds) {
 		currentPrice: inputQuote.price,
 		quoteAgeMs: inputQuote.ageMs
 	}]);
+	const analysisMs = Math.round(performance.now() - analysisStartedAt);
+	console.info("[signal-pipeline]", JSON.stringify({
+		symbol,
+		historyMs,
+		inputQuoteMs,
+		analysisMs,
+		elapsedMs: Math.round(performance.now() - pipelineStartedAt),
+		copyWindow: duringCopyWindow,
+		decision: review.decision
+	}));
 	if (review.decision === "pass") return review;
 	if (!acceptsMarketAiReview(review, [symbol])) return {
 		decision: "pass",
 		reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан."
 	};
+	await waitUntil(signalReadyAtMs);
 	const analysisWindowFailure = entryWindowFailure(candles);
 	if (analysisWindowFailure) return analysisWindowFailure;
-	const entryQuote = await waitFreshQuote(symbol);
+	const entryQuoteStartedAt = performance.now();
+	const entryQuote = freshQuoteFromCache(symbol);
+	const entryQuoteMs = Math.round(performance.now() - entryQuoteStartedAt);
 	const finalWindowFailure = entryWindowFailure(candles);
 	if (finalWindowFailure) return finalWindowFailure;
 	const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
 	signal.openPrice = entryQuote.price;
+	console.info("[signal-pipeline]", JSON.stringify({
+		symbol,
+		historyMs,
+		inputQuoteMs,
+		analysisMs,
+		entryQuoteMs,
+		elapsedMs: Math.round(performance.now() - pipelineStartedAt),
+		copyWindow: duringCopyWindow,
+		decision: "signal"
+	}));
 	return {
 		decision: "signal",
 		...signal

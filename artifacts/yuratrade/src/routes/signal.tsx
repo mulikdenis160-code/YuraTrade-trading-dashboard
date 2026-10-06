@@ -14,10 +14,16 @@ import {
 } from "@/lib/expiry";
 import {
   MAX_OVERLAYS,
+  SIGNAL_ANALYSIS_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
 import { copyPairName } from "@/lib/pair-clipboard";
+import {
+  settleSignalRequest,
+  type SettledSignalRequest,
+  waitForSignalRequest,
+} from "@/lib/signal-request";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 type Group = "fx";
@@ -180,6 +186,7 @@ function SignalCard({ search }: { search: Search }) {
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [liveMessage, setLiveMessage] = useState("");
   const settled = useRef(false);
+  const preparedSignalRequest = useRef<Promise<SettledSignalRequest<Awaited<ReturnType<typeof takeSignal>>>> | null>(null);
   const journalId = signalRecordId({
     symbol: search.symbol,
     startedAt: search.started,
@@ -229,6 +236,13 @@ function SignalCard({ search }: { search: Search }) {
   useEffect(() => {
     if (phase !== "copy") return;
     const copyUntil = Date.now() + SIGNAL_COPY_DELAY_MS;
+    preparedSignalRequest.current = settleSignalRequest(takeSignal({
+      data: {
+        symbol: search.symbol,
+        expirySeconds: search.seconds,
+        duringCopyWindow: true,
+      },
+    }));
     const update = () => {
       const remaining = Math.max(0, copyUntil - Date.now());
       setCopyRemaining(Math.ceil(remaining / 1000));
@@ -237,7 +251,7 @@ function SignalCard({ search }: { search: Search }) {
     update();
     const timer = window.setInterval(update, 100);
     return () => window.clearInterval(timer);
-  }, [phase]);
+  }, [phase, search.seconds, search.symbol]);
 
   useEffect(() => {
     if (phase !== "run" || !search.symbol) return;
@@ -311,7 +325,16 @@ function SignalCard({ search }: { search: Search }) {
   useEffect(() => {
     if (phase !== "hunt") return;
     let stop = false;
-    void takeSignal({ data: { symbol: search.symbol, expirySeconds: search.seconds } })
+    const pendingRequest = preparedSignalRequest.current
+      ?? settleSignalRequest(takeSignal({
+        data: { symbol: search.symbol, expirySeconds: search.seconds },
+      }));
+    preparedSignalRequest.current = null;
+    void waitForSignalRequest(
+      pendingRequest,
+      SIGNAL_ANALYSIS_TIMEOUT_MS,
+      t("signal.analysisTimeout"),
+    )
       .then(async (result) => {
         if (result.decision === "pass") {
           if (stop) return;
@@ -348,7 +371,7 @@ function SignalCard({ search }: { search: Search }) {
     return () => {
       stop = true;
     };
-  }, [navigate, phase, search.group, search.seconds, search.step, search.symbol]);
+  }, [navigate, phase, search.group, search.seconds, search.step, search.symbol, t]);
 
   if (!search.symbol || !search.open) {
     return (

@@ -18,17 +18,25 @@ export const readClose = createServerFn({ method: "POST" })
   });
 
 export const takeSignal = createServerFn({ method: "POST" })
-  .validator((input: { symbol: string; expirySeconds: number }) => {
+  .validator((input: {
+    symbol: string;
+    expirySeconds: number;
+    duringCopyWindow?: boolean;
+  }) => {
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     const expirySeconds = Number(input?.expirySeconds);
     if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) {
       throw new Error("Выберите пару и срок экспирации от 1 минуты до 4 часов.");
     }
-    return { symbol, expirySeconds };
+    return {
+      symbol,
+      expirySeconds,
+      duringCopyWindow: input?.duringCopyWindow === true,
+    };
   })
   .handler(async ({ data }) => {
     const { feedSignal } = await import("./pocket-live.server");
-    return feedSignal(data.symbol, data.expirySeconds);
+    return feedSignal(data.symbol, data.expirySeconds, data.duringCopyWindow);
   });
 
 export const chooseSignalPair = createServerFn({ method: "POST" })

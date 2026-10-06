@@ -25,6 +25,8 @@ import {
 import {
   MAX_QUOTE_AGE_MS,
   MIN_ENTRY_BUFFER_MS,
+  SIGNAL_COPY_DELAY_MS,
+  SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
 import { nextCandleEntryWindow } from "./signal-entry-window";
 
@@ -204,7 +206,7 @@ function subscribe(symbol: string) {
   socket.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: 1 }]));
 }
 
-function waitQuote(symbol: string) {
+function waitQuote(symbol: string, timeoutMs = 12_000) {
   const current = quotes.get(symbol);
   if (current && Date.now() - current.at <= 2000) return Promise.resolve(current.price);
   const started = Date.now();
@@ -241,13 +243,14 @@ function waitQuote(symbol: string) {
       clearTimers();
       const quote = quotes.get(symbol);
       if (quote && Date.now() - quote.at <= 2000) resolve(quote.price);
-      else reject(new Error(`Цена по паре ${symbol} не пришла за 12 секунд. Попробуйте ещё раз.`));
-    }, 12_000);
+      else reject(new Error(
+        `Цена по паре ${symbol} не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`,
+      ));
+    }, timeoutMs);
   });
 }
 
-async function waitFreshQuote(symbol: string) {
-  const waitedPrice = await waitQuote(symbol);
+function freshQuoteFromCache(symbol: string) {
   const quote = quotes.get(symbol);
   if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
     throw new Error(`Не удалось получить живую котировку по паре ${symbol}.`);
@@ -257,9 +260,14 @@ async function waitFreshQuote(symbol: string) {
     throw new Error(`Котировка по паре ${symbol} старше 20 секунд. Сигнал не выдан.`);
   }
   return {
-    price: quote.price || waitedPrice,
+    price: quote.price,
     ageMs,
   };
+}
+
+async function waitFreshQuote(symbol: string, timeoutMs = 12_000) {
+  await waitQuote(symbol, timeoutMs);
+  return freshQuoteFromCache(symbol);
 }
 
 function entryWindowFailure(candles: HistoricalCandle[], nowMs = Date.now()): PassResult | null {
@@ -517,12 +525,14 @@ async function loadCandles(
   symbol: string,
   seconds: number,
   pageTimeoutMs = 12_000,
+  pageLimit?: number,
 ): Promise<{ candles: HistoricalCandle[]; rejectedRows: number }> {
   await ensureFeed();
   const collected = new Map<number, HistoricalCandle>();
   let rejectedRows = 0;
   let cursor = Math.floor(Date.now() / 1000);
-  const maxPages = Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
+  const maxPages = pageLimit
+    ?? Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
   for (let page = 0; page < maxPages && collected.size < DIRECT_AI_HISTORY_CANDLES; page += 1) {
     const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
     rejectedRows += history.rejectedRows;
@@ -620,8 +630,21 @@ function summarizeCandleCadence(series: HistoricalCandle[][], expectedSeconds: n
   };
 }
 
-export async function feedSignal(symbol: string, expirySeconds: number): Promise<FeedSignalResult> {
+async function waitUntil(timestampMs: number) {
+  const remainingMs = timestampMs - Date.now();
+  if (remainingMs > 0) {
+    await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
+  }
+}
+
+export async function feedSignal(
+  symbol: string,
+  expirySeconds: number,
+  duringCopyWindow = false,
+): Promise<FeedSignalResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+  const signalReadyAtMs = Date.now() + (duringCopyWindow ? SIGNAL_COPY_DELAY_MS : 0);
+  const pipelineStartedAt = performance.now();
   await ensureFeed();
   const pair = pairs.get(symbol);
   if (
@@ -634,7 +657,14 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   }
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
+  const historyStartedAt = performance.now();
+  const history = await loadCandles(
+    symbol,
+    analysisSeconds,
+    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
+    1,
+  );
+  const historyMs = Math.round(performance.now() - historyStartedAt);
   const candles = history.candles;
   console.info("[signal-history]", JSON.stringify({
     symbol,
@@ -645,9 +675,10 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
     lastReceivedCandle: candles.at(-1) ?? null,
     ...summarizeCandleCadence([candles], analysisSeconds),
   }));
-  const initialWindowFailure = entryWindowFailure(candles);
-  if (initialWindowFailure) return initialWindowFailure;
-  const inputQuote = await waitFreshQuote(symbol);
+  const inputQuoteStartedAt = performance.now();
+  const inputQuote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+  const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
+  const analysisStartedAt = performance.now();
   const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [
     {
       symbol,
@@ -657,17 +688,40 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
       quoteAgeMs: inputQuote.ageMs,
     },
   ]);
+  const analysisMs = Math.round(performance.now() - analysisStartedAt);
+  console.info("[signal-pipeline]", JSON.stringify({
+    symbol,
+    historyMs,
+    inputQuoteMs,
+    analysisMs,
+    elapsedMs: Math.round(performance.now() - pipelineStartedAt),
+    copyWindow: duringCopyWindow,
+    decision: review.decision,
+  }));
   if (review.decision === "pass") return review;
   if (!acceptsMarketAiReview(review, [symbol])) {
     return { decision: "pass", reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан." };
   }
+  await waitUntil(signalReadyAtMs);
   const analysisWindowFailure = entryWindowFailure(candles);
   if (analysisWindowFailure) return analysisWindowFailure;
-  const entryQuote = await waitFreshQuote(symbol);
+  const entryQuoteStartedAt = performance.now();
+  const entryQuote = freshQuoteFromCache(symbol);
+  const entryQuoteMs = Math.round(performance.now() - entryQuoteStartedAt);
   const finalWindowFailure = entryWindowFailure(candles);
   if (finalWindowFailure) return finalWindowFailure;
   const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
   signal.openPrice = entryQuote.price;
+  console.info("[signal-pipeline]", JSON.stringify({
+    symbol,
+    historyMs,
+    inputQuoteMs,
+    analysisMs,
+    entryQuoteMs,
+    elapsedMs: Math.round(performance.now() - pipelineStartedAt),
+    copyWindow: duringCopyWindow,
+    decision: "signal",
+  }));
   return { decision: "signal", ...signal };
 }
 

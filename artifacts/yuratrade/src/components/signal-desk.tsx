@@ -6,7 +6,12 @@ import { isAdminId, usePocket } from "@/lib/pocket";
 import { readSignalJournal, recentlyUsedSignalSymbols } from "@/lib/signal-journal";
 import { AnalysisModal } from "@/components/analysis-modal";
 import { copyPairName } from "@/lib/pair-clipboard";
-import { SIGNAL_COPY_DELAY_MS, SIGNAL_COPY_DELAY_SECONDS } from "@/lib/signal-config";
+import {
+  SIGNAL_ANALYSIS_TIMEOUT_MS,
+  SIGNAL_COPY_DELAY_MS,
+  SIGNAL_COPY_DELAY_SECONDS,
+} from "@/lib/signal-config";
+import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import {
   analysisPeriodForExpiry,
   EXPIRY_OPTIONS_MINUTES,
@@ -165,12 +170,21 @@ export function SignalDesk() {
       setCopyRemaining(SIGNAL_COPY_DELAY_SECONDS);
       setCopiedPair(false);
       setPhase("copy");
+      const signalRequest = settleSignalRequest(takeSignal({
+        data: {
+          symbol: selected.symbol,
+          expirySeconds: selected.seconds,
+          duringCopyWindow: true,
+        },
+      }));
       await new Promise<void>((resolve) => window.setTimeout(resolve, SIGNAL_COPY_DELAY_MS));
       if (attemptRef.current !== attempt) return;
       setPhase("analysis");
-      const result = await takeSignal({
-        data: { symbol: selected.symbol, expirySeconds: selected.seconds },
-      });
+      const result = await waitForSignalRequest(
+        signalRequest,
+        SIGNAL_ANALYSIS_TIMEOUT_MS,
+        t("signal.analysisTimeout"),
+      );
       if (attemptRef.current !== attempt) return;
       if (result.decision === "pass") {
         setNotice(result.reason);

@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, n as require_react_dom } from "../_libs/@tanstack/react-router+[...].mjs";
-import { w as useLanguage } from "./router-Czlfb_jQ.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pair-clipboard-DBem5KiR.js
+import { w as useLanguage } from "./router-DEDqTRii.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-request-q3TKsCT_.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var import_react_dom = require_react_dom();
@@ -126,5 +126,27 @@ function copyPairName(name) {
 	if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(pairName);
 	return Promise.reject(/* @__PURE__ */ new Error("copy"));
 }
+function settleSignalRequest(request) {
+	return request.then((value) => ({
+		ok: true,
+		value
+	}), (error) => ({
+		ok: false,
+		error
+	}));
+}
+function waitForSignalRequest(request, timeoutMs, timeoutMessage) {
+	let timer;
+	const completed = request.then((outcome) => {
+		if (outcome.ok) return outcome.value;
+		throw outcome.error;
+	});
+	const timedOut = new Promise((_, reject) => {
+		timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+	});
+	return Promise.race([completed, timedOut]).finally(() => {
+		if (timer) clearTimeout(timer);
+	});
+}
 //#endregion
-export { copyPairName as n, AnalysisModal as t };
+export { waitForSignalRequest as i, copyPairName as n, settleSignalRequest as r, AnalysisModal as t };

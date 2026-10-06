@@ -13,6 +13,7 @@ import {
   requestMarketAiReviewOnce,
 } from "./market-ai.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
+import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
 test("direct market analysis uses Gemini 3.6 Flash when no proxy is configured", () => {
   assert.equal(DIRECT_AI_MODEL, "gemini-3.6-flash");
@@ -470,4 +471,13 @@ test("an unparseable Gemini response fails after exactly one model request", asy
     /не удалось проверить/,
   );
   assert.equal(calls, 1);
+});
+
+test("a Gemini analysis request is stopped at the five-second budget", async () => {
+  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 5_000);
+  const request = async () => new Promise<{ choices: never[] }>(() => {});
+  await assert.rejects(
+    requestMarketAiReviewOnce(request, [], ["EURUSD_otc"], 10),
+    /занял слишком много времени/,
+  );
 });

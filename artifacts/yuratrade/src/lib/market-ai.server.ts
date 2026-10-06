@@ -5,6 +5,7 @@ import {
   buildMarketAnalysisContext,
 } from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
+import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
 export const DIRECT_AI_MODEL = "gemini-3.6-flash";
 export const DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
@@ -102,9 +103,13 @@ function getGeminiClient() {
   if (!client || clientIdentity !== identity) {
     client = new GoogleGenAI({
       apiKey,
-      ...(model.proxyBaseUrl
-        ? { httpOptions: { apiVersion: "", baseUrl: model.proxyBaseUrl } }
-        : {}),
+      httpOptions: {
+        ...(model.proxyBaseUrl
+          ? { apiVersion: "", baseUrl: model.proxyBaseUrl }
+          : {}),
+        timeout: SIGNAL_ANALYSIS_TIMEOUT_MS,
+        retryOptions: { attempts: 1 },
+      },
     });
     clientIdentity = identity;
   }
@@ -275,7 +280,7 @@ export function marketAiApiErrorMessage(error: unknown) {
   if (status === 429) {
     return "Gemini временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
   }
-  if (status === 408 || status === 504 || name.includes("timeout")) {
+  if (status === 408 || status === 504 || name.includes("timeout") || name.includes("abort")) {
     return "Анализ Gemini занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
   }
   if (status === 400) {
@@ -320,7 +325,7 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
     config: {
       systemInstruction: system,
       responseMimeType: "application/json",
-      maxOutputTokens: 8192,
+      maxOutputTokens: 512,
     },
   }).then((response) => ({
     choices: [{
@@ -330,16 +335,40 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
   }));
 }
 
+function withTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`Gemini request exceeded ${timeoutMs} ms.`);
+      error.name = "TimeoutError";
+      reject(error);
+    }, timeoutMs);
+  });
+  return Promise.race([request, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export async function requestMarketAiReviewOnce(
   request: ReviewCompletionRequest,
   baseMessages: ReviewMessage[],
   allowedSymbols: string[],
+  timeoutMs = SIGNAL_ANALYSIS_TIMEOUT_MS,
 ): Promise<MarketAiReview> {
   let choice: ReviewChoice | undefined;
+  const startedAt = performance.now();
+  let timedOut = false;
   try {
-    choice = (await request(baseMessages)).choices[0];
+    choice = (await withTimeout(request(baseMessages), timeoutMs)).choices[0];
   } catch (error) {
+    timedOut = error instanceof Error && error.name.toLowerCase().includes("timeout");
     throw new Error(marketAiApiErrorMessage(error));
+  } finally {
+    console.info("[signal-ai-duration]", JSON.stringify({
+      durationMs: Math.round(performance.now() - startedAt),
+      timeoutMs,
+      timedOut,
+    }));
   }
 
   const content = choice?.message.content;

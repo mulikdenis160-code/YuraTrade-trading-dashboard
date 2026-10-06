@@ -1,9 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { r as SIGNAL_COPY_DELAY_MS } from "./expiry-Wv4yeTgP.mjs";
+import { i as SIGNAL_COPY_DELAY_MS, r as SIGNAL_ANALYSIS_TIMEOUT_MS } from "./expiry-S4GaUEZi.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as formatExpiryForLanguage, g as takeSignal, h as readClose, l as signalRecordId, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-Czlfb_jQ.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DBem5KiR.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-D0K4moaG.js
+import { C as formatExpiryForLanguage, g as takeSignal, h as readClose, l as signalRecordId, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-DEDqTRii.mjs";
+import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-q3TKsCT_.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-Bm1JU8sn.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -324,6 +324,7 @@ function SignalCard({ search }) {
 	const [liveStatus, setLiveStatus] = (0, import_react.useState)("connecting");
 	const [liveMessage, setLiveMessage] = (0, import_react.useState)("");
 	const settled = (0, import_react.useRef)(false);
+	const preparedSignalRequest = (0, import_react.useRef)(null);
 	const journalId = signalRecordId({
 		symbol: search.symbol,
 		startedAt: search.started,
@@ -385,6 +386,11 @@ function SignalCard({ search }) {
 	(0, import_react.useEffect)(() => {
 		if (phase !== "copy") return;
 		const copyUntil = Date.now() + SIGNAL_COPY_DELAY_MS;
+		preparedSignalRequest.current = settleSignalRequest(takeSignal({ data: {
+			symbol: search.symbol,
+			expirySeconds: search.seconds,
+			duringCopyWindow: true
+		} }));
 		const update = () => {
 			const remaining = Math.max(0, copyUntil - Date.now());
 			setCopyRemaining(Math.ceil(remaining / 1e3));
@@ -393,7 +399,11 @@ function SignalCard({ search }) {
 		update();
 		const timer = window.setInterval(update, 100);
 		return () => window.clearInterval(timer);
-	}, [phase]);
+	}, [
+		phase,
+		search.seconds,
+		search.symbol
+	]);
 	(0, import_react.useEffect)(() => {
 		if (phase !== "run" || !search.symbol) return;
 		const source = new EventSource(`/api/ticks?symbol=${encodeURIComponent(search.symbol)}`);
@@ -463,10 +473,12 @@ function SignalCard({ search }) {
 	(0, import_react.useEffect)(() => {
 		if (phase !== "hunt") return;
 		let stop = false;
-		takeSignal({ data: {
+		const pendingRequest = preparedSignalRequest.current ?? settleSignalRequest(takeSignal({ data: {
 			symbol: search.symbol,
 			expirySeconds: search.seconds
-		} }).then(async (result) => {
+		} }));
+		preparedSignalRequest.current = null;
+		waitForSignalRequest(pendingRequest, SIGNAL_ANALYSIS_TIMEOUT_MS, t("signal.analysisTimeout")).then(async (result) => {
 			if (result.decision === "pass") {
 				if (stop) return;
 				setPhase("no-signal");
@@ -507,7 +519,8 @@ function SignalCard({ search }) {
 		search.group,
 		search.seconds,
 		search.step,
-		search.symbol
+		search.symbol,
+		t
 	]);
 	if (!search.symbol || !search.open) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto max-w-md",

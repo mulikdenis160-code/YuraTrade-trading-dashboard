@@ -1,11 +1,11 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { i as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, r as SIGNAL_COPY_DELAY_MS } from "./expiry-Wv4yeTgP.mjs";
+import { i as SIGNAL_COPY_DELAY_MS, n as EXPIRY_OPTIONS_MINUTES, o as analysisPeriodForExpiry, r as SIGNAL_ANALYSIS_TIMEOUT_MS } from "./expiry-S4GaUEZi.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, i as readSignalJournal, m as loadFeed, p as chooseSignalPair, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-Czlfb_jQ.mjs";
-import { t as StatRow } from "./stats-CcVyCYsI.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DBem5KiR.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-DviOnHb-.js
+import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, i as readSignalJournal, m as loadFeed, p as chooseSignalPair, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-DEDqTRii.mjs";
+import { t as StatRow } from "./stats-CyHpoTGu.mjs";
+import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-q3TKsCT_.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BbtLoJjL.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -127,13 +127,15 @@ function SignalDesk() {
 			setCopyRemaining(10);
 			setCopiedPair(false);
 			setPhase("copy");
+			const signalRequest = settleSignalRequest(takeSignal({ data: {
+				symbol: selected.symbol,
+				expirySeconds: selected.seconds,
+				duringCopyWindow: true
+			} }));
 			await new Promise((resolve) => window.setTimeout(resolve, SIGNAL_COPY_DELAY_MS));
 			if (attemptRef.current !== attempt) return;
 			setPhase("analysis");
-			const result = await takeSignal({ data: {
-				symbol: selected.symbol,
-				expirySeconds: selected.seconds
-			} });
+			const result = await waitForSignalRequest(signalRequest, SIGNAL_ANALYSIS_TIMEOUT_MS, t("signal.analysisTimeout"));
 			if (attemptRef.current !== attempt) return;
 			if (result.decision === "pass") {
 				setNotice(result.reason);
