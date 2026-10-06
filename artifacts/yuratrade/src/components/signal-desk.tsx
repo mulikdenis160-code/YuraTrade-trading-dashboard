@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { loadFeed, takeBest } from "@/lib/pocket-live";
+import { chooseSignalPair, loadFeed, takeSignal } from "@/lib/pocket-live";
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { readSignalJournal, recentlyUsedSignalSymbols } from "@/lib/signal-journal";
 import { AnalysisModal } from "@/components/analysis-modal";
+import { copyPairName } from "@/lib/pair-clipboard";
+import { SIGNAL_COPY_DELAY_MS, SIGNAL_COPY_DELAY_SECONDS } from "@/lib/signal-config";
 import {
   analysisPeriodForExpiry,
   EXPIRY_OPTIONS_MINUTES,
 } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
-type PreparedSignal = Extract<Awaited<ReturnType<typeof takeBest>>, { decision: "signal" }>;
+type PairChoice = Awaited<ReturnType<typeof chooseSignalPair>>;
+type PreparedSignal = Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }>
+  & Pick<PairChoice, "symbol" | "group">
+  & { seconds: number };
+type PendingPair = PairChoice & {
+  attempt: number;
+  seconds: number;
+  copyUntil: number;
+};
 
 export function SignalDesk() {
   const navigate = useNavigate();
@@ -20,10 +30,13 @@ export function SignalDesk() {
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
   const [feedStatus, setFeedStatus] = useState<"connecting" | "connected" | "error">("connecting");
-  const [phase, setPhase] = useState<"idle" | "search">("idle");
+  const [phase, setPhase] = useState<"idle" | "choosing" | "copy" | "analysis">("idle");
   const [feedError, setFeedError] = useState("");
   const [searchError, setSearchError] = useState("");
   const [notice, setNotice] = useState("");
+  const [pendingPair, setPendingPair] = useState<PendingPair | null>(null);
+  const [copyRemaining, setCopyRemaining] = useState(SIGNAL_COPY_DELAY_SECONDS);
+  const [copiedPair, setCopiedPair] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [used, setUsed] = useState(0);
   const [expiryMinutes, setExpiryMinutes] = useState(2);
@@ -32,6 +45,17 @@ export function SignalDesk() {
   useEffect(() => () => {
     attemptRef.current += 1;
   }, []);
+
+  useEffect(() => {
+    if (phase !== "copy" || !pendingPair) return;
+    const update = () => {
+      const remaining = Math.max(0, pendingPair.copyUntil - Date.now());
+      setCopyRemaining(Math.ceil(remaining / 1000));
+    };
+    update();
+    const timer = window.setInterval(update, 100);
+    return () => window.clearInterval(timer);
+  }, [pendingPair, phase]);
 
   useEffect(() => {
     let stop = false;
@@ -103,29 +127,61 @@ export function SignalDesk() {
   const showSearchError = (cause: unknown, attempt: number) => {
     if (attemptRef.current !== attempt) return;
     setPhase("idle");
+    setPendingPair(null);
     setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
+  };
+
+  const copySelectedPair = async () => {
+    if (!pendingPair) return;
+    try {
+      await copyPairName(pendingPair.name);
+      if (attemptRef.current === pendingPair.attempt) setCopiedPair(true);
+    } catch {
+      setCopiedPair(false);
+    }
   };
 
   const ask = async () => {
     if (phase !== "idle" || blocked || !ready) return;
     const attempt = ++attemptRef.current;
-    setPhase("search");
+    setPhase("choosing");
     setSearchError("");
     setNotice("");
+    setPendingPair(null);
     try {
-      const candidate = await takeBest({
+      const candidate = await chooseSignalPair({
         data: {
-          expirySeconds,
           excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal()),
         },
       });
       if (attemptRef.current !== attempt) return;
-      if (candidate.decision === "pass") {
-        setNotice(candidate.reason);
+      const selected = {
+        ...candidate,
+        attempt,
+        seconds: expirySeconds,
+        copyUntil: Date.now() + SIGNAL_COPY_DELAY_MS,
+      };
+      setPendingPair(selected);
+      setCopyRemaining(SIGNAL_COPY_DELAY_SECONDS);
+      setCopiedPair(false);
+      setPhase("copy");
+      await new Promise<void>((resolve) => window.setTimeout(resolve, SIGNAL_COPY_DELAY_MS));
+      if (attemptRef.current !== attempt) return;
+      setPhase("analysis");
+      const result = await takeSignal({
+        data: { symbol: selected.symbol, expirySeconds: selected.seconds },
+      });
+      if (attemptRef.current !== attempt) return;
+      if (result.decision === "pass") {
+        setNotice(result.reason);
+        setPendingPair(null);
         setPhase("idle");
         return;
       }
-      await openSignal(candidate, attempt);
+      await openSignal(
+        { ...result, symbol: selected.symbol, group: selected.group, seconds: selected.seconds },
+        attempt,
+      );
     } catch (cause) {
       showSearchError(cause, attempt);
     }
@@ -192,7 +248,7 @@ export function SignalDesk() {
           </p>
         </section>
         <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked)} onClick={() => void ask()}>
-          {phase === "search" ? t("signal.checking") : t("signal.get")}
+          {phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")}
         </button>
         <p className={`mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`}>
           {blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", { used, cap }))}
@@ -249,7 +305,19 @@ export function SignalDesk() {
           </section>
         ) : null}
       </section>
-      {phase === "search" ? <AnalysisModal pair={t("home.eyebrow")} expiry={expiryLabel(expirySeconds)} /> : null}
+      {phase === "choosing" ? <AnalysisModal pair={t("home.eyebrow")} expiry={expiryLabel(expirySeconds)} /> : null}
+      {phase === "copy" && pendingPair ? (
+        <AnalysisModal
+          pair={pendingPair.name}
+          expiry={expiryLabel(pendingPair.seconds)}
+          countdown={copyRemaining}
+          copied={copiedPair}
+          onCopy={() => void copySelectedPair()}
+        />
+      ) : null}
+      {phase === "analysis" && pendingPair ? (
+        <AnalysisModal pair={pendingPair.name} expiry={expiryLabel(pendingPair.seconds)} />
+      ) : null}
     </div>
   );
 }

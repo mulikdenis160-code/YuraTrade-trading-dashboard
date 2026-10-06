@@ -50,6 +50,10 @@ export type FeedPair = {
   group: PairGroup;
 };
 
+export type FeedSignalPair = Pick<FeedPair, "symbol" | "name" | "payout"> & {
+  group: "fx";
+};
+
 export type FeedSignal = {
   name: string;
   payout: number;
@@ -431,6 +435,41 @@ export async function feedSnapshot() {
   };
 }
 
+function rankedSignalPairs() {
+  return [...pairs.values()]
+    .filter(
+      (pair) =>
+        pair.group === "fx" &&
+        pair.symbol.toLowerCase().includes("otc") &&
+        pair.payout >= MIN_SIGNAL_PAYOUT,
+    )
+    .sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name))
+    .slice(0, MAX_ELIGIBLE_PAIRS);
+}
+
+function selectRotatingSignalPair(
+  ranked: FeedPair[],
+  excludedSymbols: string[] = [],
+) {
+  const excluded = new Set(excludedSymbols.map((symbol) => symbol.toLowerCase()));
+  for (let index = 0; index < ranked.length; index += 1) {
+    const next = selectSignalCandidates(ranked)[0];
+    if (next && !excluded.has(next.symbol.toLowerCase())) return next;
+  }
+  return selectSignalCandidates(ranked)[0] ?? null;
+}
+
+export async function feedNextPair(excludedSymbols: string[] = []): Promise<FeedSignalPair> {
+  await ensureFeed();
+  const ranked = rankedSignalPairs();
+  if (ranked.length === 0) {
+    throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
+  }
+  const pair = selectRotatingSignalPair(ranked, excludedSymbols.slice(0, 24));
+  if (!pair) throw new Error("Не удалось выбрать валютную пару.");
+  return { symbol: pair.symbol, name: pair.name, payout: pair.payout, group: "fx" };
+}
+
 async function loadHistoryPage(
   symbol: string,
   seconds: number,
@@ -678,28 +717,12 @@ export async function feedBest(
     feedMs = performance.now() - feedStartedAt;
     const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
     expectedCandleSeconds = analysisSeconds;
-    const ranked = [...pairs.values()]
-      .filter(
-        (pair) =>
-          pair.group === "fx" &&
-          pair.symbol.toLowerCase().includes("otc") &&
-          pair.payout >= MIN_SIGNAL_PAYOUT,
-      )
-      .sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name))
-      .slice(0, MAX_ELIGIBLE_PAIRS);
+    const ranked = rankedSignalPairs();
     if (ranked.length === 0) {
       throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
     }
-    const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
-    let pool: FeedPair[] = [];
-    for (let index = 0; index < ranked.length; index += 1) {
-      const next = selectSignalCandidates(ranked)[0];
-      if (next && !excluded.has(next.symbol.toLowerCase())) {
-        pool = [next];
-        break;
-      }
-    }
-    if (pool.length === 0) pool = selectSignalCandidates(ranked);
+    const nextPair = selectRotatingSignalPair(ranked, excludedSymbols.slice(0, 24));
+    const pool = nextPair ? [nextPair] : [];
     poolSize = pool.length;
     if (pool.length === 0) {
       throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");

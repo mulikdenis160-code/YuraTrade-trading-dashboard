@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
+import { i as analysisPeriodForExpiry, o as isValidExpirySeconds, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-Wv4yeTgP.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
-import { a as isValidExpirySeconds, r as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-JyfywvSv.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-CmiJ6EHd.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-DYel_wu5.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -960,9 +960,9 @@ var copy = {
 		"Same pair. Attempts left: {count}"
 	],
 	"common.recoveryStop": [
-		"Обе дополнительные попытки перекрытия использованы. Проверьте журнал перед следующим запросом.",
-		"Обидві додаткові спроби перекриття використані. Перевірте журнал перед наступним запитом.",
-		"Both additional overlay attempts have been used. Review the journal before requesting another signal."
+		"Все три перекрытия использованы. Проверьте журнал перед следующим запросом.",
+		"Усі три перекриття використано. Перевірте журнал перед наступним запитом.",
+		"All three overlays have been used. Review the journal before requesting another signal."
 	],
 	"common.skipEntry": [
 		"Вход пропущен",
@@ -1416,11 +1416,11 @@ var levels = [
 			"Короткое пояснение, почему взята эта сторона.",
 			"Анимация победы, если цена закрылась в нужную сторону.",
 			"Ничья, если цена не сдвинулась: возврат и без перекрытия.",
-			"Одно перекрытие после проигрыша, не серия без конца.",
-			"10 секунд, чтобы подготовиться к перекрытию.",
+			"До трёх перекрытий после проигрышей; ничья не запускает перекрытие.",
+			"10 секунд, чтобы скопировать пару перед сигналом и каждым перекрытием.",
 			"Только валютные пары, включая OTC.",
 			"В конце названия пары стоит OTC.",
-			"Кнопка копирует полное имя пары.",
+			"Кнопка копирует название пары без завершающей метки OTC.",
 			"Сроки 1, 3, 5 и 15 минут.",
 			"Таймер до конца экспирации.",
 			"Калькулятор риска на главной для размера входа."
@@ -1449,8 +1449,8 @@ var levels = [
 			"Сравнение импульса вверх и импульса вниз.",
 			"Текст говорит, чего не хватило обратной стороне.",
 			"Пометка, если до экспирации входить уже поздно.",
-			"Два перекрытия, у каждого свой разбор, не копия первого.",
-			"После второго проигрыша серия останавливается.",
+			"До трёх перекрытий, у каждого свой разбор той же пары.",
+			"После третьего проигрыша серия останавливается.",
 			"Живая точка на графике отдельно от исторической свечи.",
 			"Более длинная карточка: RSI, средняя, диапазон, свечи, наклон.",
 			"Подсказка размера ставки из калькулятора рядом со входом."
@@ -1461,7 +1461,7 @@ var levels = [
 		name: "Апекс",
 		deposit: 500,
 		tag: "Глубокий",
-		lead: "Полный разбор окна, запас до границы и жёсткий пропуск слабого сценария. Три перекрытия и стоп.",
+		lead: "Полный разбор окна, запас до границы и жёсткий пропуск слабого сценария. До трёх перекрытий на всех уровнях.",
 		daily: null,
 		points: [
 			"Сигналы без дневного лимита.",
@@ -1483,7 +1483,7 @@ var levels = [
 			"Строка уверенности: сильный, средний или слабый сценарий.",
 			"Ничья описана отдельно: это возврат, не победа и не перекрытие.",
 			"Три перекрытия, каждое с новым разбором той же пары.",
-			"10 секунд подготовки перед каждым следующим входом.",
+			"10 секунд, чтобы скопировать пару перед первым сигналом и каждым перекрытием.",
 			"После третьего проигрыша четвёртого сигнала нет.",
 			"План серии смотрит на калькулятор, а не на желание отбить.",
 			"Приоритет чистого импульса над красивой, но спорной свечой.",
@@ -1547,7 +1547,10 @@ var takeSignal = createServerFn({ method: "POST" }).validator((input) => {
 		expirySeconds
 	};
 }).handler(createSsrRpc("e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857"));
-var takeBest = createServerFn({ method: "POST" }).validator((input) => {
+var chooseSignalPair = createServerFn({ method: "POST" }).validator((input) => {
+	return { excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : [] };
+}).handler(createSsrRpc("4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e"));
+createServerFn({ method: "POST" }).validator((input) => {
 	const expirySeconds = Number(input?.expirySeconds);
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
 	return {
@@ -1962,7 +1965,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-CKJ-9h5s.css";
+var styles_default = "/assets/styles-DZSXiB7y.css";
 var Route$6 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -2017,15 +2020,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-YRr0hxLo.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-BtbU9GLB.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-BG8h1xZQ.mjs");
+var $$splitComponentImporter$3 = () => import("./history-B03VzJMN.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-BFRLf2E8.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-D68MlRs3.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-BJ-XBcXG.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-CYSACu12.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-wVgzAr_x.mjs");
+var $$splitComponentImporter = () => import("./signal-Bf8OzzvI.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2070,7 +2073,7 @@ var Route$1 = createFileRoute("/signal")({
 			note: typeof search.note === "string" ? search.note : "",
 			bars: readBars(search.bars),
 			aiConfidence: Number.isFinite(parsedConfidence) ? Math.min(100, Math.max(0, Math.round(parsedConfidence))) : null,
-			step: Math.min(2, Math.max(0, Number(search.step) || 0)),
+			step: Math.min(3, Math.max(0, Number(search.step) || 0)),
 			started: Number(search.started) || Date.now()
 		};
 	},
@@ -2079,7 +2082,7 @@ var Route$1 = createFileRoute("/signal")({
 var Route = createFileRoute("/api/ticks")({ server: { handlers: { GET: async ({ request }) => {
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-KRjYVtSl.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-C9Cng8Ez.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2161,4 +2164,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { formatExpiryForLanguage as C, usePocket as S, levelForBalance as _, recentlyUsedSignalSymbols as a, signalsUsedToday as b, signalJournalCsv as c, summarizeByMarket as d, summarizeSignals as f, takeSignal as g, takeBest as h, readSignalJournal as i, signalRecordId as l, readClose as m, Route$1 as n, recordSignalOutcome as o, loadFeed as p, markExpiredPendingSignals as r, recordSignalStarted as s, router_exports as t, subscribeToSignalJournal as u, levels as v, useLanguage as w, isAdminId as x, markSignalUsed as y };
+export { formatExpiryForLanguage as C, usePocket as S, levelForBalance as _, recentlyUsedSignalSymbols as a, signalsUsedToday as b, signalJournalCsv as c, summarizeByMarket as d, summarizeSignals as f, takeSignal as g, readClose as h, readSignalJournal as i, signalRecordId as l, loadFeed as m, Route$1 as n, recordSignalOutcome as o, chooseSignalPair as p, markExpiredPendingSignals as r, recordSignalStarted as s, router_exports as t, subscribeToSignalJournal as u, levels as v, useLanguage as w, isAdminId as x, markSignalUsed as y };

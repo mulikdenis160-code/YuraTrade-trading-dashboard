@@ -31,6 +31,25 @@ export const takeSignal = createServerFn({ method: "POST" })
     return feedSignal(data.symbol, data.expirySeconds);
   });
 
+export const chooseSignalPair = createServerFn({ method: "POST" })
+  .validator((input: { excludedSymbols?: unknown }) => {
+    const excludedSymbols = Array.isArray(input?.excludedSymbols)
+      ? [...new Set(
+          input.excludedSymbols
+            .filter(
+              (symbol): symbol is string =>
+                typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim()),
+            )
+            .map((symbol) => symbol.trim()),
+        )].slice(0, 24)
+      : [];
+    return { excludedSymbols };
+  })
+  .handler(async ({ data }) => {
+    const { feedNextPair } = await import("./pocket-live.server");
+    return feedNextPair(data.excludedSymbols);
+  });
+
 export const takeBest = createServerFn({ method: "POST" })
   .validator((input: { expirySeconds: number; excludedSymbols?: unknown }) => {
     const expirySeconds = Number(input?.expirySeconds);

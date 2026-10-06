@@ -12,7 +12,12 @@ import {
   analysisPeriodForExpiry,
   isValidExpirySeconds,
 } from "@/lib/expiry";
-import { MAX_OVERLAYS } from "@/lib/signal-config";
+import {
+  MAX_OVERLAYS,
+  SIGNAL_COPY_DELAY_MS,
+  SIGNAL_COPY_DELAY_SECONDS,
+} from "@/lib/signal-config";
+import { copyPairName } from "@/lib/pair-clipboard";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 type Group = "fx";
@@ -129,31 +134,6 @@ function digitsOf(price: number) {
   return 5;
 }
 
-function copyName(text: string) {
-  const pairName = text.replace(/\s+OTC$/i, "").trim();
-  const area = document.createElement("textarea");
-  area.value = pairName;
-  area.setAttribute("readonly", "");
-  area.style.position = "fixed";
-  area.style.top = "0";
-  area.style.left = "0";
-  area.style.opacity = "0";
-  document.body.appendChild(area);
-  area.focus();
-  area.select();
-  area.setSelectionRange(0, pairName.length);
-  let copied = false;
-  try {
-    copied = document.execCommand("copy");
-  } catch {
-    copied = false;
-  }
-  area.remove();
-  if (copied) return Promise.resolve();
-  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(pairName);
-  return Promise.reject(new Error("copy"));
-}
-
 function clock(ms: number) {
   const total = Math.ceil(ms / 1000);
   const minutes = Math.floor(total / 60);
@@ -190,8 +170,9 @@ function SignalCard({ search }: { search: Search }) {
   const navigate = useNavigate();
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
   const [now, setNow] = useState(() => Date.now());
-  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "hunt" | "stop" | "no-signal">("run");
+  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "copy" | "hunt" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
+  const [copyRemaining, setCopyRemaining] = useState(SIGNAL_COPY_DELAY_SECONDS);
   const [close, setClose] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [journalWarning, setJournalWarning] = useState("");
@@ -207,6 +188,15 @@ function SignalCard({ search }: { search: Search }) {
   const until = search.started + search.seconds * 1000;
   const left = Math.max(0, until - now);
   const up = search.direction === "call";
+  const copyCurrentPair = async () => {
+    try {
+      await copyPairName(search.name);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   useEffect(() => {
     if (!search.symbol || !search.open) return;
@@ -233,6 +223,19 @@ function SignalCard({ search }: { search: Search }) {
   useEffect(() => {
     if (phase !== "run") return;
     const timer = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(timer);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "copy") return;
+    const copyUntil = Date.now() + SIGNAL_COPY_DELAY_MS;
+    const update = () => {
+      const remaining = Math.max(0, copyUntil - Date.now());
+      setCopyRemaining(Math.ceil(remaining / 1000));
+      if (remaining <= 0) setPhase("hunt");
+    };
+    update();
+    const timer = window.setInterval(update, 100);
     return () => window.clearInterval(timer);
   }, [phase]);
 
@@ -288,7 +291,15 @@ function SignalCard({ search }: { search: Search }) {
           setPhase("draw");
           return;
         }
-        setPhase(won ? "win" : search.step >= MAX_OVERLAYS ? "stop" : "hunt");
+        if (won) {
+          setPhase("win");
+        } else if (search.step >= MAX_OVERLAYS) {
+          setPhase("stop");
+        } else {
+          setCopied(false);
+          setCopyRemaining(SIGNAL_COPY_DELAY_SECONDS);
+          setPhase("copy");
+        }
       })
       .catch((cause: unknown) => {
         setPhase("run");
@@ -394,14 +405,7 @@ function SignalCard({ search }: { search: Search }) {
               <button
                 type="button"
                 className="press min-h-10 shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-blue-soft"
-                onClick={() => {
-                  void copyName(search.name)
-                    .then(() => {
-                      setCopied(true);
-                      window.setTimeout(() => setCopied(false), 1400);
-                    })
-                    .catch(() => setCopied(false));
-                }}
+                onClick={() => void copyCurrentPair()}
               >
                 {copied ? t("common.copied") : t("common.copy")}
               </button>
@@ -527,6 +531,15 @@ function SignalCard({ search }: { search: Search }) {
         </div>
       ) : null}
 
+      {phase === "copy" ? (
+        <AnalysisModal
+          pair={search.name}
+          expiry={expiryLabel(search.seconds)}
+          countdown={copyRemaining}
+          copied={copied}
+          onCopy={() => void copyCurrentPair()}
+        />
+      ) : null}
       {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={expiryLabel(search.seconds)} /> : null}
 
     </div>

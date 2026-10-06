@@ -1,4 +1,5 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/expiry-JyfywvSv.js
+//#region node_modules/.nitro/vite/services/ssr/assets/expiry-Wv4yeTgP.js
+var SIGNAL_COPY_DELAY_MS = 1e4;
 var ANALYSIS_PERIODS_SECONDS = [60];
 var EXPIRY_OPTIONS_MINUTES = [
 	1,
@@ -28,4 +29,4 @@ function formatExpiry(seconds) {
 	return remainingMinutes === 0 ? `${hours} ч` : `${hours} ч ${remainingMinutes} мин`;
 }
 //#endregion
-export { isValidExpirySeconds as a, formatExpiry as i, EXPIRY_OPTIONS_MINUTES as n, analysisPeriodForExpiry as r, ANALYSIS_PERIODS_SECONDS as t };
+export { formatExpiry as a, analysisPeriodForExpiry as i, EXPIRY_OPTIONS_MINUTES as n, isValidExpirySeconds as o, SIGNAL_COPY_DELAY_MS as r, ANALYSIS_PERIODS_SECONDS as t };

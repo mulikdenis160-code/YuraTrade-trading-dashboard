@@ -1,11 +1,11 @@
 import { o as __toESM } from "../_runtime.mjs";
+import { i as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, r as SIGNAL_COPY_DELAY_MS } from "./expiry-Wv4yeTgP.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
-import { n as EXPIRY_OPTIONS_MINUTES, r as analysisPeriodForExpiry } from "./expiry-JyfywvSv.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, h as takeBest, i as readSignalJournal, p as loadFeed, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-CmiJ6EHd.mjs";
-import { t as StatRow } from "./stats-DzWzv0gb.mjs";
-import { t as AnalysisModal } from "./analysis-modal-DTQTFTQs.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-YRr0hxLo.js
+import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, i as readSignalJournal, m as loadFeed, p as chooseSignalPair, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-DYel_wu5.mjs";
+import { t as StatRow } from "./stats-CYgVu_Jd.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-dVbyjLrr.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BtbU9GLB.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -19,6 +19,9 @@ function SignalDesk() {
 	const [feedError, setFeedError] = (0, import_react.useState)("");
 	const [searchError, setSearchError] = (0, import_react.useState)("");
 	const [notice, setNotice] = (0, import_react.useState)("");
+	const [pendingPair, setPendingPair] = (0, import_react.useState)(null);
+	const [copyRemaining, setCopyRemaining] = (0, import_react.useState)(10);
+	const [copiedPair, setCopiedPair] = (0, import_react.useState)(false);
 	const [balance, setBalance] = (0, import_react.useState)(null);
 	const [used, setUsed] = (0, import_react.useState)(0);
 	const [expiryMinutes, setExpiryMinutes] = (0, import_react.useState)(2);
@@ -26,6 +29,16 @@ function SignalDesk() {
 	(0, import_react.useEffect)(() => () => {
 		attemptRef.current += 1;
 	}, []);
+	(0, import_react.useEffect)(() => {
+		if (phase !== "copy" || !pendingPair) return;
+		const update = () => {
+			const remaining = Math.max(0, pendingPair.copyUntil - Date.now());
+			setCopyRemaining(Math.ceil(remaining / 1e3));
+		};
+		update();
+		const timer = window.setInterval(update, 100);
+		return () => window.clearInterval(timer);
+	}, [pendingPair, phase]);
 	(0, import_react.useEffect)(() => {
 		let stop = false;
 		const pull = () => {
@@ -82,184 +95,230 @@ function SignalDesk() {
 	const showSearchError = (cause, attempt) => {
 		if (attemptRef.current !== attempt) return;
 		setPhase("idle");
+		setPendingPair(null);
 		setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
+	};
+	const copySelectedPair = async () => {
+		if (!pendingPair) return;
+		try {
+			await copyPairName(pendingPair.name);
+			if (attemptRef.current === pendingPair.attempt) setCopiedPair(true);
+		} catch {
+			setCopiedPair(false);
+		}
 	};
 	const ask = async () => {
 		if (phase !== "idle" || blocked || !ready) return;
 		const attempt = ++attemptRef.current;
-		setPhase("search");
+		setPhase("choosing");
 		setSearchError("");
 		setNotice("");
+		setPendingPair(null);
 		try {
-			const candidate = await takeBest({ data: {
-				expirySeconds,
-				excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal())
+			const candidate = await chooseSignalPair({ data: { excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal()) } });
+			if (attemptRef.current !== attempt) return;
+			const selected = {
+				...candidate,
+				attempt,
+				seconds: expirySeconds,
+				copyUntil: Date.now() + SIGNAL_COPY_DELAY_MS
+			};
+			setPendingPair(selected);
+			setCopyRemaining(10);
+			setCopiedPair(false);
+			setPhase("copy");
+			await new Promise((resolve) => window.setTimeout(resolve, SIGNAL_COPY_DELAY_MS));
+			if (attemptRef.current !== attempt) return;
+			setPhase("analysis");
+			const result = await takeSignal({ data: {
+				symbol: selected.symbol,
+				expirySeconds: selected.seconds
 			} });
 			if (attemptRef.current !== attempt) return;
-			if (candidate.decision === "pass") {
-				setNotice(candidate.reason);
+			if (result.decision === "pass") {
+				setNotice(result.reason);
+				setPendingPair(null);
 				setPhase("idle");
 				return;
 			}
-			await openSignal(candidate, attempt);
+			await openSignal({
+				...result,
+				symbol: selected.symbol,
+				group: selected.group,
+				seconds: selected.seconds
+			}, attempt);
 		} catch (cause) {
 			showSearchError(cause, attempt);
 		}
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto w-full max-w-md space-y-4",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-			className: "panel p-4",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-					className: `mb-3 flex items-center justify-center gap-2 text-xs font-semibold ${feedStatus === "connected" ? "text-win" : feedStatus === "error" ? "text-loss" : "text-dim"}`,
-					role: "status",
-					"aria-live": "polite",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? t("signal.connected") : feedStatus === "error" ? t("signal.disconnected") : t("signal.connecting")]
-				}),
-				feedError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mb-3 text-center text-xs leading-relaxed text-loss",
-					role: "status",
-					"aria-live": "polite",
-					children: feedError
-				}) : null,
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "text-sm leading-relaxed text-muted",
-					children: t("signal.description")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-2 text-xs leading-relaxed text-dim",
-					children: t("signal.experimental")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3",
-					"aria-label": t("signal.expiry"),
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center justify-between gap-3",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-sm font-semibold text-fg",
-								children: t("signal.expiry")
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-sm font-bold text-blue-soft",
-								children: expiryLabel(expirySeconds)
-							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "mt-3 grid grid-cols-4 gap-2",
-							children: EXPIRY_OPTIONS_MINUTES.map((minutes) => {
-								const selected = expiryMinutes === minutes;
-								const label = expiryLabel(minutes * 60);
-								return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									type: "button",
-									disabled: phase !== "idle",
-									"aria-pressed": selected,
-									title: expiryLabel(minutes * 60),
-									onClick: () => setExpiryMinutes(minutes),
-									className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"} disabled:cursor-not-allowed disabled:opacity-50`,
-									children: label
-								}, minutes);
-							})
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "mt-2 text-xs leading-relaxed text-dim",
-							"aria-live": "polite",
-							children: t("signal.analyzed", { period: expiryLabel(analysisSeconds) })
-						})
-					]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					className: "btn-prime mt-4 min-h-12 w-full",
-					disabled: !ready || phase !== "idle" || Boolean(blocked),
-					onClick: () => void ask(),
-					children: phase === "search" ? t("signal.checking") : t("signal.get")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
-					children: blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", {
-						used,
-						cap
-					}))
-				}),
-				searchError ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "mt-4 rounded-2xl border border-loss/30 bg-loss/8 p-4 text-left",
-					role: "alert",
-					"aria-live": "assertive",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "text-sm font-semibold text-loss",
-							children: t("signal.searchFailed")
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "mt-1 text-sm leading-relaxed text-muted",
-							children: searchError
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: "btn-ghost mt-3 min-h-10 w-full justify-center",
-							disabled: !ready || phase !== "idle" || Boolean(blocked),
-							onClick: () => void ask(),
-							children: t("signal.tryAgain")
-						})
-					]
-				}) : null,
-				notice && phase === "idle" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "mt-4 overflow-hidden rounded-3xl border border-blue/25 bg-[#0e1420] text-left shadow-[0_18px_50px_rgba(0,0,0,0.24)]",
-					role: "status",
-					"aria-live": "polite",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-start gap-3 border-b border-white/6 bg-gradient-to-r from-blue/10 to-transparent p-4 sm:p-5",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "grid size-11 shrink-0 place-items-center rounded-2xl border border-blue/25 bg-blue/10 text-blue-soft",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", {
-								viewBox: "0 0 24 24",
-								fill: "none",
-								className: "size-5",
-								"aria-hidden": "true",
-								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
-									d: "M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z",
-									stroke: "currentColor",
-									strokeWidth: "1.7",
-									strokeLinecap: "round",
-									strokeLinejoin: "round"
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "panel p-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: `mb-3 flex items-center justify-center gap-2 text-xs font-semibold ${feedStatus === "connected" ? "text-win" : feedStatus === "error" ? "text-loss" : "text-dim"}`,
+						role: "status",
+						"aria-live": "polite",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: feedStatus === "connected" ? "live-dot" : "size-2 rounded-full bg-current" }), feedStatus === "connected" ? t("signal.connected") : feedStatus === "error" ? t("signal.disconnected") : t("signal.connecting")]
+					}),
+					feedError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mb-3 text-center text-xs leading-relaxed text-loss",
+						role: "status",
+						"aria-live": "polite",
+						children: feedError
+					}) : null,
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-sm leading-relaxed text-muted",
+						children: t("signal.description")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-2 text-xs leading-relaxed text-dim",
+						children: t("signal.experimental")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3",
+						"aria-label": t("signal.expiry"),
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center justify-between gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-sm font-semibold text-fg",
+									children: t("signal.expiry")
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-sm font-bold text-blue-soft",
+									children: expiryLabel(expirySeconds)
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-3 grid grid-cols-4 gap-2",
+								children: EXPIRY_OPTIONS_MINUTES.map((minutes) => {
+									const selected = expiryMinutes === minutes;
+									const label = expiryLabel(minutes * 60);
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										disabled: phase !== "idle",
+										"aria-pressed": selected,
+										title: expiryLabel(minutes * 60),
+										onClick: () => setExpiryMinutes(minutes),
+										className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"} disabled:cursor-not-allowed disabled:opacity-50`,
+										children: label
+									}, minutes);
 								})
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-2 text-xs leading-relaxed text-dim",
+								"aria-live": "polite",
+								children: t("signal.analyzed", { period: expiryLabel(analysisSeconds) })
 							})
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "min-w-0 flex-1",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-								className: "mt-1 text-base font-bold leading-snug text-fg sm:text-lg",
-								children: t("common.notConfirmed")
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-1.5 text-sm leading-relaxed text-muted",
-								children: t("signal.noSignalAtExpiry", { expiry: expiryLabel(expirySeconds) })
-							})]
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "space-y-4 p-4 sm:p-5",
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "btn-prime mt-4 min-h-12 w-full",
+						disabled: !ready || phase !== "idle" || Boolean(blocked),
+						onClick: () => void ask(),
+						children: phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
+						children: blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", {
+							used,
+							cap
+						}))
+					}),
+					searchError ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 rounded-2xl border border-loss/30 bg-loss/8 p-4 text-left",
+						role: "alert",
+						"aria-live": "assertive",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-sm font-semibold text-loss",
+								children: t("signal.searchFailed")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-1 text-sm leading-relaxed text-muted",
+								children: searchError
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: "btn-ghost mt-3 min-h-10 w-full justify-center",
+								disabled: !ready || phase !== "idle" || Boolean(blocked),
+								onClick: () => void ask(),
+								children: t("signal.tryAgain")
+							})
+						]
+					}) : null,
+					notice && phase === "idle" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 overflow-hidden rounded-3xl border border-blue/25 bg-[#0e1420] text-left shadow-[0_18px_50px_rgba(0,0,0,0.24)]",
+						role: "status",
+						"aria-live": "polite",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "rounded-2xl border border-white/8 bg-black/20 p-3.5",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-[10px] font-bold tracking-[0.14em] text-dim uppercase",
-								children: t("signal.reason")
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-1.5 whitespace-pre-line break-words text-sm leading-relaxed text-muted",
-								children: notice
+							className: "flex items-start gap-3 border-b border-white/6 bg-gradient-to-r from-blue/10 to-transparent p-4 sm:p-5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "grid size-11 shrink-0 place-items-center rounded-2xl border border-blue/25 bg-blue/10 text-blue-soft",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", {
+									viewBox: "0 0 24 24",
+									fill: "none",
+									className: "size-5",
+									"aria-hidden": "true",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+										d: "M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z",
+										stroke: "currentColor",
+										strokeWidth: "1.7",
+										strokeLinecap: "round",
+										strokeLinejoin: "round"
+									})
+								})
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "min-w-0 flex-1",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+									className: "mt-1 text-base font-bold leading-snug text-fg sm:text-lg",
+									children: t("common.notConfirmed")
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-1.5 text-sm leading-relaxed text-muted",
+									children: t("signal.noSignalAtExpiry", { expiry: expiryLabel(expirySeconds) })
+								})]
 							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: "btn-ghost min-h-11 w-full justify-center",
-							disabled: !ready || phase !== "idle" || Boolean(blocked),
-							onClick: () => void ask(),
-							children: t("signal.tryAgain")
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-4 p-4 sm:p-5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "rounded-2xl border border-white/8 bg-black/20 p-3.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-[10px] font-bold tracking-[0.14em] text-dim uppercase",
+									children: t("signal.reason")
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-1.5 whitespace-pre-line break-words text-sm leading-relaxed text-muted",
+									children: notice
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: "btn-ghost min-h-11 w-full justify-center",
+								disabled: !ready || phase !== "idle" || Boolean(blocked),
+								onClick: () => void ask(),
+								children: t("signal.tryAgain")
+							})]
 						})]
-					})]
-				}) : null
-			]
-		}), phase === "search" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
-			pair: t("home.eyebrow"),
-			expiry: expiryLabel(expirySeconds)
-		}) : null]
+					}) : null
+				]
+			}),
+			phase === "choosing" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+				pair: t("home.eyebrow"),
+				expiry: expiryLabel(expirySeconds)
+			}) : null,
+			phase === "copy" && pendingPair ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+				pair: pendingPair.name,
+				expiry: expiryLabel(pendingPair.seconds),
+				countdown: copyRemaining,
+				copied: copiedPair,
+				onCopy: () => void copySelectedPair()
+			}) : null,
+			phase === "analysis" && pendingPair ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+				pair: pendingPair.name,
+				expiry: expiryLabel(pendingPair.seconds)
+			}) : null
+		]
 	});
 }
 var risks = [

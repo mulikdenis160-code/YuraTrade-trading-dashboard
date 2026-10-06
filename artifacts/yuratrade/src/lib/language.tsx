@@ -234,9 +234,9 @@ const copy = {
   "common.prepareRecovery": ["Подготовьтесь к перекрытию", "Підготуйтеся до перекриття", "Prepare for the recovery trade"],
   "common.samePairAttempts": ["Та же пара. Осталось попыток: {count}", "Та сама пара. Спроб залишилося: {count}", "Same pair. Attempts left: {count}"],
   "common.recoveryStop": [
-    "Обе дополнительные попытки перекрытия использованы. Проверьте журнал перед следующим запросом.",
-    "Обидві додаткові спроби перекриття використані. Перевірте журнал перед наступним запитом.",
-    "Both additional overlay attempts have been used. Review the journal before requesting another signal.",
+    "Все три перекрытия использованы. Проверьте журнал перед следующим запросом.",
+    "Усі три перекриття використано. Перевірте журнал перед наступним запитом.",
+    "All three overlays have been used. Review the journal before requesting another signal.",
   ],
   "common.skipEntry": ["Вход пропущен", "Вхід пропущено", "Entry skipped"],
   "common.notConfirmed": ["Новый сигнал не подтверждён", "Новий сигнал не підтверджено", "New signal not confirmed"],

@@ -1,9 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { c as Download, o as History } from "../_libs/lucide-react.mjs";
-import { C as formatExpiryForLanguage, c as signalJournalCsv, d as summarizeByMarket, f as summarizeSignals, i as readSignalJournal, r as markExpiredPendingSignals, u as subscribeToSignalJournal, w as useLanguage } from "./router-CmiJ6EHd.mjs";
-import { t as StatRow } from "./stats-DzWzv0gb.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/history-BG8h1xZQ.js
+import { C as formatExpiryForLanguage, c as signalJournalCsv, d as summarizeByMarket, f as summarizeSignals, i as readSignalJournal, r as markExpiredPendingSignals, u as subscribeToSignalJournal, w as useLanguage } from "./router-DYel_wu5.mjs";
+import { t as StatRow } from "./stats-CYgVu_Jd.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/history-B03VzJMN.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var outcomeStyles = {
@@ -308,7 +308,7 @@ function HistoryPage() {
 									className: "mt-1 font-semibold text-fg",
 									children: t("history.attemptCount", {
 										current: entry.step + 1,
-										total: Math.max(3, entry.step + 1)
+										total: Math.max(4, entry.step + 1)
 									})
 								})]
 							})
