@@ -2,7 +2,7 @@ import { a as isValidExpirySeconds, i as formatExpiry, r as analysisPeriodForExp
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as Anthropic } from "../_libs/@anthropic-ai/sdk+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-28ZKEtPL.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-VKtxBy26.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -221,7 +221,7 @@ function buildMarketAnalysisContext(inputCandles, candleSeconds, nowSeconds = Ma
 }
 var DIRECT_AI_MODEL = "claude-opus-5";
 var DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
-var DIRECT_AI_VISIBLE_CANDLES = 32;
+var DIRECT_AI_VISIBLE_CANDLES = 64;
 var DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES = 16;
 var signalReviewSchema = object({
 	decision: literal("signal"),
@@ -573,7 +573,7 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		expirySeconds,
 		candleSeconds,
 		horizonCandles: expirySeconds / candleSeconds,
-		candleFormat: "Массив candles содержит до 32 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
+		candleFormat: "Массив candles содержит до 64 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
 		indicatorFormat: {
 			recentReturnBps: "Изменение close за указанное число свечей в basis points.",
 			ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",
@@ -658,6 +658,37 @@ function loadCandidatesInParallel(items, load) {
 		}
 	}));
 }
+function parsePocketOptionHistory(data) {
+	const candles = [];
+	for (const row of data) {
+		if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+		const candle = row;
+		const time = Number(candle.time);
+		const open = Number(candle.open);
+		const close = Number(candle.close);
+		const high = Number(candle.high);
+		const low = Number(candle.low);
+		if (![
+			time,
+			open,
+			close,
+			high,
+			low
+		].every(Number.isFinite) || time <= 0 || open <= 0 || close <= 0 || low <= 0 || high < Math.max(open, close) || low > Math.min(open, close) || high < low) continue;
+		candles.push({
+			time,
+			open,
+			close,
+			high,
+			low
+		});
+	}
+	candles.sort((a, b) => a.time - b.time);
+	return {
+		candles,
+		rejectedRows: data.length - candles.length
+	};
+}
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
@@ -719,25 +750,6 @@ function storeAssets(rows) {
 		for (const [symbol, pair] of next) pairs.set(symbol, pair);
 		connectionError = "";
 	}
-}
-function asCandles(data) {
-	const candles = [];
-	for (const row of data) {
-		if (!row || typeof row !== "object") continue;
-		const candle = row;
-		const close = Number(candle.close);
-		const open = Number(candle.open);
-		if (!Number.isFinite(close) || !Number.isFinite(open)) continue;
-		candles.push({
-			time: Number(candle.time) || 0,
-			open,
-			close,
-			high: Number.isFinite(Number(candle.high)) ? Number(candle.high) : Math.max(open, close),
-			low: Number.isFinite(Number(candle.low)) ? Number(candle.low) : Math.min(open, close)
-		});
-	}
-	candles.sort((a, b) => a.time - b.time);
-	return candles;
 }
 function buildDirectAiSignal(candles, expirySeconds, analysisSeconds, name, payout, review) {
 	const pack = candles.slice(-28);
@@ -884,7 +896,7 @@ function handleMessage(current, message) {
 				if (request) {
 					clearTimeout(request.timer);
 					pendingHistory.delete(parsed.asset);
-					request.resolve(asCandles(parsed.data));
+					request.resolve(parsePocketOptionHistory(parsed.data));
 					return;
 				}
 			}
@@ -1019,10 +1031,13 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3) {
 	await ensureFeed();
 	const collected = /* @__PURE__ */ new Map();
+	let rejectedRows = 0;
 	let cursor = Math.floor(Date.now() / 1e3);
 	const maxPages = Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
 	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
-		const candles = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
+		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
+		rejectedRows += history.rejectedRows;
+		const candles = history.candles;
 		if (candles.length === 0) break;
 		const previousSize = collected.size;
 		for (const candle of candles) collected.set(candle.time, candle);
@@ -1030,7 +1045,10 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3) {
 		if (collected.size === previousSize || oldestTime <= 0 || oldestTime >= cursor) break;
 		cursor = oldestTime - 1;
 	}
-	return [...collected.values()].sort((a, b) => a.time - b.time).slice(-128);
+	return {
+		candles: [...collected.values()].sort((a, b) => a.time - b.time).slice(-128),
+		rejectedRows
+	};
 }
 function followQuote(symbol) {
 	if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) feedSnapshot().catch(() => {});
@@ -1068,12 +1086,47 @@ async function feedClose(symbol) {
 	if (quote && Date.now() - quote.at < 800) return quote.price;
 	return waitQuote(symbol);
 }
+function summarizeCandleCadence(series, expectedSeconds) {
+	const intervalCounts = /* @__PURE__ */ new Map();
+	let intervalCount = 0;
+	let irregularIntervals = 0;
+	let estimatedMissingIntervals = 0;
+	for (const candles of series) for (let index = 1; index < candles.length; index += 1) {
+		const previous = candles[index - 1];
+		const current = candles[index];
+		if (!previous || !current) continue;
+		const interval = current.time - previous.time;
+		if (!Number.isFinite(interval) || interval <= 0) {
+			irregularIntervals += 1;
+			continue;
+		}
+		intervalCount += 1;
+		intervalCounts.set(interval, (intervalCounts.get(interval) ?? 0) + 1);
+		const expectedSteps = Math.round(interval / expectedSeconds);
+		const tolerance = Math.max(1, expectedSeconds * .01);
+		if (expectedSteps < 1 || Math.abs(interval - expectedSteps * expectedSeconds) > tolerance) irregularIntervals += 1;
+		if (interval > expectedSeconds * 1.5) estimatedMissingIntervals += Math.max(1, Math.round(interval / expectedSeconds) - 1);
+	}
+	return {
+		observedIntervalSeconds: [...intervalCounts.entries()].sort(([intervalA, countA], [intervalB, countB]) => countB - countA || intervalA - intervalB)[0]?.[0] ?? null,
+		intervalCount,
+		irregularIntervals,
+		estimatedMissingIntervals
+	};
+}
 async function feedSignal(symbol, expirySeconds) {
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
 	await ensureFeed();
 	subscribe(symbol);
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-	const candles = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
+	const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
+	const candles = history.candles;
+	console.info("[signal-history]", JSON.stringify({
+		candleCount: candles.length,
+		rejectedRows: history.rejectedRows,
+		expectedCandleSeconds: analysisSeconds,
+		...summarizeCandleCadence([candles], analysisSeconds)
+	}));
 	const pair = pairs.get(symbol);
 	if (!pair) throw new Error("Эта пара сейчас недоступна.");
 	const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [{
@@ -1103,6 +1156,12 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 	let poolSize = 0;
 	let historyResponses = 0;
 	let candidateCount = 0;
+	let rejectedHistoryRows = 0;
+	let expectedCandleSeconds = 0;
+	let observedIntervalSeconds = null;
+	let intervalCount = 0;
+	let irregularIntervals = 0;
+	let estimatedMissingIntervals = 0;
 	const logTiming = (decision, error) => {
 		console.info("[signal-search]", JSON.stringify({
 			decision,
@@ -1115,6 +1174,12 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 			poolSize,
 			historyResponses,
 			candidateCount,
+			rejectedHistoryRows,
+			expectedCandleSeconds,
+			observedIntervalSeconds,
+			intervalCount,
+			irregularIntervals,
+			estimatedMissingIntervals,
 			...error ? { errorType: error instanceof Error ? error.name : typeof error } : {}
 		}));
 	};
@@ -1125,6 +1190,7 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		await ensureFeed();
 		feedMs = performance.now() - feedStartedAt;
 		const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+		expectedCandleSeconds = analysisSeconds;
 		const ranked = [...pairs.values()].filter((pair) => pair.payout === 92 || pair.payout === 80).sort((a, b) => b.payout - a.payout);
 		if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
 		const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
@@ -1149,13 +1215,19 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 				continue;
 			}
 			historyResponses += 1;
-			if (result.value.length < 30) continue;
+			rejectedHistoryRows += result.value.rejectedRows;
+			if (result.value.candles.length < 30) continue;
 			candidates.push({
 				pair: result.item,
-				candles: result.value
+				candles: result.value.candles
 			});
 		}
 		candidateCount = candidates.length;
+		const cadence = summarizeCandleCadence(candidates.map((candidate) => candidate.candles), analysisSeconds);
+		observedIntervalSeconds = cadence.observedIntervalSeconds;
+		intervalCount = cadence.intervalCount;
+		irregularIntervals = cadence.irregularIntervals;
+		estimatedMissingIntervals = cadence.estimatedMissingIntervals;
 		if (candidates.length === 0) {
 			if (historyResponses === 0 && historyFailure) throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);
 			throw new Error(`Не удалось получить по Pocket Option минимум 30 исторических свечей ни для одной пары.`);

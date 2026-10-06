@@ -1,6 +1,6 @@
 import { n as TSS_SERVER_FUNCTION, t as createServerFn } from "./ssr.mjs";
 import { a as isValidExpirySeconds } from "./expiry-BPQ3PYPw.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-BpNfOgxC.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-o9K0kIkY.js
 var createServerRpc = (serverFnMeta, splitImportFn) => {
 	const url = "/_serverFn/" + serverFnMeta.id;
 	return Object.assign(splitImportFn, {
@@ -15,7 +15,7 @@ var loadFeed_createServerFn_handler = createServerRpc({
 	filename: "src/lib/pocket-live.ts"
 }, (opts) => loadFeed.__executeServer(opts));
 var loadFeed = createServerFn({ method: "GET" }).handler(loadFeed_createServerFn_handler, async () => {
-	const { feedSnapshot } = await import("./pocket-live.server-28ZKEtPL.mjs");
+	const { feedSnapshot } = await import("./pocket-live.server-VKtxBy26.mjs");
 	return feedSnapshot();
 });
 var readClose_createServerFn_handler = createServerRpc({
@@ -28,7 +28,7 @@ var readClose = createServerFn({ method: "POST" }).validator((input) => {
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
 	return { symbol };
 }).handler(readClose_createServerFn_handler, async ({ data }) => {
-	const { feedClose } = await import("./pocket-live.server-28ZKEtPL.mjs");
+	const { feedClose } = await import("./pocket-live.server-VKtxBy26.mjs");
 	return { close: await feedClose(data.symbol) };
 });
 var takeSignal_createServerFn_handler = createServerRpc({
@@ -45,7 +45,7 @@ var takeSignal = createServerFn({ method: "POST" }).validator((input) => {
 		expirySeconds
 	};
 }).handler(takeSignal_createServerFn_handler, async ({ data }) => {
-	const { feedSignal } = await import("./pocket-live.server-28ZKEtPL.mjs");
+	const { feedSignal } = await import("./pocket-live.server-VKtxBy26.mjs");
 	return feedSignal(data.symbol, data.expirySeconds);
 });
 var takeBest_createServerFn_handler = createServerRpc({
@@ -61,7 +61,7 @@ var takeBest = createServerFn({ method: "POST" }).validator((input) => {
 		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
 	};
 }).handler(takeBest_createServerFn_handler, async ({ data }) => {
-	const { feedBest } = await import("./pocket-live.server-28ZKEtPL.mjs");
+	const { feedBest } = await import("./pocket-live.server-VKtxBy26.mjs");
 	return feedBest(data.expirySeconds, data.excludedSymbols);
 });
 //#endregion

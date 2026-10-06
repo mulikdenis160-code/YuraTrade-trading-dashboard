@@ -14,3 +14,9 @@ Performance claims must come from completed FX signal outcomes in the local jour
 **Why:** historical replay produced only one qualified outcome, a loss; the user now prioritizes stricter win-rate selection and direct candle analysis, but this is not enough evidence to claim effectiveness. The feed protocol has no request correlation ID for history responses, so same-asset requests must not overlap.
 
 **How to apply:** paginate only read-only history requests; do not lower validation thresholds or synthesize candles to make a model pass. Store authorization only in Replit Secrets, never in source files, and exclude pending or unverified records from hit-rate calculations.
+
+A live OHLC-shape and candle-cadence check confirms only row structure and interval; it does not prove price-for-price parity with the Pocket Option chart or indicator equivalence.
+
+**Why:** a feed can return complete, regularly spaced candles while the user still observes different chart values or indicator readings.
+
+**How to apply:** when investigating a reported chart or indicator mismatch, ask for an exact pair, timeframe, candle timestamp, and values from both the bot and the chart after checking feed structure and cadence.
