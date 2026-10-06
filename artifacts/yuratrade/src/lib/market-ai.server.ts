@@ -1,19 +1,22 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
 
-export const DIRECT_AI_MODEL = "claude-opus-5";
-export const DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
-export const DIRECT_AI_HISTORY_CANDLES = 128;
-export const MIN_DIRECT_AI_CANDLES = 30;
-const DIRECT_AI_VISIBLE_CANDLES = 64;
-const DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES = 16;
+export const DIRECT_AI_MODEL = "gemini-3.6-flash";
+export const DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
+export const PROXY_AI_MODEL = "gemini-2.5-flash";
+export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
+export const DIRECT_AI_HISTORY_CANDLES = 32;
+export const MIN_DIRECT_AI_CANDLES = 15;
+const DIRECT_AI_VISIBLE_CANDLES = 30;
 
 export type MarketAiCandidate = {
   symbol: string;
   name: string;
   candles: MarketCandle[];
+  currentPrice: number;
+  quoteAgeMs: number;
 };
 
 const signalReviewSchema = z.object({
@@ -43,31 +46,67 @@ const reviewSchema = z.discriminatedUnion("decision", [
 export type MarketAiReview = z.infer<typeof reviewSchema>;
 
 export const DIRECT_AI_SYSTEM_PROMPT = [
-  "Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT, если для него есть ясное преимущество.",
-  "Не используй отдельный классификатор, числовой порог уверенности, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр.",
-  "Минимум 30 корректных свечей — только условие достаточности входных данных, а не причина обязательно выдать сигнал.",
-  "Не выдумывай направление: возвращай pass, если OHLC боковые или хаотичные, оба направления одинаково правдоподобны, либо сценарий держится только на одной свече без подтверждения. Краткосрочное движение против старшего тренда само по себе не причина для pass: проверь подтверждённый разворот или ложный пробой по закрытым свечам и прежним экстремумам; если структура это не поддерживает — верни pass.",
-  "Проверяй контекст на нескольких масштабах: сопоставь короткую структуру OHLC с higherTimeframe, режимом волатильности, импульсом, EMA, RSI, MACD, Bollinger z-score и расстоянием до недавних границ диапазона. Ищи возможный пробой, ложный пробой, отбой от уровня и смену импульса.",
-  "Эти индикаторы рассчитаны из тех же свечей, поэтому не считай их независимыми подтверждениями и не складывай механический балл. Используй их как проверяемые описания цены; при противоречии индикаторов и OHLC, пропуске важных интервалов или устаревании истории объясни риск либо верни pass.",
-  "Если higherTimeframe отсутствует или содержит мало свечей, прямо учитывай ограниченность контекста и не достраивай недостающие бары. Не используй незакрытые свечи.",
-  "Оцени ожидаемое движение к концу указанной экспирации, а не только цвет последних свечей. Учитывай, что candleSeconds — интервал свечи, а не гарантированный период прогноза; сравни horizonCandles с доступной историей.",
-  "Сравни все доступные пары и выбери наиболее убедительный сценарий на указанную экспирацию, если он последовательно поддержан OHLC. Не требуй, чтобы все индикаторы совпадали; при отсутствии связной свечной структуры верни pass.",
-  "Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Технические расстояния даны в basis points, RSI — 0..100, Bollinger z-score — в стандартных отклонениях.",
-  "Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки.",
-  "Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены.",
-  "Кратко, но содержательно: каждое поле explanation — одно короткое предложение примерно до 180 символов. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
+  "Ты анализируешь одну OTC-валютную пару по минутным закрытиям. Доступно до 30 последних close по порядку от старых к новым, текущая живая цена, сравнение последнего close с close четыре свечи назад и стандартное отклонение 12 последних close.",
+  "Тренд уже рассчитан как сравнение последнего закрытия с закрытием четырьмя минутными свечами ранее. Волатильность — population standard deviation двенадцати последних закрытий в тех же ценовых единицах.",
+  "Используй только переданные значения; не выдумывай OHLC, индикаторы, новости или дополнительные цены. Учти срок экспирации 120 секунд.",
+  "При корректных входных данных обязательно выбери направление вверх или вниз. Не возвращай pass, abstain, no_signal, decision или symbol. Не используй вторую модель-классификатор и не применяй порог уверенности.",
+  "Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки.",
 ].join(" ");
 
-let client: Anthropic | null = null;
+type ActiveGeminiModel = {
+  model: string;
+  label: string;
+  proxyBaseUrl?: string;
+};
 
-function getAnthropicClient() {
-  const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
-  const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
-  if (!apiKey || !baseURL) {
-    throw new Error("Подключение Anthropic через Replit AI Integrations не настроено. Сигнал не выдан.");
+export function activeGeminiModel(
+  env: NodeJS.ProcessEnv = process.env,
+): ActiveGeminiModel {
+  const hasProxyBase = Boolean(env.AI_INTEGRATIONS_GEMINI_BASE_URL);
+  const hasProxyKey = Boolean(env.AI_INTEGRATIONS_GEMINI_API_KEY);
+  if (hasProxyBase || hasProxyKey) {
+    if (!hasProxyBase || !hasProxyKey) {
+      throw new Error("Настройки Gemini proxy неполные. Сигнал не выдан.");
+    }
+    return {
+      model: PROXY_AI_MODEL,
+      label: PROXY_AI_MODEL_LABEL,
+      proxyBaseUrl: env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+    };
   }
-  if (!client) client = new Anthropic({ apiKey, baseURL, timeout: 45_000, maxRetries: 1 });
-  return client;
+  return { model: DIRECT_AI_MODEL, label: DIRECT_AI_MODEL_LABEL };
+}
+
+let client: GoogleGenAI | null = null;
+let clientIdentity = "";
+
+function getGeminiClient() {
+  const hasProxy = Boolean(
+    process.env.AI_INTEGRATIONS_GEMINI_BASE_URL ||
+    process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+  );
+  const apiKey = hasProxy
+    ? process.env.AI_INTEGRATIONS_GEMINI_API_KEY
+    : process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      hasProxy
+        ? "Настройки Gemini proxy неполные. Сигнал не выдан."
+        : "Gemini не настроен. Добавьте GEMINI_API_KEY в Replit Secrets или настройте Replit Gemini proxy.",
+    );
+  }
+  const model = activeGeminiModel();
+  const identity = `${model.model}\u0000${apiKey}\u0000${model.proxyBaseUrl ?? ""}`;
+  if (!client || clientIdentity !== identity) {
+    client = new GoogleGenAI({
+      apiKey,
+      ...(model.proxyBaseUrl
+        ? { httpOptions: { apiVersion: "", baseUrl: model.proxyBaseUrl } }
+        : {}),
+    });
+    clientIdentity = identity;
+  }
+  return { client, model };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -171,24 +210,11 @@ function normalizeExplanation(
   return hasExplanation ? explanation : null;
 }
 
-function candlesInBasisPoints(candles: MarketCandle[]) {
-  const start = Math.max(0, candles.length - DIRECT_AI_VISIBLE_CANDLES);
-  let previousClose = candles[start - 1]?.close ?? candles[start]?.open ?? 1;
-  const result: number[][] = [];
-
-  for (let index = start; index < candles.length; index += 1) {
-    const candle = candles[index];
-    const base = previousClose || candle.open || 1;
-    const toBasisPoints = (price: number) => Number((((price / base) - 1) * 10_000).toFixed(2));
-    result.push([
-      toBasisPoints(candle.open),
-      toBasisPoints(candle.high),
-      toBasisPoints(candle.low),
-      toBasisPoints(candle.close),
-    ]);
-    previousClose = candle.close;
-  }
-  return result;
+function standardDeviation(values: number[]) {
+  if (values.length === 0) return null;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  return Number.isFinite(variance) ? Math.sqrt(variance) : null;
 }
 
 export function parseMarketAiReview(content: string, allowedSymbols: string[]): MarketAiReview | null {
@@ -249,7 +275,10 @@ export function acceptsMarketAiReview(
 }
 
 export function marketAiApiErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.includes("Подключение Anthropic через Replit AI Integrations не настроено")) {
+  if (
+    error instanceof Error &&
+    (error.message.includes("Gemini не настроен") || error.message.includes("Настройки Gemini proxy"))
+  ) {
     return error.message;
   }
   const status = isRecord(error)
@@ -257,24 +286,24 @@ export function marketAiApiErrorMessage(error: unknown) {
     : Number.NaN;
   const name = error instanceof Error ? error.name.toLowerCase() : "";
   if (status === 401 || status === 403) {
-    return "Anthropic отклонил подключение. Проверьте настройки интеграции; сигнал не выдан.";
+    return "Gemini отклонил подключение. Проверьте API key или настройки proxy; сигнал не выдан.";
   }
   if (status === 429) {
-    return "Anthropic временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
+    return "Gemini временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
   }
   if (status === 408 || status === 504 || name.includes("timeout")) {
-    return "Анализ Claude занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
+    return "Анализ Gemini занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
   }
   if (status === 400) {
-    return "Anthropic отклонил формат запроса. Попробуйте ещё раз; если ошибка повторится, проверьте настройку модели.";
+    return "Gemini отклонил формат запроса. Проверьте настройку модели и повторите попытку.";
   }
   if (status === 404) {
-    return "Модель Claude Opus 5 сейчас недоступна. Попробуйте ещё раз позже.";
+    return "Выбранная модель Gemini сейчас недоступна. Проверьте имя модели и повторите попытку.";
   }
   if (status >= 500 || name.includes("connection")) {
-    return "Сервис Anthropic временно недоступен. Попробуйте ещё раз через минуту.";
+    return "Сервис Gemini временно недоступен. Попробуйте ещё раз через минуту.";
   }
-  return "Не удалось завершить анализ Claude. Попробуйте ещё раз; сигнал не выдан.";
+  return "Не удалось завершить анализ Gemini. Попробуйте ещё раз; сигнал не выдан.";
 }
 
 type ReviewMessage = {
@@ -295,89 +324,52 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
     .filter((message) => message.role === "system")
     .map((message) => message.content)
     .join("\n\n");
-  const requestMessages = messages.flatMap((message) => {
-    if (message.role === "system") return [];
-    return [{ role: message.role, content: message.content }];
-  });
+  const userPrompt = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .join("\n\n");
+  const { client: gemini, model } = getGeminiClient();
 
-  return getAnthropicClient().messages.create({
-    model: DIRECT_AI_MODEL,
-    max_tokens: 2048,
-    system,
-    messages: requestMessages,
-  }).then((response) => {
-    const content = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
-    const refusal = response.stop_reason === "refusal"
-      ? content || "Anthropic отказался выполнить анализ."
-      : null;
-
-    return {
-      choices: [{
-        message: { content: content || null, refusal },
-        finish_reason: response.stop_reason === "max_tokens" ? "length" : response.stop_reason,
-      }],
-    };
-  });
+  return gemini.models.generateContent({
+    model: model.model,
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    config: {
+      systemInstruction: system,
+      responseMimeType: "application/json",
+      maxOutputTokens: 8192,
+    },
+  }).then((response) => ({
+    choices: [{
+      message: { content: response.text || null },
+      finish_reason: String(response.candidates?.[0]?.finishReason ?? "STOP"),
+    }],
+  }));
 }
 
-export async function requestMarketAiReviewWithRepair(
+export async function requestMarketAiReviewOnce(
   request: ReviewCompletionRequest,
   baseMessages: ReviewMessage[],
   allowedSymbols: string[],
 ): Promise<MarketAiReview> {
-  let firstChoice: ReviewChoice | undefined;
+  let choice: ReviewChoice | undefined;
   try {
-    firstChoice = (await request(baseMessages)).choices[0];
+    choice = (await request(baseMessages)).choices[0];
   } catch (error) {
     throw new Error(marketAiApiErrorMessage(error));
   }
 
-  const firstContent = firstChoice?.message.content;
-  const firstReview = typeof firstContent === "string"
-    ? parseMarketAiReview(firstContent, allowedSymbols)
+  const content = choice?.message.content;
+  const review = typeof content === "string"
+    ? parseMarketAiReview(content, allowedSymbols)
     : null;
-  if (firstReview) return firstReview;
-  if (firstChoice?.message.refusal) {
-    throw new Error("Claude отказался выполнить анализ. Сигнал не выдан.");
+  if (review) return review;
+  if (choice?.message.refusal) {
+    throw new Error("Gemini отказался выполнить анализ. Сигнал не выдан.");
   }
-
-  const repairMessages: ReviewMessage[] = [
-    ...baseMessages,
-    ...(typeof firstContent === "string" && firstContent
-      ? [{ role: "assistant" as const, content: firstContent.slice(0, 16_000) }]
-      : []),
-    {
-      role: "user",
-      content:
-        "Предыдущий ответ нельзя проверить. Повтори анализ по исходным правилам и верни один корректный JSON-объект. Если ясного преимущества нет, верни pass с краткой причиной и не вынуждай себя выбирать направление. Если выдаёшь signal, используй точный symbol из списка, направление call или put, числовую confidence от 0 до 100 и все пять полей explanation. Не добавляй факты, которых нет в свечах.",
-    },
-  ];
-
-  let retryChoice: ReviewChoice | undefined;
-  try {
-    retryChoice = (await request(repairMessages)).choices[0];
-  } catch (error) {
-    throw new Error(marketAiApiErrorMessage(error));
+  if (choice?.finish_reason.toLowerCase().includes("max_tokens")) {
+    throw new Error("Gemini оборвал ответ по лимиту длины. Сигнал не выдан.");
   }
-
-  const retryContent = retryChoice?.message.content;
-  const retryReview = typeof retryContent === "string"
-    ? parseMarketAiReview(retryContent, allowedSymbols)
-    : null;
-  if (retryReview) return retryReview;
-  if (retryChoice?.message.refusal) {
-    throw new Error("Claude отказался выполнить анализ повторно. Сигнал не выдан.");
-  }
-  if (firstChoice?.finish_reason === "length" || retryChoice?.finish_reason === "length") {
-    throw new Error("Claude оборвал ответ по лимиту длины. Повторите запрос; сигнал не выдан.");
-  }
-  if (typeof firstContent !== "string" && typeof retryContent !== "string") {
-    throw new Error("Claude не вернул текст анализа после повторного запроса. Сигнал не выдан.");
-  }
-  throw new Error("Claude дважды вернул ответ, который не удалось проверить. Повторите запрос; сигнал не выдан.");
+  throw new Error("Gemini вернул ответ, который не удалось проверить. Сигнал не выдан.");
 }
 
 export async function analyzeMarketCandidates(

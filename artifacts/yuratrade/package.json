@@ -90,6 +90,7 @@
     "zustand": "^5.0.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0"
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@google/genai": "^2.27.0"
   }
 }
