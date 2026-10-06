@@ -1,6 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts";
+import {
+  ADX14_MIN_HISTORY_CANDLES,
+  buildMarketAnalysisContext,
+} from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
 
 export const DIRECT_AI_MODEL = "gemini-3.6-flash";
@@ -414,7 +417,7 @@ export async function analyzeMarketCandidates(
     }));
     return {
       decision: "pass",
-      reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее ${MIN_SIGNAL_ADX14 + 14}. Сигнал не выдан.`,
+      reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее ${ADX14_MIN_HISTORY_CANDLES}. Сигнал не выдан.`,
     };
   }
   if (adx14 < MIN_SIGNAL_ADX14) {

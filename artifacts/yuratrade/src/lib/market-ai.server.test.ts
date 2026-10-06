@@ -282,7 +282,10 @@ test("missing ADX history returns no signal without calling Gemini", async () =>
   );
 
   assert.equal(result.decision, "pass");
-  if (result.decision === "pass") assert.match(result.reason, /недостаточно.*ADX\(14\)/i);
+  if (result.decision === "pass") {
+    assert.match(result.reason, /недостаточно.*ADX\(14\)/i);
+    assert.match(result.reason, /не менее 28/);
+  }
   assert.equal(called, false);
 });
 

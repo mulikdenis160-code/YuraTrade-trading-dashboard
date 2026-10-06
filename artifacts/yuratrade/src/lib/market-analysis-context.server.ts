@@ -2,6 +2,9 @@ import type { MarketCandle } from "./signal-model.server.ts";
 
 type NullableNumber = number | null;
 
+export const ADX14_PERIOD = 14;
+export const ADX14_MIN_HISTORY_CANDLES = ADX14_PERIOD * 2;
+
 export type MarketTechnicalIndicators = {
   recentReturnBps: {
     bars5: NullableNumber;
@@ -155,7 +158,7 @@ function averageTrueRange(candles: MarketCandle[], period: number) {
   return average(ranges.slice(-period));
 }
 
-function directionalMovement(candles: MarketCandle[], period = 14) {
+function directionalMovement(candles: MarketCandle[], period = ADX14_PERIOD) {
   const unavailable = { adx14: null, plusDi14: null, minusDi14: null };
   if (candles.length < period * 2) return unavailable;
 

@@ -1,7 +1,7 @@
 import { a as formatExpiry, i as analysisPeriodForExpiry, o as isValidExpirySeconds } from "./expiry-Wv4yeTgP.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CNkxbgNH.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CT5K972H.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -613,7 +613,7 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		}));
 		return {
 			decision: "pass",
-			reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее 34. Сигнал не выдан.`
+			reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее 28. Сигнал не выдан.`
 		};
 	}
 	if (adx14 < 20) {
