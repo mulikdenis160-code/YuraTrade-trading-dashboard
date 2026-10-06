@@ -1,8 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as formatExpiryForLanguage, g as takeSignal, l as signalRecordId, m as readClose, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-CikUson1.mjs";
-import { t as AnalysisModal } from "./analysis-modal-CGIoWhs0.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-BmfThqYs.js
+import { C as formatExpiryForLanguage, g as takeSignal, l as signalRecordId, m as readClose, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-e0nTTW-D.mjs";
+import { t as AnalysisModal } from "./analysis-modal-cIq3IRqX.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-BXHLte-t.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -531,34 +531,57 @@ function SignalCard({ search }) {
 	if (phase === "no-signal") return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto w-full max-w-md",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BackLink, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-			className: "panel arrive mt-3 px-4 py-8 text-center sm:px-6",
+			className: "panel arrive mt-3 overflow-hidden rounded-3xl border border-blue/25 bg-[#0e1420] p-0 text-left shadow-[0_18px_50px_rgba(0,0,0,0.24)]",
 			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
-					children: t("common.skipEntry")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "mt-3 text-xl font-bold text-fg",
-					children: t("common.notConfirmed")
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted",
-					children: error || t("common.skipReason")
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-start gap-3 border-b border-white/6 bg-gradient-to-r from-blue/10 to-transparent p-4 sm:p-5",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "grid size-11 shrink-0 place-items-center rounded-2xl border border-blue/25 bg-blue/10 text-blue-soft",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", {
+							viewBox: "0 0 24 24",
+							fill: "none",
+							className: "size-5",
+							"aria-hidden": "true",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+								d: "M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z",
+								stroke: "currentColor",
+								strokeWidth: "1.7",
+								strokeLinecap: "round",
+								strokeLinejoin: "round"
+							})
+						})
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "min-w-0 flex-1",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-[10px] font-bold tracking-[0.16em] text-blue-soft uppercase",
+								children: t("common.skipEntry")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+								className: "mt-1 text-lg font-bold leading-snug text-fg sm:text-xl",
+								children: t("common.notConfirmed")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-muted",
+								children: error || t("common.skipReason")
+							})
+						]
+					})]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center",
+					className: "flex flex-col gap-2 p-4 sm:flex-row sm:p-5",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
 						to: "/history",
-						className: "btn-ghost min-h-11 justify-center",
+						className: "btn-ghost min-h-11 flex-1 justify-center",
 						children: t("common.openHistory")
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
 						to: "/",
-						className: "btn-prime min-h-11 justify-center",
+						className: "btn-prime min-h-11 flex-1 justify-center",
 						children: t("common.toSignals")
 					})]
 				}),
 				journalWarning ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-4 text-xs leading-relaxed text-loss",
+					className: "mx-4 mb-4 rounded-xl border border-loss/25 bg-loss/5 p-3 text-xs leading-relaxed text-loss sm:mx-5",
 					role: "status",
 					children: journalWarning
 				}) : null

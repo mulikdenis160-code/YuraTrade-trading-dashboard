@@ -1,10 +1,228 @@
-import { i as isValidExpirySeconds, n as analysisPeriodForExpiry, r as formatExpiry } from "./expiry-BxofkO8c.mjs";
+import { a as formatExpiry, i as analysisPeriodForExpiry, o as isValidExpirySeconds } from "./expiry-CMnOHOBu.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { t as wrapper_default } from "../_libs/ws.mjs";
 import { t as Anthropic } from "../_libs/@anthropic-ai/sdk+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-3irK7T5S.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-D8iU7Nc7.js
+function higherTimeframeForAnalysis(candleSeconds) {
+	switch (candleSeconds) {
+		case 60: return 300;
+		case 180:
+		case 300: return 900;
+		case 900: return 3600;
+		default: return null;
+	}
+}
+function isValidCandle(candle) {
+	return Number.isFinite(candle.time) && Number.isFinite(candle.open) && Number.isFinite(candle.high) && Number.isFinite(candle.low) && Number.isFinite(candle.close) && candle.time > 0 && candle.open > 0 && candle.high > 0 && candle.low > 0 && candle.close > 0 && candle.high >= candle.low && candle.high >= Math.max(candle.open, candle.close) && candle.low <= Math.min(candle.open, candle.close);
+}
+function round(value) {
+	return Number.isFinite(value) ? Number(value.toFixed(3)) : null;
+}
+function basisPoints(value, base) {
+	return base > 0 ? round((value / base - 1) * 1e4) : null;
+}
+function signedMagnitudeBps(value, base) {
+	return base > 0 ? round(value / base * 1e4) : null;
+}
+function average(values) {
+	if (values.length === 0) return null;
+	return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+function emaSeries(values, period) {
+	const result = Array.from({ length: values.length }, () => null);
+	if (values.length < period) return result;
+	const seed = average(values.slice(0, period));
+	if (seed === null) return result;
+	let current = seed;
+	result[period - 1] = current;
+	const smoothing = 2 / (period + 1);
+	for (let index = period; index < values.length; index += 1) {
+		const value = values[index];
+		if (value === void 0) continue;
+		current = (value - current) * smoothing + current;
+		result[index] = current;
+	}
+	return result;
+}
+function rsi(closes, period = 14) {
+	if (closes.length <= period) return null;
+	let averageGain = 0;
+	let averageLoss = 0;
+	for (let index = 1; index <= period; index += 1) {
+		const current = closes[index];
+		const previous = closes[index - 1];
+		if (current === void 0 || previous === void 0) return null;
+		const change = current - previous;
+		averageGain += Math.max(0, change);
+		averageLoss += Math.max(0, -change);
+	}
+	averageGain /= period;
+	averageLoss /= period;
+	for (let index = period + 1; index < closes.length; index += 1) {
+		const current = closes[index];
+		const previous = closes[index - 1];
+		if (current === void 0 || previous === void 0) return null;
+		const change = current - previous;
+		averageGain = (averageGain * (period - 1) + Math.max(0, change)) / period;
+		averageLoss = (averageLoss * (period - 1) + Math.max(0, -change)) / period;
+	}
+	if (averageLoss === 0) return averageGain === 0 ? 50 : 100;
+	return round(100 - 100 / (1 + averageGain / averageLoss));
+}
+function averageTrueRange(candles, period) {
+	if (candles.length < period) return null;
+	return average(candles.map((candle, index) => {
+		const previousClose = candles[index - 1]?.close ?? candle.open;
+		return Math.max(candle.high - candle.low, Math.abs(candle.high - previousClose), Math.abs(candle.low - previousClose));
+	}).slice(-period));
+}
+function macdHistogram(closes) {
+	const fast = emaSeries(closes, 12);
+	const slow = emaSeries(closes, 26);
+	const macd = [];
+	for (let index = 0; index < closes.length; index += 1) {
+		const fastValue = fast[index];
+		const slowValue = slow[index];
+		if (fastValue !== null && fastValue !== void 0 && slowValue !== null && slowValue !== void 0) macd.push(fastValue - slowValue);
+	}
+	const signal = emaSeries(macd, 9);
+	const macdValue = macd.at(-1);
+	const signalValue = signal.at(-1);
+	const lastClose = closes.at(-1);
+	if (macdValue === void 0 || signalValue === null || signalValue === void 0 || lastClose === void 0) return null;
+	return signedMagnitudeBps(macdValue - signalValue, lastClose);
+}
+function bollingerZScore(closes, period = 20) {
+	const sample = closes.slice(-period);
+	if (sample.length < period) return null;
+	const mean = average(sample);
+	if (mean === null) return null;
+	const variance = sample.reduce((sum, value) => sum + (value - mean) ** 2, 0) / period;
+	const standardDeviation = Math.sqrt(variance);
+	const lastClose = sample.at(-1);
+	if (lastClose === void 0) return null;
+	if (standardDeviation === 0) return 0;
+	return round((lastClose - mean) / standardDeviation);
+}
+function returnOverBars(closes, bars) {
+	const latest = closes.at(-1);
+	const earlier = closes.at(-(bars + 1));
+	if (latest === void 0 || earlier === void 0) return null;
+	return basisPoints(latest, earlier);
+}
+function emaSlope(ema, bars) {
+	const latest = ema.at(-1);
+	const earlier = ema.at(-(bars + 1));
+	if (latest === null || latest === void 0 || earlier === null || earlier === void 0) return null;
+	return basisPoints(latest, earlier);
+}
+function technicalIndicators(candles) {
+	const closes = candles.map((candle) => candle.close);
+	const lastClose = closes.at(-1);
+	const ema9 = emaSeries(closes, 9);
+	const ema21 = emaSeries(closes, 21);
+	const ema50 = emaSeries(closes, 50);
+	const currentEma9 = ema9.at(-1);
+	const currentEma21 = ema21.at(-1);
+	const priorCandles = candles.slice(-21, -1);
+	const priorHigh = priorCandles.length === 20 ? Math.max(...priorCandles.map((candle) => candle.high)) : null;
+	const priorLow = priorCandles.length === 20 ? Math.min(...priorCandles.map((candle) => candle.low)) : null;
+	const atr5 = averageTrueRange(candles, 5);
+	const atr14 = averageTrueRange(candles, 14);
+	return {
+		recentReturnBps: {
+			bars5: returnOverBars(closes, 5),
+			bars14: returnOverBars(closes, 14),
+			bars30: returnOverBars(closes, 30)
+		},
+		ema: {
+			ema9Vs21Bps: currentEma9 !== null && currentEma9 !== void 0 && currentEma21 !== null && currentEma21 !== void 0 ? basisPoints(currentEma9, currentEma21) : null,
+			ema21Slope5Bps: emaSlope(ema21, 5),
+			ema50Slope5Bps: emaSlope(ema50, 5)
+		},
+		rsi14: rsi(closes),
+		macdHistogramBps: macdHistogram(closes),
+		bollingerZ20: bollingerZScore(closes),
+		atr14Bps: atr14 !== null && lastClose !== void 0 ? signedMagnitudeBps(atr14, lastClose) : null,
+		atr5To14Ratio: atr5 !== null && atr14 !== null && atr14 > 0 ? round(atr5 / atr14) : null,
+		prior20HighDistanceBps: priorHigh !== null && lastClose !== void 0 ? basisPoints(priorHigh, lastClose) : null,
+		prior20LowDistanceBps: priorLow !== null && lastClose !== void 0 ? basisPoints(lastClose, priorLow) : null
+	};
+}
+function aggregateHigherTimeframe(candles, candleSeconds, higherSeconds) {
+	const ratio = higherSeconds / candleSeconds;
+	if (!Number.isInteger(ratio) || ratio < 2) return [];
+	const buckets = /* @__PURE__ */ new Map();
+	for (const candle of candles) {
+		const start = Math.floor(candle.time / higherSeconds) * higherSeconds;
+		const slot = Math.round((candle.time - start) / candleSeconds);
+		const expectedTime = start + slot * candleSeconds;
+		if (slot < 0 || slot >= ratio || Math.abs(candle.time - expectedTime) > Math.max(1, candleSeconds * .01)) continue;
+		const bucket = buckets.get(start) ?? /* @__PURE__ */ new Map();
+		bucket.set(slot, candle);
+		buckets.set(start, bucket);
+	}
+	const aggregated = [];
+	for (const [time, bucket] of [...buckets.entries()].sort(([a], [b]) => a - b)) {
+		if (bucket.size !== ratio) continue;
+		const bars = Array.from({ length: ratio }, (_, slot) => bucket.get(slot));
+		if (bars.some((bar) => bar === void 0)) continue;
+		const completeBars = bars;
+		const first = completeBars[0];
+		const last = completeBars.at(-1);
+		if (!first || !last) continue;
+		aggregated.push({
+			time,
+			open: first.open,
+			high: Math.max(...completeBars.map((bar) => bar.high)),
+			low: Math.min(...completeBars.map((bar) => bar.low)),
+			close: last.close
+		});
+	}
+	return aggregated.slice(-32);
+}
+function countMissingIntervals(candles, candleSeconds) {
+	let missing = 0;
+	for (let index = 1; index < candles.length; index += 1) {
+		const previous = candles[index - 1];
+		const current = candles[index];
+		if (!previous || !current) continue;
+		const elapsed = current.time - previous.time;
+		if (elapsed > candleSeconds * 1.5) missing += Math.max(1, Math.round(elapsed / candleSeconds) - 1);
+	}
+	return missing;
+}
+function buildMarketAnalysisContext(inputCandles, candleSeconds, nowSeconds = Math.floor(Date.now() / 1e3)) {
+	if (!Number.isInteger(candleSeconds) || candleSeconds <= 0) throw new Error("Интервал свечей должен быть положительным числом секунд.");
+	const uniqueByTime = /* @__PURE__ */ new Map();
+	for (const candle of inputCandles) if (isValidCandle(candle)) uniqueByTime.set(candle.time, candle);
+	const normalized = [...uniqueByTime.values()].sort((a, b) => a.time - b.time);
+	const closedCandles = normalized.filter((candle) => candle.time + candleSeconds <= nowSeconds);
+	const candles = closedCandles.slice(-128);
+	const latest = candles.at(-1);
+	const latestClosedAgeSeconds = latest ? Math.max(0, Math.round(nowSeconds - (latest.time + candleSeconds))) : null;
+	const higherSeconds = higherTimeframeForAnalysis(candleSeconds);
+	const higherCandles = higherSeconds ? aggregateHigherTimeframe(candles, candleSeconds, higherSeconds) : [];
+	return {
+		candles,
+		dataQuality: {
+			closedCandleCount: candles.length,
+			droppedOpenCandles: normalized.length - closedCandles.length,
+			missingIntervals: countMissingIntervals(candles, candleSeconds),
+			latestClosedAgeSeconds,
+			isFresh: latestClosedAgeSeconds !== null && latestClosedAgeSeconds <= candleSeconds * 3
+		},
+		technicalIndicators: technicalIndicators(candles),
+		higherTimeframe: higherSeconds ? {
+			candleSeconds: higherSeconds,
+			candles: higherCandles
+		} : null
+	};
+}
 var DIRECT_AI_MODEL = "claude-opus-5";
 var DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
+var DIRECT_AI_VISIBLE_CANDLES = 64;
+var DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES = 16;
 var signalReviewSchema = object({
 	decision: literal("signal"),
 	symbol: string().min(1).max(80),
@@ -24,16 +242,19 @@ var passReviewSchema = object({
 });
 discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
 var DIRECT_AI_SYSTEM_PROMPT = [
-	"Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT.",
+	"Ты непосредственно анализируешь переданные свечи OHLC и выбираешь направление CALL или PUT, если для него есть ясное преимущество.",
 	"Не используй отдельный классификатор, числовой порог уверенности, исторический порог точности или проверку на отложенной выборке как дополнительный фильтр.",
 	"Минимум 30 корректных свечей — только условие достаточности входных данных, а не причина обязательно выдать сигнал.",
-	"Не вынуждай себя выбирать направление: возвращай pass, если нет ясного преимущества, свечи боковые или хаотичные, недавнее движение противоречит общей структуре, направление держится только на одной свече или коротком всплеске, либо CALL и PUT одинаково правдоподобны.",
-	"Оцени ожидаемое движение к концу указанной экспирации, а не только цвет последних свечей. Учитывай, что candleSeconds — интервал свечи, а не гарантированный период прогноза.",
-	"Сравнивай доступные пары и выбирай сигнал только если одна пара и направление обоснованы лучше альтернатив; если данные не дают такого преимущества, возвращай pass.",
-	"Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных.",
+	"Не выдумывай направление: возвращай pass, если OHLC боковые или хаотичные, оба направления одинаково правдоподобны, либо сценарий держится только на одной свече без подтверждения. Краткосрочное движение против старшего тренда само по себе не причина для pass: проверь подтверждённый разворот или ложный пробой по закрытым свечам и прежним экстремумам; если структура это не поддерживает — верни pass.",
+	"Проверяй контекст на нескольких масштабах: сопоставь короткую структуру OHLC с higherTimeframe, режимом волатильности, импульсом, EMA, RSI, MACD, Bollinger z-score и расстоянием до недавних границ диапазона. Ищи возможный пробой, ложный пробой, отбой от уровня и смену импульса.",
+	"Эти индикаторы рассчитаны из тех же свечей, поэтому не считай их независимыми подтверждениями и не складывай механический балл. Используй их как проверяемые описания цены; при противоречии индикаторов и OHLC, пропуске важных интервалов или устаревании истории объясни риск либо верни pass.",
+	"Если higherTimeframe отсутствует или содержит мало свечей, прямо учитывай ограниченность контекста и не достраивай недостающие бары. Не используй незакрытые свечи.",
+	"Оцени ожидаемое движение к концу указанной экспирации, а не только цвет последних свечей. Учитывай, что candleSeconds — интервал свечи, а не гарантированный период прогноза; сравни horizonCandles с доступной историей.",
+	"Сравни все доступные пары и выбери наиболее убедительный сценарий на указанную экспирацию, если он последовательно поддержан OHLC. Не требуй, чтобы все индикаторы совпадали; при отсутствии связной свечной структуры верни pass.",
+	"Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Технические расстояния даны в basis points, RSI — 0..100, Bollinger z-score — в стандартных отклонениях.",
 	"Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки.",
 	"Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены.",
-	"Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}."
+	"Кратко, но содержательно: каждое поле explanation — одно короткое предложение примерно до 180 символов. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}."
 ].join(" ");
 var client = null;
 function getAnthropicClient() {
@@ -167,7 +388,7 @@ function normalizeExplanation(value, root) {
 	} : null;
 }
 function candlesInBasisPoints(candles) {
-	const start = Math.max(0, candles.length - 128);
+	const start = Math.max(0, candles.length - DIRECT_AI_VISIBLE_CANDLES);
 	let previousClose = candles[start - 1]?.close ?? candles[start]?.open ?? 1;
 	const result = [];
 	for (let index = start; index < candles.length; index += 1) {
@@ -263,9 +484,6 @@ function parseMarketAiReview(content, allowedSymbols) {
 function acceptsMarketAiReview(review, allowedSymbols) {
 	return review?.decision === "signal" && allowedSymbols.includes(review.symbol);
 }
-function isValidCandle(candle) {
-	return Number.isFinite(candle.time) && Number.isFinite(candle.open) && Number.isFinite(candle.high) && Number.isFinite(candle.low) && Number.isFinite(candle.close) && candle.time > 0 && candle.open > 0 && candle.high > 0 && candle.low > 0 && candle.close > 0 && candle.high >= candle.low && candle.high >= Math.max(candle.open, candle.close) && candle.low <= Math.min(candle.open, candle.close);
-}
 function marketAiApiErrorMessage(error) {
 	if (error instanceof Error && error.message.includes("Подключение Anthropic через Replit AI Integrations не настроено")) return error.message;
 	const status = isRecord(error) ? Number(error.status ?? error.statusCode) : NaN;
@@ -289,7 +507,7 @@ function requestMarketAiCompletion(messages) {
 	});
 	return getAnthropicClient().messages.create({
 		model: DIRECT_AI_MODEL,
-		max_tokens: 8192,
+		max_tokens: 2048,
 		system,
 		messages: requestMessages
 	}).then((response) => {
@@ -340,37 +558,77 @@ async function requestMarketAiReviewWithRepair(request, baseMessages, allowedSym
 	if (typeof firstContent !== "string" && typeof retryContent !== "string") throw new Error("Claude не вернул текст анализа после повторного запроса. Сигнал не выдан.");
 	throw new Error("Claude дважды вернул ответ, который не удалось проверить. Повторите запрос; сигнал не выдан.");
 }
-async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates) {
-	const eligibleCandidates = candidates.map((candidate) => {
-		const candlesByTime = /* @__PURE__ */ new Map();
-		for (const candle of candidate.candles) if (isValidCandle(candle)) candlesByTime.set(candle.time, candle);
-		return {
-			...candidate,
-			candles: [...candlesByTime.values()].sort((a, b) => a.time - b.time)
-		};
-	}).filter((candidate) => candidate.candles.length >= 30);
+async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates, options = {}) {
+	const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1e3);
+	const preparedCandidates = candidates.map((candidate) => ({
+		...candidate,
+		context: buildMarketAnalysisContext(candidate.candles, candleSeconds, nowSeconds)
+	}));
+	const eligibleCandidates = preparedCandidates.filter((candidate) => candidate.context.candles.length >= 30 && candidate.context.dataQuality.isFresh);
 	if (eligibleCandidates.length === 0) return {
 		decision: "pass",
-		reason: `После проверки данных нужно не менее 30 корректных свечей на пару.`
+		reason: preparedCandidates.some((candidate) => candidate.context.candles.length >= 30 && !candidate.context.dataQuality.isFresh) ? "Последняя закрытая свеча слишком старая для надёжного анализа. Сигнал не выдан." : `После проверки данных нужно не менее 30 закрытых корректных свечей на пару.`
 	};
 	const input = {
 		expirySeconds,
 		candleSeconds,
-		candleFormat: "Последовательность OHLC, oldest-to-newest; значения в basis points относительно close предыдущей свечи.",
+		horizonCandles: expirySeconds / candleSeconds,
+		candleFormat: "Массив candles содержит до 64 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
+		indicatorFormat: {
+			recentReturnBps: "Изменение close за указанное число свечей в basis points.",
+			ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",
+			emaSlope5Bps: "Изменение EMA за 5 свечей в basis points; знак показывает направление наклона.",
+			rsi14: "RSI 14 в диапазоне 0..100.",
+			macdHistogramBps: "Знак и величина MACD-гистограммы в basis points относительно последнего close.",
+			bollingerZ20: "Отклонение последнего close от средней Bollinger 20 в стандартных отклонениях.",
+			atr14Bps: "Средний истинный диапазон за 14 свечей в basis points.",
+			atr5To14Ratio: "Отношение ATR 5 к ATR 14; выше 1 означает недавнее расширение диапазона.",
+			prior20HighDistanceBps: "Предыдущий максимум 20 свечей относительно текущего close; отрицательное значение означает close выше максимума.",
+			prior20LowDistanceBps: "Текущий close относительно предыдущего минимума 20 свечей; отрицательное значение означает close ниже минимума.",
+			null: "Истории недостаточно для надёжного расчёта этого показателя."
+		},
 		candidates: eligibleCandidates.map((candidate) => ({
 			symbol: candidate.symbol,
 			name: candidate.name,
-			candles: candlesInBasisPoints(candidate.candles)
+			dataQuality: candidate.context.dataQuality,
+			technicalIndicators: candidate.context.technicalIndicators,
+			higherTimeframe: candidate.context.higherTimeframe ? {
+				candleSeconds: candidate.context.higherTimeframe.candleSeconds,
+				candleCount: Math.min(DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES, candidate.context.higherTimeframe.candles.length),
+				candles: candlesInBasisPoints(candidate.context.higherTimeframe.candles.slice(-16))
+			} : null,
+			candles: candlesInBasisPoints(candidate.context.candles)
 		}))
 	};
 	const userPrompt = JSON.stringify(input);
-	return requestMarketAiReviewWithRepair(requestMarketAiCompletion, [{
+	const baseMessages = [{
 		role: "system",
 		content: DIRECT_AI_SYSTEM_PROMPT
 	}, {
 		role: "user",
 		content: userPrompt
-	}], eligibleCandidates.map((candidate) => candidate.symbol));
+	}];
+	const allowedSymbols = eligibleCandidates.map((candidate) => candidate.symbol);
+	return requestMarketAiReviewWithRepair(options.request ?? requestMarketAiCompletion, baseMessages, allowedSymbols);
+}
+function createKeyedAsyncQueue() {
+	const tails = /* @__PURE__ */ new Map();
+	return async function run(key, operation) {
+		const previous = tails.get(key) ?? Promise.resolve();
+		let releaseTurn = () => {};
+		const turn = new Promise((resolve) => {
+			releaseTurn = resolve;
+		});
+		const tail = previous.then(() => turn);
+		tails.set(key, tail);
+		await previous;
+		try {
+			return await operation();
+		} finally {
+			releaseTurn();
+			if (tails.get(key) === tail) tails.delete(key);
+		}
+	};
 }
 function createRotatingCandidateSelector(batchSize) {
 	if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Candidate batch size must be a positive integer.");
@@ -383,12 +641,31 @@ function createRotatingCandidateSelector(batchSize) {
 		return Array.from({ length: size }, (_, index) => items[(start + index) % items.length]);
 	};
 }
+function loadCandidatesInParallel(items, load) {
+	return Promise.all(items.map(async (item) => {
+		try {
+			return {
+				ok: true,
+				item,
+				value: await load(item)
+			};
+		} catch (error) {
+			return {
+				ok: false,
+				item,
+				error
+			};
+		}
+	}));
+}
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 var AUTH_REJECTED_MESSAGE = "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 var HISTORY_PAGE_CANDLES = 150;
-var SIGNAL_CANDIDATES_PER_SEARCH = 4;
+var SIGNAL_CANDIDATES_PER_SEARCH = 8;
+var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
+var runHistoryRequest = createKeyedAsyncQueue();
 var pairs = /* @__PURE__ */ new Map();
 var balance = null;
 var socket = null;
@@ -396,12 +673,11 @@ var ready = null;
 var connectionError = "";
 var retryAfter = 0;
 var expectAssets = false;
-var expectHistory = false;
 var expectBalance = false;
 var quotes = /* @__PURE__ */ new Map();
 var selectSignalCandidates = createRotatingCandidateSelector(SIGNAL_CANDIDATES_PER_SEARCH);
 var expectStream = false;
-var pending = null;
+var pendingHistory = /* @__PURE__ */ new Map();
 function textOf(data) {
 	if (typeof data === "string") return data;
 	if (Buffer.isBuffer(data)) return data.toString("utf8");
@@ -523,6 +799,8 @@ function subscribe(symbol) {
 	}]));
 }
 function waitQuote(symbol) {
+	const current = quotes.get(symbol);
+	if (current && Date.now() - current.at <= 2e3) return Promise.resolve(current.price);
 	const started = Date.now();
 	subscribe(symbol);
 	return new Promise((resolve, reject) => {
@@ -560,10 +838,11 @@ function waitQuote(symbol) {
 	});
 }
 function failPending(error) {
-	if (!pending) return;
-	clearTimeout(pending.timer);
-	pending.reject(error);
-	pending = null;
+	for (const request of pendingHistory.values()) {
+		clearTimeout(request.timer);
+		request.reject(error);
+	}
+	pendingHistory.clear();
 }
 function handleMessage(current, message) {
 	if (message.startsWith("0") && message.includes("sid")) {
@@ -590,10 +869,6 @@ function handleMessage(current, message) {
 		expectAssets = true;
 		return;
 	}
-	if (message.includes("loadHistoryPeriod")) {
-		expectHistory = true;
-		return;
-	}
 	if (expectAssets && message.startsWith("[")) {
 		expectAssets = false;
 		try {
@@ -601,16 +876,17 @@ function handleMessage(current, message) {
 		} catch {}
 		return;
 	}
-	if (expectHistory && message.startsWith("{")) {
-		expectHistory = false;
+	if (message.startsWith("{")) {
 		try {
 			const parsed = JSON.parse(message);
-			if (pending && parsed.asset === pending.asset && Array.isArray(parsed.data)) {
-				const candles = asCandles(parsed.data);
-				clearTimeout(pending.timer);
-				const resolve = pending.resolve;
-				pending = null;
-				resolve(candles);
+			if (typeof parsed.asset === "string" && Array.isArray(parsed.data)) {
+				const request = pendingHistory.get(parsed.asset);
+				if (request) {
+					clearTimeout(request.timer);
+					pendingHistory.delete(parsed.asset);
+					request.resolve(asCandles(parsed.data));
+					return;
+				}
 			}
 		} catch {}
 		return;
@@ -658,6 +934,7 @@ function connect() {
 		socket = null;
 		retryAfter = Date.now() + 2e3;
 		connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
+		failPending(new Error(connectionError));
 	});
 	socket = next;
 	next.on("message", (data) => handleMessage(next, textOf(data)));
@@ -666,6 +943,7 @@ function connect() {
 		socket = null;
 		retryAfter = Date.now() + 2e3;
 		if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
+		failPending(new Error(connectionError));
 	});
 }
 function ensureFeed() {
@@ -699,53 +977,52 @@ async function feedSnapshot() {
 		pairs: [...pairs.values()].sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name))
 	};
 }
-async function loadHistoryPage(symbol, seconds, time) {
-	await ensureFeed();
-	if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
-	if (!socket || socket.readyState !== wrapper_default.OPEN) throw new Error("Котировки сейчас недоступны.");
-	if (pending) failPending(/* @__PURE__ */ new Error("Запрос сменён."));
-	const current = socket;
-	return new Promise((resolve, reject) => {
-		const timer = setTimeout(() => {
-			if (pending?.asset === symbol) {
-				pending = null;
-				expectHistory = false;
+async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
+	return runHistoryRequest(symbol, async () => {
+		await ensureFeed();
+		if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
+		if (!socket || socket.readyState !== wrapper_default.OPEN) throw new Error("Котировки сейчас недоступны.");
+		const current = socket;
+		return new Promise((resolve, reject) => {
+			let request;
+			const timer = setTimeout(() => {
+				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+				reject(/* @__PURE__ */ new Error(`История свечей не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
+			}, timeoutMs);
+			request = {
+				asset: symbol,
+				resolve,
+				reject,
+				timer
+			};
+			pendingHistory.set(symbol, request);
+			try {
+				current.send("42" + JSON.stringify(["changeSymbol", {
+					asset: symbol,
+					period: seconds
+				}]));
+				current.send("42" + JSON.stringify(["loadHistoryPeriod", {
+					asset: symbol,
+					index: 7e3 + Math.floor(Math.random() * 2e3),
+					time,
+					offset: seconds * HISTORY_PAGE_CANDLES,
+					period: seconds
+				}]));
+			} catch {
+				clearTimeout(timer);
+				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+				reject(/* @__PURE__ */ new Error("Не удалось запросить историю свечей Pocket Option."));
 			}
-			reject(/* @__PURE__ */ new Error("История свечей не пришла. Попробуйте ещё раз."));
-		}, 12e3);
-		pending = {
-			asset: symbol,
-			resolve,
-			reject,
-			timer
-		};
-		try {
-			current.send("42" + JSON.stringify(["changeSymbol", {
-				asset: symbol,
-				period: seconds
-			}]));
-			current.send("42" + JSON.stringify(["loadHistoryPeriod", {
-				asset: symbol,
-				index: 7e3 + Math.floor(Math.random() * 2e3),
-				time,
-				offset: seconds * HISTORY_PAGE_CANDLES,
-				period: seconds
-			}]));
-		} catch {
-			clearTimeout(timer);
-			if (pending?.asset === symbol) pending = null;
-			expectHistory = false;
-			reject(/* @__PURE__ */ new Error("Не удалось запросить историю свечей Pocket Option."));
-		}
+		});
 	});
 }
-async function loadCandles(symbol, seconds) {
+async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3) {
 	await ensureFeed();
 	const collected = /* @__PURE__ */ new Map();
 	let cursor = Math.floor(Date.now() / 1e3);
 	const maxPages = Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
 	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
-		const candles = await loadHistoryPage(symbol, seconds, cursor);
+		const candles = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
 		if (candles.length === 0) break;
 		const previousSize = collected.size;
 		for (const candle of candles) collected.set(candle.time, candle);
@@ -796,7 +1073,7 @@ async function feedSignal(symbol, expirySeconds) {
 	await ensureFeed();
 	subscribe(symbol);
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-	const candles = await loadCandles(symbol, analysisSeconds);
+	const candles = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
 	const pair = pairs.get(symbol);
 	if (!pair) throw new Error("Эта пара сейчас недоступна.");
 	const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [{
@@ -830,16 +1107,18 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 	const candidates = [];
 	let historyResponses = 0;
 	let historyFailure = "";
-	for (const pair of pool) try {
-		const candles = await loadCandles(pair.symbol, analysisSeconds);
+	const historyResults = await loadCandidatesInParallel(pool, (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS));
+	for (const result of historyResults) {
+		if (!result.ok) {
+			if (!historyFailure && result.error instanceof Error) historyFailure = result.error.message;
+			continue;
+		}
 		historyResponses += 1;
-		if (candles.length < 30) continue;
+		if (result.value.length < 30) continue;
 		candidates.push({
-			pair,
-			candles
+			pair: result.item,
+			candles: result.value
 		});
-	} catch (cause) {
-		if (cause instanceof Error) historyFailure = cause.message;
 	}
 	if (candidates.length === 0) {
 		if (historyResponses === 0 && historyFailure) throw new Error(`Не удалось получить историю свечей Pocket Option: ${historyFailure}`);

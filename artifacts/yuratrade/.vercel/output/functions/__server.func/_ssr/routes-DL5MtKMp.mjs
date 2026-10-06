@@ -1,27 +1,13 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
-import { n as analysisPeriodForExpiry } from "./expiry-BxofkO8c.mjs";
+import { i as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, r as alternativeExpiryMinutes } from "./expiry-CMnOHOBu.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, h as takeBest, i as readSignalJournal, p as loadFeed, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-CikUson1.mjs";
-import { t as StatRow } from "./stats-D1ta-tdm.mjs";
-import { t as AnalysisModal } from "./analysis-modal-CGIoWhs0.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-wRsxFMDQ.js
+import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, h as takeBest, i as readSignalJournal, p as loadFeed, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-e0nTTW-D.mjs";
+import { t as StatRow } from "./stats-BwJeq78y.mjs";
+import { t as AnalysisModal } from "./analysis-modal-cIq3IRqX.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DL5MtKMp.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
-var expiryOptionsMinutes = [
-	1,
-	2,
-	3,
-	5,
-	10,
-	15,
-	25,
-	30,
-	60,
-	120,
-	180,
-	240
-];
 function pairLabel(name) {
 	return name.replace(/\s+OTC$/i, "").trim();
 }
@@ -38,6 +24,9 @@ function SignalDesk() {
 	const [feedError, setFeedError] = (0, import_react.useState)("");
 	const [searchError, setSearchError] = (0, import_react.useState)("");
 	const [notice, setNotice] = (0, import_react.useState)("");
+	const [suggestedSignals, setSuggestedSignals] = (0, import_react.useState)([]);
+	const [alternativesChecked, setAlternativesChecked] = (0, import_react.useState)(false);
+	const [alternativeSearchError, setAlternativeSearchError] = (0, import_react.useState)("");
 	const [balance, setBalance] = (0, import_react.useState)(null);
 	const [used, setUsed] = (0, import_react.useState)(0);
 	const [expiryMinutes, setExpiryMinutes] = (0, import_react.useState)(1);
@@ -76,12 +65,115 @@ function SignalDesk() {
 	const left = cap === null ? null : Math.max(0, cap - used);
 	const blocked = admin ? "" : balance === null ? t("signal.block.deposit") : !level ? t("signal.block.minimum") : left === 0 ? t("signal.block.limit") : "";
 	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
+	const checkAlternativeExpiries = async (reason, selectedExpirySeconds, attempt) => {
+		setPrepared(null);
+		setNotice(reason);
+		setSearchError("");
+		setSuggestedSignals([]);
+		setAlternativeSearchError("");
+		setAlternativesChecked(false);
+		const alternatives = alternativeExpiryMinutes(selectedExpirySeconds / 60);
+		if (alternatives.length === 0) {
+			setAlternativesChecked(true);
+			setPhase("idle");
+			return;
+		}
+		setPhase("alternatives");
+		const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
+		const found = [];
+		let firstError = "";
+		const results = await Promise.all(alternatives.map(async (minutes) => {
+			if (attemptRef.current !== attempt) return {
+				minutes,
+				result: null,
+				error: ""
+			};
+			try {
+				return {
+					minutes,
+					result: await takeBest({ data: {
+						expirySeconds: minutes * 60,
+						excludedSymbols
+					} }),
+					error: ""
+				};
+			} catch (cause) {
+				return {
+					minutes,
+					result: null,
+					error: cause instanceof Error ? cause.message : t("signal.none")
+				};
+			}
+		}));
+		if (attemptRef.current !== attempt) return;
+		for (const outcome of results) {
+			if (outcome.result?.decision === "signal") found.push({
+				minutes: outcome.minutes,
+				candidate: outcome.result
+			});
+			if (!firstError && outcome.error) firstError = outcome.error;
+		}
+		setSuggestedSignals(found);
+		setAlternativeSearchError(firstError);
+		setAlternativesChecked(true);
+		setPhase("idle");
+	};
+	const prepareSignal = async (candidate, selectedExpirySeconds, attempt) => {
+		setExpiryMinutes(selectedExpirySeconds / 60);
+		setPrepared(candidate);
+		setCountdown(10);
+		setPhase("countdown");
+		for (let seconds = 10; seconds > 0; seconds -= 1) {
+			if (attemptRef.current !== attempt) return;
+			setCountdown(seconds);
+			await new Promise((resolve) => window.setTimeout(resolve, 1e3));
+		}
+		if (attemptRef.current !== attempt) return;
+		setPhase("finalizing");
+		const result = await takeSignal({ data: {
+			symbol: candidate.symbol,
+			expirySeconds: selectedExpirySeconds
+		} });
+		if (attemptRef.current !== attempt) return;
+		if (result.decision === "pass") {
+			await checkAlternativeExpiries(result.reason, selectedExpirySeconds, attempt);
+			return;
+		}
+		if (cap !== null) setUsed(markSignalUsed());
+		await navigate({
+			to: "/signal",
+			search: {
+				symbol: candidate.symbol,
+				name: result.name,
+				group: "fx",
+				direction: result.direction,
+				open: result.openPrice,
+				payout: result.payout,
+				seconds: selectedExpirySeconds,
+				analysisSeconds: result.analysisSeconds,
+				note: result.note,
+				bars: result.bars,
+				aiConfidence: result.aiConfidence,
+				step: 0,
+				started: Date.now()
+			}
+		});
+	};
+	const showSearchError = (cause, attempt) => {
+		if (attemptRef.current !== attempt) return;
+		setPhase("idle");
+		setPrepared(null);
+		setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
+	};
 	const ask = async () => {
 		if (phase !== "idle" || blocked || !ready) return;
 		const attempt = ++attemptRef.current;
 		setPhase("search");
 		setSearchError("");
 		setNotice("");
+		setSuggestedSignals([]);
+		setAlternativesChecked(false);
+		setAlternativeSearchError("");
 		try {
 			const candidate = await takeBest({ data: {
 				expirySeconds,
@@ -89,55 +181,21 @@ function SignalDesk() {
 			} });
 			if (attemptRef.current !== attempt) return;
 			if (candidate.decision === "pass") {
-				setPhase("idle");
-				setNotice(candidate.reason);
+				await checkAlternativeExpiries(candidate.reason, expirySeconds, attempt);
 				return;
 			}
-			setPrepared(candidate);
-			setPhase("countdown");
-			for (let seconds = 10; seconds > 0; seconds -= 1) {
-				if (attemptRef.current !== attempt) return;
-				setCountdown(seconds);
-				await new Promise((resolve) => window.setTimeout(resolve, 1e3));
-			}
-			if (attemptRef.current !== attempt) return;
-			setPhase("finalizing");
-			const result = await takeSignal({ data: {
-				symbol: candidate.symbol,
-				expirySeconds
-			} });
-			if (attemptRef.current !== attempt) return;
-			if (result.decision === "pass") {
-				setPrepared(null);
-				setPhase("idle");
-				setNotice(result.reason);
-				return;
-			}
-			if (cap !== null) setUsed(markSignalUsed());
-			await navigate({
-				to: "/signal",
-				search: {
-					symbol: candidate.symbol,
-					name: result.name,
-					group: "fx",
-					direction: result.direction,
-					open: result.openPrice,
-					payout: result.payout,
-					seconds: expirySeconds,
-					analysisSeconds: result.analysisSeconds,
-					note: result.note,
-					bars: result.bars,
-					aiConfidence: result.aiConfidence,
-					step: 0,
-					started: Date.now()
-				}
-			});
+			await prepareSignal(candidate, expirySeconds, attempt);
 		} catch (cause) {
-			if (attemptRef.current !== attempt) return;
-			setPhase("idle");
-			setPrepared(null);
-			setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
+			showSearchError(cause, attempt);
 		}
+	};
+	const selectExpirySuggestion = (suggestion) => {
+		if (phase !== "idle" || blocked) return;
+		const attempt = ++attemptRef.current;
+		setSearchError("");
+		prepareSignal(suggestion.candidate, suggestion.minutes * 60, attempt).catch((cause) => {
+			showSearchError(cause, attempt);
+		});
 	};
 	const cancelCountdown = () => {
 		attemptRef.current += 1;
@@ -187,7 +245,7 @@ function SignalDesk() {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "mt-3 grid grid-cols-4 gap-2",
-								children: expiryOptionsMinutes.map((minutes) => {
+								children: EXPIRY_OPTIONS_MINUTES.map((minutes) => {
 									const selected = expiryMinutes === minutes;
 									const label = expiryLabel(minutes * 60);
 									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
@@ -213,7 +271,7 @@ function SignalDesk() {
 						className: "btn-prime mt-4 min-h-12 w-full",
 						disabled: !ready || phase !== "idle" || Boolean(blocked),
 						onClick: () => void ask(),
-						children: phase === "search" ? t("signal.checking") : phase === "countdown" ? t("signal.pairReady") : phase === "finalizing" ? t("signal.finalizing") : t("signal.get")
+						children: phase === "search" ? t("signal.checking") : phase === "alternatives" ? t("signal.alternativesChecking") : phase === "countdown" ? t("signal.pairReady") : phase === "finalizing" ? t("signal.finalizing") : t("signal.get")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
@@ -244,27 +302,105 @@ function SignalDesk() {
 							})
 						]
 					}) : null,
-					notice ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-						className: "mt-4 rounded-2xl border border-blue/25 bg-blue/8 p-4 text-left",
+					notice && phase === "idle" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 overflow-hidden rounded-3xl border border-blue/25 bg-[#0e1420] text-left shadow-[0_18px_50px_rgba(0,0,0,0.24)]",
 						role: "status",
 						"aria-live": "polite",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "text-sm font-semibold text-blue-soft",
-								children: t("common.notConfirmed")
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-								className: "mt-1 text-sm leading-relaxed text-muted",
-								children: notice
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: "btn-ghost mt-3 min-h-10 w-full justify-center",
-								disabled: !ready || phase !== "idle" || Boolean(blocked),
-								onClick: () => void ask(),
-								children: t("signal.tryAgain")
-							})
-						]
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-start gap-3 border-b border-white/6 bg-gradient-to-r from-blue/10 to-transparent p-4 sm:p-5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "grid size-11 shrink-0 place-items-center rounded-2xl border border-blue/25 bg-blue/10 text-blue-soft",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", {
+									viewBox: "0 0 24 24",
+									fill: "none",
+									className: "size-5",
+									"aria-hidden": "true",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+										d: "M12 8v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3l-7.5-13.1a2 2 0 0 0-3.4 0Z",
+										stroke: "currentColor",
+										strokeWidth: "1.7",
+										strokeLinecap: "round",
+										strokeLinejoin: "round"
+									})
+								})
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "min-w-0 flex-1",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-[10px] font-bold tracking-[0.16em] text-blue-soft uppercase",
+										children: t("signal.alternativeSearchKicker")
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+										className: "mt-1 text-base font-bold leading-snug text-fg sm:text-lg",
+										children: t("common.notConfirmed")
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1.5 text-sm leading-relaxed text-muted",
+										children: t("signal.noSignalAtExpiry", { expiry: expiryLabel(expirySeconds) })
+									})
+								]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "space-y-4 p-4 sm:p-5",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-2xl border border-white/8 bg-black/20 p-3.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-[10px] font-bold tracking-[0.14em] text-dim uppercase",
+										children: t("signal.reason")
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1.5 whitespace-pre-line break-words text-sm leading-relaxed text-muted",
+										children: notice
+									})]
+								}),
+								suggestedSignals.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-2.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-sm font-bold text-fg",
+										children: t("signal.alternativesFound")
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1 text-xs leading-relaxed text-muted",
+										children: t("signal.alternativesFoundBody")
+									})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "space-y-2",
+										children: suggestedSignals.map((suggestion) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											className: "group flex min-h-16 w-full items-center justify-between gap-3 rounded-2xl border border-blue/20 bg-[#121b29] px-3.5 py-3 text-left transition hover:border-blue/45 hover:bg-blue/8 disabled:cursor-not-allowed disabled:opacity-50",
+											disabled: !ready || phase !== "idle" || Boolean(blocked),
+											onClick: () => selectExpirySuggestion(suggestion),
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "min-w-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "block text-base font-bold text-fg",
+													children: expiryLabel(suggestion.minutes * 60)
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "mt-0.5 block text-xs text-muted",
+													children: t("signal.alternativeChoose")
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "shrink-0 rounded-full border border-blue/20 bg-blue/10 px-2.5 py-1 text-xs font-semibold text-blue-soft",
+												children: t("signal.alternativePayout", { payout: suggestion.candidate.payout })
+											})]
+										}, suggestion.minutes))
+									})]
+								}) : alternativesChecked && !alternativeSearchError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "rounded-2xl border border-white/8 bg-white/3 p-3.5 text-sm leading-relaxed text-muted",
+									children: t("signal.alternativesNone")
+								}) : null,
+								alternativeSearchError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "rounded-2xl border border-loss/25 bg-loss/5 p-3.5 text-sm leading-relaxed text-muted",
+									role: "status",
+									children: t("signal.alternativesPartial", { error: alternativeSearchError })
+								}) : null,
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: "btn-ghost min-h-11 w-full justify-center",
+									disabled: !ready || phase !== "idle" || Boolean(blocked),
+									onClick: () => void ask(),
+									children: t("signal.tryAgain")
+								})
+							]
+						})]
 					}) : null
 				]
 			}),
@@ -311,6 +447,12 @@ function SignalDesk() {
 			phase === "search" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
 				pair: t("home.eyebrow"),
 				expiry: expiryLabel(expirySeconds)
+			}) : null,
+			phase === "alternatives" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+				pair: t("signal.alternativeSearchKicker"),
+				expiry: expiryLabel(expirySeconds),
+				title: t("signal.alternativesChecking"),
+				description: t("signal.alternativesCheckingBody")
 			}) : null,
 			phase === "finalizing" && prepared ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
 				pair: pairLabel(prepared.name),

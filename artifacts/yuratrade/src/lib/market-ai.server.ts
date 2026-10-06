@@ -7,6 +7,8 @@ export const DIRECT_AI_MODEL = "claude-opus-5";
 export const DIRECT_AI_MODEL_LABEL = "Claude Opus 5";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 30;
+const DIRECT_AI_VISIBLE_CANDLES = 64;
+const DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES = 16;
 
 export type MarketAiCandidate = {
   symbol: string;
@@ -53,7 +55,7 @@ export const DIRECT_AI_SYSTEM_PROMPT = [
   "Используй только переданные данные, не учитывай размер выплаты как причину повысить уверенность, не выдумывай индикаторы, уровни цены, новости или сведения, которых нет во входных данных. Технические расстояния даны в basis points, RSI — 0..100, Bollinger z-score — в стандартных отклонениях.",
   "Самооценка confidence субъективна и не является статистически калиброванной вероятностью или исторической точностью. Не обещай результат и не открывай сделки.",
   "Все пять текстов explanation напиши по-русски: pairSelection — почему выбрана эта пара; если пара одна, прямо скажи, что сравнения не было; candleEvidence — конкретные видимые свойства OHLC; directionRationale — почему эти свечи поддерживают CALL или PUT; riskFactors — что может привести к ошибке; invalidation — какое наблюдаемое движение ослабит сценарий без выдуманной цены.",
-  "Кратко, но содержательно. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
+  "Кратко, но содержательно: каждое поле explanation — одно короткое предложение примерно до 180 символов. Верни только JSON: либо {\"decision\":\"signal\",\"symbol\":\"точный symbol из списка\",\"direction\":\"call\"|\"put\",\"confidence\":0..100 целое,\"explanation\":{\"pairSelection\":\"...\",\"candleEvidence\":\"...\",\"directionRationale\":\"...\",\"riskFactors\":\"...\",\"invalidation\":\"...\"}}, либо {\"decision\":\"pass\",\"reason\":\"кратко по-русски\"}.",
 ].join(" ");
 
 let client: Anthropic | null = null;
@@ -170,7 +172,7 @@ function normalizeExplanation(
 }
 
 function candlesInBasisPoints(candles: MarketCandle[]) {
-  const start = Math.max(0, candles.length - DIRECT_AI_HISTORY_CANDLES);
+  const start = Math.max(0, candles.length - DIRECT_AI_VISIBLE_CANDLES);
   let previousClose = candles[start - 1]?.close ?? candles[start]?.open ?? 1;
   const result: number[][] = [];
 
@@ -300,7 +302,7 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
 
   return getAnthropicClient().messages.create({
     model: DIRECT_AI_MODEL,
-    max_tokens: 8192,
+    max_tokens: 2048,
     system,
     messages: requestMessages,
   }).then((response) => {
@@ -415,7 +417,7 @@ export async function analyzeMarketCandidates(
     expirySeconds,
     candleSeconds,
     horizonCandles: expirySeconds / candleSeconds,
-    candleFormat: "Последовательность закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. higherTimeframe содержит только полностью собранные свечи.",
+    candleFormat: "Массив candles содержит до 64 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
     indicatorFormat: {
       recentReturnBps: "Изменение close за указанное число свечей в basis points.",
       ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",
@@ -437,8 +439,13 @@ export async function analyzeMarketCandidates(
       higherTimeframe: candidate.context.higherTimeframe
         ? {
             candleSeconds: candidate.context.higherTimeframe.candleSeconds,
-            candleCount: candidate.context.higherTimeframe.candles.length,
-            candles: candlesInBasisPoints(candidate.context.higherTimeframe.candles),
+            candleCount: Math.min(
+              DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES,
+              candidate.context.higherTimeframe.candles.length,
+            ),
+            candles: candlesInBasisPoints(
+              candidate.context.higherTimeframe.candles.slice(-DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES),
+            ),
           }
         : null,
       candles: candlesInBasisPoints(candidate.context.candles),

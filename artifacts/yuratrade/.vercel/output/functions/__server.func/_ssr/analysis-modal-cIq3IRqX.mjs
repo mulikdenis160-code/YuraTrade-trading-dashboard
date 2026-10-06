@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, n as require_react_dom } from "../_libs/@tanstack/react-router+[...].mjs";
-import { w as useLanguage } from "./router-CikUson1.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/analysis-modal-CGIoWhs0.js
+import { w as useLanguage } from "./router-e0nTTW-D.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/analysis-modal-cIq3IRqX.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var import_react_dom = require_react_dom();
@@ -10,7 +10,7 @@ var lines = [
 	"modal.step2",
 	"modal.step3"
 ];
-function AnalysisModal({ pair, expiry }) {
+function AnalysisModal({ pair, expiry, title, description }) {
 	const { t } = useLanguage();
 	const [line, setLine] = (0, import_react.useState)(0);
 	(0, import_react.useEffect)(() => {
@@ -54,11 +54,11 @@ function AnalysisModal({ pair, expiry }) {
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 					className: "mt-6 text-2xl font-bold text-fg",
-					children: t("modal.title")
+					children: title ?? t("modal.title")
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-2 min-h-10 text-sm text-muted",
-					children: t(lines[line])
+					className: "mt-2 min-h-10 text-sm leading-relaxed text-muted",
+					children: description ?? t(lines[line])
 				})
 			]
 		})

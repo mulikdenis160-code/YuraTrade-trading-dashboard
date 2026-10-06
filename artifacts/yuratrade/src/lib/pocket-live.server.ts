@@ -27,6 +27,7 @@ const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 const HISTORY_PAGE_CANDLES = 150;
 const SIGNAL_CANDIDATES_PER_SEARCH = 8;
+const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
 const runHistoryRequest = createKeyedAsyncQueue();
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
@@ -213,6 +214,8 @@ function subscribe(symbol: string) {
 }
 
 function waitQuote(symbol: string) {
+  const current = quotes.get(symbol);
+  if (current && Date.now() - current.at <= 2000) return Promise.resolve(current.price);
   const started = Date.now();
   subscribe(symbol);
   return new Promise<number>((resolve, reject) => {
@@ -406,7 +409,12 @@ export async function feedSnapshot() {
   };
 }
 
-async function loadHistoryPage(symbol: string, seconds: number, time: number) {
+async function loadHistoryPage(
+  symbol: string,
+  seconds: number,
+  time: number,
+  timeoutMs = 12_000,
+) {
   return runHistoryRequest(symbol, async () => {
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
@@ -416,8 +424,8 @@ async function loadHistoryPage(symbol: string, seconds: number, time: number) {
       let request: Pending;
       const timer = setTimeout(() => {
         if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
-        reject(new Error("История свечей не пришла. Попробуйте ещё раз."));
-      }, 12000);
+        reject(new Error(`История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
+      }, timeoutMs);
       request = { asset: symbol, resolve, reject, timer };
       pendingHistory.set(symbol, request);
       try {
@@ -444,13 +452,13 @@ async function loadHistoryPage(symbol: string, seconds: number, time: number) {
   });
 }
 
-async function loadCandles(symbol: string, seconds: number) {
+async function loadCandles(symbol: string, seconds: number, pageTimeoutMs = 12_000) {
   await ensureFeed();
   const collected = new Map<number, HistoricalCandle>();
   let cursor = Math.floor(Date.now() / 1000);
   const maxPages = Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
   for (let page = 0; page < maxPages && collected.size < DIRECT_AI_HISTORY_CANDLES; page += 1) {
-    const candles = await loadHistoryPage(symbol, seconds, cursor);
+    const candles = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
     if (candles.length === 0) break;
     const previousSize = collected.size;
     for (const candle of candles) collected.set(candle.time, candle);
@@ -502,7 +510,7 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   await ensureFeed();
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const candles = await loadCandles(symbol, analysisSeconds);
+  const candles = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
   const pair = pairs.get(symbol);
   if (!pair) throw new Error("Эта пара сейчас недоступна.");
   const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [
@@ -540,7 +548,7 @@ export async function feedBest(
   let historyFailure = "";
   const historyResults = await loadCandidatesInParallel(
     pool,
-    (pair) => loadCandles(pair.symbol, analysisSeconds),
+    (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS),
   );
   for (const result of historyResults) {
     if (!result.ok) {

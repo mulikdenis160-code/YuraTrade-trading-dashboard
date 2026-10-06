@@ -161,12 +161,13 @@ test("analysis request supplies closed candles, indicators, and completed higher
     }>;
   };
   assert.equal(input.horizonCandles, 10);
-  assert.equal(input.candidates[0]?.candles.length, 100);
+  assert.equal(input.candidates[0]?.candles.length, 64);
   assert.equal(input.candidates[0]?.dataQuality.closedCandleCount, 100);
   assert.equal(input.candidates[0]?.dataQuality.isFresh, true);
   assert.equal(input.candidates[0]?.technicalIndicators.rsi14, 100);
   assert.equal(input.candidates[0]?.higherTimeframe?.candleSeconds, 300);
-  assert.equal(input.candidates[0]?.higherTimeframe?.candleCount, 20);
+  assert.equal(input.candidates[0]?.higherTimeframe?.candleCount, 16);
+  assert.equal(input.candidates[0]?.higherTimeframe?.candles.length, 16);
 });
 
 test("stale candle history is rejected before calling the AI", async () => {
