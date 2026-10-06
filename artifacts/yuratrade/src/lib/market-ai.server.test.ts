@@ -120,11 +120,14 @@ test("a direct AI signal uses the AI decision without a confidence threshold or 
 
 test("direct AI may abstain when candle data is valid but no direction has a clear edge", () => {
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /30 корректных свечей — только условие достаточности входных данных/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass, если нет ясного преимущества/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass, если OHLC боковые или хаотичные/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /candleSeconds — интервал свечи/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /числовой порог уверенности/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /higherTimeframe/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /не складывай механический балл/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /Краткосрочное движение против старшего тренда само по себе не причина для pass/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /подтверждённый разворот или ложный пробой/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /если он последовательно поддержан OHLC/);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass только если/u);
 });
 

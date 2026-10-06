@@ -16,6 +16,14 @@ test("candidate searches rotate through the full eligible pool in small batches"
   assert.deepEqual(select(pairs), ["C", "D", "E", "F"]);
 });
 
+test("broader eight-pair batches cover more candidates while continuing to rotate", () => {
+  const select = createRotatingCandidateSelector(8);
+  const pairs = Array.from({ length: 12 }, (_, index) => `PAIR_${index + 1}`);
+
+  assert.deepEqual(select(pairs), pairs.slice(0, 8));
+  assert.deepEqual(select(pairs), [...pairs.slice(8), ...pairs.slice(0, 4)]);
+});
+
 test("candidate search handles empty and smaller-than-batch pools", () => {
   const select = createRotatingCandidateSelector(4);
 

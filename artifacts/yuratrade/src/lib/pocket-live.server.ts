@@ -26,7 +26,7 @@ const AUTH_MISSING_MESSAGE =
 const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 const HISTORY_PAGE_CANDLES = 150;
-const SIGNAL_CANDIDATES_PER_SEARCH = 4;
+const SIGNAL_CANDIDATES_PER_SEARCH = 8;
 const runHistoryRequest = createKeyedAsyncQueue();
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
