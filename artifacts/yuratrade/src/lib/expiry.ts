@@ -5,7 +5,7 @@ export const MAX_EXPIRY_MINUTES = 240;
 export const MIN_EXPIRY_SECONDS = MIN_EXPIRY_MINUTES * 60;
 export const MAX_EXPIRY_SECONDS = MAX_EXPIRY_MINUTES * 60;
 
-export const ANALYSIS_PERIODS_SECONDS = [SIGNAL_CANDLE_SECONDS] as const;
+export const ANALYSIS_PERIODS_SECONDS = [SIGNAL_CANDLE_SECONDS, 300, 900] as const;
 export const EXPIRY_OPTIONS_MINUTES = [1, 2, 3, 5, 10, 15, 25, 30, 60, 120, 180, 240] as const;
 
 export function alternativeExpiryMinutes(currentMinutes: number) {
@@ -35,8 +35,10 @@ export function isValidExpirySeconds(value: number): boolean {
   );
 }
 
-export function analysisPeriodForExpiry(_expirySeconds: number) {
-  return SIGNAL_CANDLE_SECONDS;
+export function analysisPeriodForExpiry(expirySeconds: number) {
+  if (expirySeconds <= 3 * 60) return 60;
+  if (expirySeconds <= 30 * 60) return 300;
+  return 900;
 }
 
 export function lookbackForExpiry(expirySeconds: number, analysisSeconds: number) {

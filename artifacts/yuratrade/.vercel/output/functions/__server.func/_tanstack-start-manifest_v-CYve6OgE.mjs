@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-BqI8uEmO.js
+//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-CYve6OgE.js
 var tsrStartManifest = () => ({ routes: {
 	__root__: {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/__root.tsx",
@@ -11,32 +11,32 @@ var tsrStartManifest = () => ({ routes: {
 			"/api/ticks"
 		],
 		preloads: [
-			"/assets/index-BtnXxNda.js",
+			"/assets/index-6Z8_hEq4.js",
 			"/assets/language-DyDYJ-HP.js",
-			"/assets/pocket-live-BhsSo29a.js",
-			"/assets/link-CjiwR29y.js",
-			"/assets/signal-journal-DpCaEYnE.js",
+			"/assets/pocket-live-DzohUVaI.js",
+			"/assets/link-Dmmu9_PW.js",
+			"/assets/signal-journal-Dh7S8RCI.js",
 			"/assets/createLucideIcon-Bji4Nvh_.js"
 		],
 		scripts: [{ attrs: {
 			type: "module",
 			async: !0,
-			src: "/assets/index-BtnXxNda.js"
+			src: "/assets/index-6Z8_hEq4.js"
 		} }]
 	},
 	"/": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/index.tsx",
 		children: void 0,
 		preloads: [
-			"/assets/routes-Bq59xyU2.js",
-			"/assets/stats-DZfTuT7-.js",
-			"/assets/signal-request-CslYpcGY.js"
+			"/assets/routes-B9nX4ZOo.js",
+			"/assets/stats-B8Ny2Zp-.js",
+			"/assets/signal-request-Co8eSNKG.js"
 		]
 	},
 	"/history": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/history.tsx",
 		children: void 0,
-		preloads: ["/assets/history-D8zf7W8N.js", "/assets/stats-DZfTuT7-.js"]
+		preloads: ["/assets/history-bOAFCvvC.js", "/assets/stats-B8Ny2Zp-.js"]
 	},
 	"/learn": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/learn.tsx",
@@ -46,12 +46,12 @@ var tsrStartManifest = () => ({ routes: {
 	"/profile": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/profile.tsx",
 		children: void 0,
-		preloads: ["/assets/profile-DS8bp3pc.js"]
+		preloads: ["/assets/profile-BNUUjOub.js"]
 	},
 	"/signal": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/signal.tsx",
 		children: void 0,
-		preloads: ["/assets/signal-BOF4fLGe.js", "/assets/signal-request-CslYpcGY.js"]
+		preloads: ["/assets/signal-DeTCI_ii.js", "/assets/signal-request-Co8eSNKG.js"]
 	}
 } });
 //#endregion

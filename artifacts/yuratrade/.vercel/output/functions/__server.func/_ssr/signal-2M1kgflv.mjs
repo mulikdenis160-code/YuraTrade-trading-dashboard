@@ -1,9 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { i as SIGNAL_COPY_DELAY_MS, r as SIGNAL_ANALYSIS_TIMEOUT_MS } from "./expiry-S4GaUEZi.mjs";
+import { o as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-Be9OTVwm.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { C as formatExpiryForLanguage, g as takeSignal, h as readClose, l as signalRecordId, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as useLanguage } from "./router-DEDqTRii.mjs";
-import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-q3TKsCT_.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-Bm1JU8sn.js
+import { T as useLanguage, _ as takeSignal, g as readClose, l as signalRecordId, m as confirmSignalEntry, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as formatExpiryForLanguage } from "./router-Dw70odaB.mjs";
+import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-CMqgG2Zf.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-2M1kgflv.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -323,8 +323,9 @@ function SignalCard({ search }) {
 	const [live, setLive] = (0, import_react.useState)(null);
 	const [liveStatus, setLiveStatus] = (0, import_react.useState)("connecting");
 	const [liveMessage, setLiveMessage] = (0, import_react.useState)("");
+	const [copyUntil, setCopyUntil] = (0, import_react.useState)(null);
+	const [preparedRecovery, setPreparedRecovery] = (0, import_react.useState)(null);
 	const settled = (0, import_react.useRef)(false);
-	const preparedSignalRequest = (0, import_react.useRef)(null);
 	const journalId = signalRecordId({
 		symbol: search.symbol,
 		startedAt: search.started,
@@ -357,7 +358,7 @@ function SignalCard({ search }) {
 			step: search.step,
 			startedAt: search.started,
 			aiConfidence: search.aiConfidence ?? void 0,
-			strategyVersion: "direct-ai-v2",
+			strategyVersion: "direct-ai-v3-adaptive-timeframe",
 			note: search.note,
 			bars: search.bars
 		});
@@ -384,13 +385,7 @@ function SignalCard({ search }) {
 		return () => window.clearInterval(timer);
 	}, [phase]);
 	(0, import_react.useEffect)(() => {
-		if (phase !== "copy") return;
-		const copyUntil = Date.now() + SIGNAL_COPY_DELAY_MS;
-		preparedSignalRequest.current = settleSignalRequest(takeSignal({ data: {
-			symbol: search.symbol,
-			expirySeconds: search.seconds,
-			duringCopyWindow: true
-		} }));
+		if (phase !== "copy" || copyUntil === null) return;
 		const update = () => {
 			const remaining = Math.max(0, copyUntil - Date.now());
 			setCopyRemaining(Math.ceil(remaining / 1e3));
@@ -399,11 +394,7 @@ function SignalCard({ search }) {
 		update();
 		const timer = window.setInterval(update, 100);
 		return () => window.clearInterval(timer);
-	}, [
-		phase,
-		search.seconds,
-		search.symbol
-	]);
+	}, [copyUntil, phase]);
 	(0, import_react.useEffect)(() => {
 		if (phase !== "run" || !search.symbol) return;
 		const source = new EventSource(`/api/ticks?symbol=${encodeURIComponent(search.symbol)}`);
@@ -455,7 +446,9 @@ function SignalCard({ search }) {
 			else {
 				setCopied(false);
 				setCopyRemaining(10);
-				setPhase("copy");
+				setCopyUntil(null);
+				setPreparedRecovery(null);
+				setPhase("preparing-recovery");
 			}
 		}).catch((cause) => {
 			setPhase("run");
@@ -471,14 +464,12 @@ function SignalCard({ search }) {
 		up
 	]);
 	(0, import_react.useEffect)(() => {
-		if (phase !== "hunt") return;
+		if (phase !== "preparing-recovery") return;
 		let stop = false;
-		const pendingRequest = preparedSignalRequest.current ?? settleSignalRequest(takeSignal({ data: {
+		waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
 			symbol: search.symbol,
 			expirySeconds: search.seconds
-		} }));
-		preparedSignalRequest.current = null;
-		waitForSignalRequest(pendingRequest, SIGNAL_ANALYSIS_TIMEOUT_MS, t("signal.analysisTimeout")).then(async (result) => {
+		} })), SIGNAL_PREPARATION_TIMEOUT_MS, t("signal.analysisTimeout")).then((result) => {
 			if (result.decision === "pass") {
 				if (stop) return;
 				setPhase("no-signal");
@@ -486,21 +477,44 @@ function SignalCard({ search }) {
 				return;
 			}
 			if (stop) return;
+			setPreparedRecovery(result);
+			setCopyUntil(result.releaseAtMs);
+			setCopyRemaining(Math.max(0, Math.ceil((result.releaseAtMs - Date.now()) / 1e3)));
+			setPhase("copy");
+		}).catch((cause) => {
+			if (stop) return;
+			setPhase("no-signal");
+			setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
+		});
+		return () => {
+			stop = true;
+		};
+	}, [
+		phase,
+		search.seconds,
+		search.symbol,
+		t
+	]);
+	(0, import_react.useEffect)(() => {
+		if (phase !== "hunt" || !preparedRecovery) return;
+		let stop = false;
+		confirmSignalEntry({ data: { symbol: search.symbol } }).then(async (entry) => {
+			if (stop) return;
 			await navigate({
 				to: "/signal",
 				replace: true,
 				search: {
 					symbol: search.symbol,
-					name: result.name,
+					name: preparedRecovery.name,
 					group: search.group,
-					direction: result.direction,
-					open: result.openPrice,
-					payout: result.payout,
+					direction: preparedRecovery.direction,
+					open: entry.openPrice,
+					payout: preparedRecovery.payout,
 					seconds: search.seconds,
-					analysisSeconds: result.analysisSeconds,
-					note: result.note,
-					bars: result.bars,
-					aiConfidence: result.aiConfidence,
+					analysisSeconds: preparedRecovery.analysisSeconds,
+					note: preparedRecovery.note,
+					bars: preparedRecovery.bars,
+					aiConfidence: preparedRecovery.aiConfidence,
 					step: search.step + 1,
 					started: Date.now()
 				}
@@ -508,7 +522,7 @@ function SignalCard({ search }) {
 		}).catch((cause) => {
 			if (stop) return;
 			setPhase("no-signal");
-			setError(cause instanceof Error ? cause.message : "Не удалось дать перекрытие.");
+			setError(cause instanceof Error ? cause.message : "Не удалось подтвердить вход перекрытия.");
 		});
 		return () => {
 			stop = true;
@@ -516,11 +530,11 @@ function SignalCard({ search }) {
 	}, [
 		navigate,
 		phase,
+		preparedRecovery,
 		search.group,
 		search.seconds,
 		search.step,
-		search.symbol,
-		t
+		search.symbol
 	]);
 	if (!search.symbol || !search.open) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto max-w-md",
@@ -850,7 +864,7 @@ function SignalCard({ search }) {
 				copied,
 				onCopy: () => void copyCurrentPair()
 			}) : null,
-			phase === "hunt" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
+			phase === "preparing-recovery" || phase === "hunt" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalysisModal, {
 				pair: search.name,
 				expiry: expiryLabel(search.seconds)
 			}) : null

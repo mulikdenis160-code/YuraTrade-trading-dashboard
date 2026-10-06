@@ -16,21 +16,21 @@ test("expirations cover whole minutes from one minute through four hours", () =>
   assert.equal(isValidExpirySeconds(14_460), false);
 });
 
-test("signal analysis always uses one-minute candles for every expiration", () => {
-  assert.equal(analysisPeriodForExpiry(5 * 60), 60);
-  assert.equal(analysisPeriodForExpiry(6 * 60), 60);
-  assert.equal(analysisPeriodForExpiry(15 * 60), 60);
-  assert.equal(analysisPeriodForExpiry(16 * 60), 60);
-  assert.equal(analysisPeriodForExpiry(60 * 60), 60);
-  assert.equal(analysisPeriodForExpiry(61 * 60), 60);
-  assert.equal(analysisPeriodForExpiry(4 * 60 * 60), 60);
+test("analysis timeframe scales with the selected expiration", () => {
+  assert.equal(analysisPeriodForExpiry(60), 60);
+  assert.equal(analysisPeriodForExpiry(3 * 60), 60);
+  assert.equal(analysisPeriodForExpiry(5 * 60), 300);
+  assert.equal(analysisPeriodForExpiry(10 * 60), 300);
+  assert.equal(analysisPeriodForExpiry(30 * 60), 300);
+  assert.equal(analysisPeriodForExpiry(60 * 60), 900);
+  assert.equal(analysisPeriodForExpiry(4 * 60 * 60), 900);
 });
 
-test("alternative expirations choose the nearest options when all use one-minute candles", () => {
-  assert.deepEqual(alternativeExpiryMinutes(1), [2]);
-  assert.deepEqual(alternativeExpiryMinutes(5), [3]);
-  assert.deepEqual(alternativeExpiryMinutes(10), [5]);
-  assert.deepEqual(alternativeExpiryMinutes(240), [180]);
+test("alternative expirations prioritize options using the same analysis timeframe", () => {
+  assert.deepEqual(alternativeExpiryMinutes(1), [2, 5]);
+  assert.deepEqual(alternativeExpiryMinutes(5), [10, 3]);
+  assert.deepEqual(alternativeExpiryMinutes(10), [5, 3]);
+  assert.deepEqual(alternativeExpiryMinutes(240), [180, 30]);
 });
 
 test("lookback grows for longer expirations and labels hours clearly", () => {

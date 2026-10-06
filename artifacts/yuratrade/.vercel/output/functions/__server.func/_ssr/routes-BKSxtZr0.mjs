@@ -1,11 +1,11 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { i as SIGNAL_COPY_DELAY_MS, n as EXPIRY_OPTIONS_MINUTES, o as analysisPeriodForExpiry, r as SIGNAL_ANALYSIS_TIMEOUT_MS } from "./expiry-S4GaUEZi.mjs";
+import { c as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, o as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-Be9OTVwm.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as formatExpiryForLanguage, S as usePocket, _ as levelForBalance, a as recentlyUsedSignalSymbols, b as signalsUsedToday, g as takeSignal, i as readSignalJournal, m as loadFeed, p as chooseSignalPair, w as useLanguage, x as isAdminId, y as markSignalUsed } from "./router-DEDqTRii.mjs";
-import { t as StatRow } from "./stats-CyHpoTGu.mjs";
-import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-q3TKsCT_.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BbtLoJjL.js
+import { C as usePocket, S as isAdminId, T as useLanguage, _ as takeSignal, a as recentlyUsedSignalSymbols, b as markSignalUsed, h as loadFeed, i as readSignalJournal, m as confirmSignalEntry, p as chooseSignalPair, v as levelForBalance, w as formatExpiryForLanguage, x as signalsUsedToday } from "./router-Dw70odaB.mjs";
+import { t as StatRow } from "./stats-DOfY1-9U.mjs";
+import { i as waitForSignalRequest, n as copyPairName, r as settleSignalRequest, t as AnalysisModal } from "./signal-request-CMqgG2Zf.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BKSxtZr0.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -115,39 +115,57 @@ function SignalDesk() {
 		setNotice("");
 		setPendingPair(null);
 		try {
-			const candidate = await chooseSignalPair({ data: { excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal()) } });
-			if (attemptRef.current !== attempt) return;
-			const selected = {
-				...candidate,
-				attempt,
-				seconds: expirySeconds,
-				copyUntil: Date.now() + SIGNAL_COPY_DELAY_MS
-			};
-			setPendingPair(selected);
-			setCopyRemaining(10);
-			setCopiedPair(false);
-			setPhase("copy");
-			const signalRequest = settleSignalRequest(takeSignal({ data: {
-				symbol: selected.symbol,
-				expirySeconds: selected.seconds,
-				duringCopyWindow: true
-			} }));
-			await new Promise((resolve) => window.setTimeout(resolve, SIGNAL_COPY_DELAY_MS));
-			if (attemptRef.current !== attempt) return;
-			setPhase("analysis");
-			const result = await waitForSignalRequest(signalRequest, SIGNAL_ANALYSIS_TIMEOUT_MS, t("signal.analysisTimeout"));
-			if (attemptRef.current !== attempt) return;
-			if (result.decision === "pass") {
-				setNotice(result.reason);
-				setPendingPair(null);
+			const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
+			const checkedSymbols = /* @__PURE__ */ new Set();
+			let selected = null;
+			let prepared = null;
+			let lastReason = "";
+			for (let index = 0; index < 4; index += 1) {
+				const candidate = await chooseSignalPair({ data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] } });
+				if (attemptRef.current !== attempt) return;
+				if (checkedSymbols.has(candidate.symbol)) break;
+				checkedSymbols.add(candidate.symbol);
+				const result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
+					symbol: candidate.symbol,
+					expirySeconds
+				} })), SIGNAL_PREPARATION_TIMEOUT_MS, t("signal.analysisTimeout"));
+				if (attemptRef.current !== attempt) return;
+				if (result.decision === "pass") {
+					lastReason = result.reason;
+					continue;
+				}
+				prepared = result;
+				selected = {
+					...candidate,
+					attempt,
+					seconds: expirySeconds,
+					copyUntil: result.releaseAtMs
+				};
+				break;
+			}
+			if (!selected || !prepared) {
+				setNotice(lastReason || t("signal.none"));
 				setPhase("idle");
 				return;
 			}
+			const readyPair = selected;
+			setPendingPair(readyPair);
+			setCopyRemaining(Math.max(0, Math.ceil((readyPair.copyUntil - Date.now()) / 1e3)));
+			setCopiedPair(false);
+			setPhase("copy");
+			await new Promise((resolve) => {
+				window.setTimeout(resolve, Math.max(0, readyPair.copyUntil - Date.now()));
+			});
+			if (attemptRef.current !== attempt) return;
+			setPhase("analysis");
+			const entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
+			if (attemptRef.current !== attempt) return;
 			await openSignal({
-				...result,
-				symbol: selected.symbol,
-				group: selected.group,
-				seconds: selected.seconds
+				...prepared,
+				openPrice: entry.openPrice,
+				symbol: readyPair.symbol,
+				group: readyPair.group,
+				seconds: readyPair.seconds
 			}, attempt);
 		} catch (cause) {
 			showSearchError(cause, attempt);

@@ -1,6 +1,6 @@
 - [Market data feed](market-data-feed.md) — Pocket Option history pages cap near 150 candles; paginate read-only and keep authorization in Secrets.
-- [Signal preparation flow](signal-preparation.md) — issue signals without added countdowns; keep fresh quotes, next-minute entry timing, and two bounded overlays.
-- [Signal model](signal-model.md) — use the configured Replit Gemini 2.5 Flash proxy for one-pair analysis; no prompt abstention, classifier, or confidence cutoff.
+- [Signal preparation flow](signal-preparation.md) — show the pair countdown only after a signal is ready; recheck the minute-entry window and quote before issuing.
+- [Signal model](signal-model.md) — use expiry-matched candle intervals and treat ADX as context, not an automatic no-signal cutoff.
 - [Rotating signal candidates](signal-candidate-rotation.md) — rotate one pair at a time through the 20 highest-payout eligible OTC currency pairs.
 - [Referral scope](referral-scope.md) — do not add referral features unless explicitly requested; keep signal-reliability work focused.
 - [TanStack dev RPC diagnostics](tanstack-dev-rpc.md) — use the current Vite-generated function ID and same-origin `Origin` header for live dev calls.

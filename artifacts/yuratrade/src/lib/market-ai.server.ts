@@ -1,9 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import {
-  ADX14_MIN_HISTORY_CANDLES,
-  buildMarketAnalysisContext,
-} from "./market-analysis-context.server.ts";
+import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
 import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
@@ -13,7 +10,6 @@ export const PROXY_AI_MODEL = "gemini-2.5-flash";
 export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 15;
-export const MIN_SIGNAL_ADX14 = 20;
 const DIRECT_AI_VISIBLE_CANDLES = 30;
 const HIGHER_TIMEFRAME_VISIBLE_CANDLES = 24;
 
@@ -51,7 +47,6 @@ export const DIRECT_AI_SYSTEM_PROMPT = [
   "Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
   "Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
   "Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
-  "Сервер перед этим запросом уже пропускает ситуации с ADX(14) ниже 20; анализируй оставшиеся данные без выдуманных подтверждений.",
   "При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
   "Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки.",
 ].join(" ");
@@ -433,36 +428,6 @@ export async function analyzeMarketCandidates(
   const candidate = eligibleCandidates[0];
   if (!candidate) {
     return { decision: "pass", reason: "Не удалось подготовить данные выбранной пары. Сигнал не выдан." };
-  }
-  const adx14 = candidate.context.technicalIndicators.directionalMovement.adx14;
-  if (adx14 === null) {
-    console.info("[signal-adx-filter]", JSON.stringify({
-      symbol: candidate.symbol,
-      decision: "pass",
-      reason: "ADX(14) недоступен",
-      closedCandleCount: candidate.context.dataQuality.closedCandleCount,
-      missingIntervals: candidate.context.dataQuality.missingIntervals,
-      threshold: MIN_SIGNAL_ADX14,
-    }));
-    return {
-      decision: "pass",
-      reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее ${ADX14_MIN_HISTORY_CANDLES}. Сигнал не выдан.`,
-    };
-  }
-  if (adx14 < MIN_SIGNAL_ADX14) {
-    console.info("[signal-adx-filter]", JSON.stringify({
-      symbol: candidate.symbol,
-      decision: "pass",
-      reason: "ADX ниже минимального значения",
-      adx14,
-      threshold: MIN_SIGNAL_ADX14,
-      closedCandleCount: candidate.context.dataQuality.closedCandleCount,
-      missingIntervals: candidate.context.dataQuality.missingIntervals,
-    }));
-    return {
-      decision: "pass",
-      reason: `Слабый тренд: ADX(14) ${adx14} ниже 20. Сигнал не выдан.`,
-    };
   }
   const closes = candidate.context.candles
     .slice(-DIRECT_AI_VISIBLE_CANDLES)

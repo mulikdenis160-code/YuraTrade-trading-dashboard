@@ -6,6 +6,8 @@ import {
   SIGNAL_ANALYSIS_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_MS,
   SIGNAL_COPY_DELAY_SECONDS,
+  SIGNAL_PAIR_SEARCH_LIMIT,
+  SIGNAL_PREPARATION_TIMEOUT_MS,
 } from "./signal-config.ts";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 
@@ -19,11 +21,13 @@ test("the pair-copy window lasts exactly ten seconds", () => {
   assert.equal(SIGNAL_COPY_DELAY_MS, 10_000);
 });
 
-test("signal analysis and post-countdown waiting are capped at five seconds", async () => {
+test("Gemini is capped at five seconds and full preparation has a separate bounded wait", async () => {
   assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 5_000);
+  assert.equal(SIGNAL_PREPARATION_TIMEOUT_MS, 15_000);
+  assert.equal(SIGNAL_PAIR_SEARCH_LIMIT, 4);
   const request = settleSignalRequest(Promise.resolve("ready"));
   assert.equal(
-    await waitForSignalRequest(request, SIGNAL_ANALYSIS_TIMEOUT_MS, "timed out"),
+    await waitForSignalRequest(request, SIGNAL_PREPARATION_TIMEOUT_MS, "timed out"),
     "ready",
   );
 });

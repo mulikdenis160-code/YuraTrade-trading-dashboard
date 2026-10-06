@@ -1,7 +1,7 @@
-import { a as SIGNAL_QUOTE_WAIT_MS, c as isValidExpirySeconds, i as SIGNAL_COPY_DELAY_MS, o as analysisPeriodForExpiry, r as SIGNAL_ANALYSIS_TIMEOUT_MS, s as formatExpiry } from "./expiry-S4GaUEZi.mjs";
+import { a as SIGNAL_COPY_DELAY_MS, c as analysisPeriodForExpiry, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as formatExpiry, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_QUOTE_WAIT_MS, u as isValidExpirySeconds } from "./expiry-Be9OTVwm.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-7vjy6U2m.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DqDhhjxY.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -303,7 +303,6 @@ var DIRECT_AI_SYSTEM_PROMPT = [
 	"Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
 	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
 	"Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
-	"Сервер перед этим запросом уже пропускает ситуации с ADX(14) ниже 20; анализируй оставшиеся данные без выдуманных подтверждений.",
 	"При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
 	"Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
 ].join(" ");
@@ -627,36 +626,6 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		decision: "pass",
 		reason: "Не удалось подготовить данные выбранной пары. Сигнал не выдан."
 	};
-	const adx14 = candidate.context.technicalIndicators.directionalMovement.adx14;
-	if (adx14 === null) {
-		console.info("[signal-adx-filter]", JSON.stringify({
-			symbol: candidate.symbol,
-			decision: "pass",
-			reason: "ADX(14) недоступен",
-			closedCandleCount: candidate.context.dataQuality.closedCandleCount,
-			missingIntervals: candidate.context.dataQuality.missingIntervals,
-			threshold: 20
-		}));
-		return {
-			decision: "pass",
-			reason: `Недостаточно закрытых свечей для расчёта ADX(14). Нужно не менее 28. Сигнал не выдан.`
-		};
-	}
-	if (adx14 < 20) {
-		console.info("[signal-adx-filter]", JSON.stringify({
-			symbol: candidate.symbol,
-			decision: "pass",
-			reason: "ADX ниже минимального значения",
-			adx14,
-			threshold: 20,
-			closedCandleCount: candidate.context.dataQuality.closedCandleCount,
-			missingIntervals: candidate.context.dataQuality.missingIntervals
-		}));
-		return {
-			decision: "pass",
-			reason: `Слабый тренд: ADX(14) ${adx14} ниже 20. Сигнал не выдан.`
-		};
-	}
 	const closes = candidate.context.candles.slice(-30).map((candle) => candle.close);
 	const recentCandles = candidate.context.candles.slice(-30).map((candle) => ({
 		time: candle.time,
@@ -835,6 +804,17 @@ function nextCandleEntryWindow(candles, nowMs) {
 		remainingMs,
 		canEnter: nowMs >= opensAtMs && remainingMs >= 15e3
 	};
+}
+function signalReleaseAt(candles, nowMs) {
+	const window = nextCandleEntryWindow(candles, nowMs);
+	if (!window) return null;
+	const minimumRemaining = SIGNAL_COPY_DELAY_MS + MIN_ENTRY_BUFFER_MS + SIGNAL_QUOTE_WAIT_MS + 1e3;
+	let countdownStartsAt;
+	if (nowMs < window.opensAtMs) countdownStartsAt = window.opensAtMs;
+	else if (window.closesAtMs - nowMs >= minimumRemaining) countdownStartsAt = nowMs;
+	else if (nowMs < window.closesAtMs) countdownStartsAt = window.closesAtMs;
+	else countdownStartsAt = window.closesAtMs + 6e4;
+	return countdownStartsAt + SIGNAL_COPY_DELAY_MS;
 }
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -1310,13 +1290,8 @@ function summarizeCandleCadence(series, expectedSeconds) {
 		estimatedMissingIntervals
 	};
 }
-async function waitUntil(timestampMs) {
-	const remainingMs = timestampMs - Date.now();
-	if (remainingMs > 0) await new Promise((resolve) => setTimeout(resolve, remainingMs));
-}
-async function feedSignal(symbol, expirySeconds, duringCopyWindow = false) {
+async function feedSignal(symbol, expirySeconds) {
 	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
-	const signalReadyAtMs = Date.now() + (duringCopyWindow ? SIGNAL_COPY_DELAY_MS : 0);
 	const pipelineStartedAt = performance.now();
 	await ensureFeed();
 	const pair = pairs.get(symbol);
@@ -1354,7 +1329,6 @@ async function feedSignal(symbol, expirySeconds, duringCopyWindow = false) {
 		inputQuoteMs,
 		analysisMs,
 		elapsedMs: Math.round(performance.now() - pipelineStartedAt),
-		copyWindow: duringCopyWindow,
 		decision: review.decision
 	}));
 	if (review.decision === "pass") return review;
@@ -1362,30 +1336,39 @@ async function feedSignal(symbol, expirySeconds, duringCopyWindow = false) {
 		decision: "pass",
 		reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан."
 	};
-	await waitUntil(signalReadyAtMs);
-	const analysisWindowFailure = entryWindowFailure(candles);
-	if (analysisWindowFailure) return analysisWindowFailure;
-	const entryQuoteStartedAt = performance.now();
-	const entryQuote = freshQuoteFromCache(symbol);
-	const entryQuoteMs = Math.round(performance.now() - entryQuoteStartedAt);
-	const finalWindowFailure = entryWindowFailure(candles);
-	if (finalWindowFailure) return finalWindowFailure;
+	const releaseAtMs = signalReleaseAt((await loadCandles(symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1)).candles, Date.now());
+	if (releaseAtMs === null) return {
+		decision: "pass",
+		reason: "Не удалось подготовить безопасное окно входа. Сигнал не выдан."
+	};
 	const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
-	signal.openPrice = entryQuote.price;
+	signal.openPrice = inputQuote.price;
 	console.info("[signal-pipeline]", JSON.stringify({
 		symbol,
 		historyMs,
 		inputQuoteMs,
 		analysisMs,
-		entryQuoteMs,
 		elapsedMs: Math.round(performance.now() - pipelineStartedAt),
-		copyWindow: duringCopyWindow,
+		releaseDelayMs: Math.max(0, releaseAtMs - Date.now()),
 		decision: "signal"
 	}));
 	return {
 		decision: "signal",
-		...signal
+		...signal,
+		releaseAtMs
 	};
+}
+async function feedConfirmSignalEntry(symbol) {
+	await ensureFeed();
+	const pair = pairs.get(symbol);
+	if (!pair || pair.group !== "fx" || !pair.symbol.toLowerCase().includes("otc") || pair.payout < MIN_SIGNAL_PAYOUT) throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
+	const history = await loadCandles(symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+	const initialWindowFailure = entryWindowFailure(history.candles);
+	if (initialWindowFailure) throw new Error(initialWindowFailure.reason);
+	const quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+	const finalWindowFailure = entryWindowFailure(history.candles);
+	if (finalWindowFailure) throw new Error(finalWindowFailure.reason);
+	return { openPrice: quote.price };
 }
 async function feedBest(expirySeconds, excludedSymbols = []) {
 	const startedAt = performance.now();
@@ -1473,7 +1456,7 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		}
 		const candidate = candidates[0];
 		if (!candidate) throw new Error("Не удалось подготовить данные выбранной пары.");
-		const initialWindowFailure = entryWindowFailure(candidate.candles);
+		const initialWindowFailure = entryWindowFailure((await loadCandles(candidate.pair.symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1)).candles);
 		if (initialWindowFailure) {
 			stage = "entry-window";
 			logTiming("pass");
@@ -1511,7 +1494,8 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 				reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан."
 			};
 		}
-		const analysisWindowFailure = entryWindowFailure(best.candles);
+		const finalEntryHistory = await loadCandles(best.pair.symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+		const analysisWindowFailure = entryWindowFailure(finalEntryHistory.candles);
 		if (analysisWindowFailure) {
 			stage = "entry-window";
 			logTiming("pass");
@@ -1521,7 +1505,7 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		const quoteStartedAt = performance.now();
 		const entryQuote = await waitFreshQuote(best.pair.symbol);
 		quoteMs += performance.now() - quoteStartedAt;
-		const finalWindowFailure = entryWindowFailure(best.candles);
+		const finalWindowFailure = entryWindowFailure(finalEntryHistory.candles);
 		if (finalWindowFailure) {
 			stage = "entry-window";
 			logTiming("pass");
@@ -1545,4 +1529,4 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 	}
 }
 //#endregion
-export { feedBest, feedClose, feedNextPair, feedSignal, feedSnapshot, followQuote, quoteStatus };
+export { feedBest, feedClose, feedConfirmSignalEntry, feedNextPair, feedSignal, feedSnapshot, followQuote, quoteStatus };

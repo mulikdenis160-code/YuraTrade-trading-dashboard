@@ -8,7 +8,6 @@ import {
   DIRECT_AI_SYSTEM_PROMPT,
   marketAiApiErrorMessage,
   MIN_DIRECT_AI_CANDLES,
-  MIN_SIGNAL_ADX14,
   parseMarketAiReview,
   requestMarketAiReviewOnce,
 } from "./market-ai.server.ts";
@@ -226,7 +225,45 @@ test("analysis request transfers verified OHLC, indicators, quality, higher time
   assert.ok(input.volatility.standardDeviation > 0);
 });
 
-test("weak ADX returns no signal without calling Gemini", async () => {
+test("the updated AI analysis uses matched 5- and 15-minute candle contexts", async () => {
+  for (const scenario of [
+    { expirySeconds: 5 * 60, candleSeconds: 300, higherSeconds: 900 },
+    { expirySeconds: 60 * 60, candleSeconds: 900, higherSeconds: 3_600 },
+  ]) {
+    const candles = risingCandles(64, 6_000, scenario.candleSeconds);
+    const last = candles.at(-1)!;
+    let userContent = "";
+    const result = await analyzeMarketCandidates(
+      scenario.expirySeconds,
+      scenario.candleSeconds,
+      [{
+        symbol: "EURUSD_otc",
+        name: "EUR/USD OTC",
+        candles,
+        currentPrice: last.close,
+        quoteAgeMs: 0,
+      }],
+      {
+        nowSeconds: last.time + scenario.candleSeconds + 30,
+        request: async (messages) => {
+          userContent = messages.find((message) => message.role === "user")?.content ?? "";
+          return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
+        },
+      },
+    );
+    const input = JSON.parse(userContent) as {
+      expirySeconds: number;
+      candleSeconds: number;
+      higherTimeframe: { candleSeconds: number } | null;
+    };
+    assert.equal(result.decision, "signal");
+    assert.equal(input.expirySeconds, scenario.expirySeconds);
+    assert.equal(input.candleSeconds, scenario.candleSeconds);
+    assert.equal(input.higherTimeframe?.candleSeconds, scenario.higherSeconds);
+  }
+});
+
+test("weak ADX is passed to Gemini instead of suppressing the signal", async () => {
   const candles = Array.from({ length: 64 }, (_, index) => ({
     time: 6_000 + index * 60,
     open: 1.1,
@@ -234,7 +271,12 @@ test("weak ADX returns no signal without calling Gemini", async () => {
     low: 1.09995,
     close: 1.1,
   }));
-  let called = false;
+  let input: unknown;
+  const readInput = () => input as {
+    technicalIndicators: {
+      directionalMovement: { adx14: number | null };
+    };
+  };
   const result = await analyzeMarketCandidates(
     120,
     60,
@@ -247,22 +289,25 @@ test("weak ADX returns no signal without calling Gemini", async () => {
     }],
     {
       nowSeconds: candles.at(-1)!.time + 30,
-      request: async () => {
-        called = true;
+      request: async (messages) => {
+        input = JSON.parse(messages.find((message) => message.role === "user")?.content ?? "{}");
         return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
       },
     },
   );
 
-  assert.equal(MIN_SIGNAL_ADX14, 20);
-  assert.equal(result.decision, "pass");
-  if (result.decision === "pass") assert.match(result.reason, /ADX\(14\).*ниже 20/);
-  assert.equal(called, false);
+  assert.equal(result.decision, "signal");
+  assert.ok(readInput().technicalIndicators.directionalMovement.adx14! < 20);
 });
 
-test("missing ADX history returns no signal without calling Gemini", async () => {
+test("missing ADX history is passed to Gemini as unavailable context", async () => {
   const candles = risingCandles(20);
-  let called = false;
+  let input: unknown;
+  const readInput = () => input as {
+    technicalIndicators: {
+      directionalMovement: { adx14: number | null };
+    };
+  };
   const result = await analyzeMarketCandidates(
     120,
     60,
@@ -275,19 +320,15 @@ test("missing ADX history returns no signal without calling Gemini", async () =>
     }],
     {
       nowSeconds: candles.at(-1)!.time + 30,
-      request: async () => {
-        called = true;
+      request: async (messages) => {
+        input = JSON.parse(messages.find((message) => message.role === "user")?.content ?? "{}");
         return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
       },
     },
   );
 
-  assert.equal(result.decision, "pass");
-  if (result.decision === "pass") {
-    assert.match(result.reason, /недостаточно.*ADX\(14\)/i);
-    assert.match(result.reason, /не менее 28/);
-  }
-  assert.equal(called, false);
+  assert.equal(result.decision, "signal");
+  assert.equal(readInput().technicalIndicators.directionalMovement.adx14, null);
 });
 
 test("analysis submits only one pair even when multiple candidates are provided", async () => {

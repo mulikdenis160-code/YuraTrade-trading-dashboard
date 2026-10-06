@@ -25,10 +25,10 @@ import {
 import {
   MAX_QUOTE_AGE_MS,
   MIN_ENTRY_BUFFER_MS,
-  SIGNAL_COPY_DELAY_MS,
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
 import { nextCandleEntryWindow } from "./signal-entry-window";
+import { signalReleaseAt } from "./signal-release-time";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -69,12 +69,13 @@ export type FeedSignal = {
 
 type PassResult = { decision: "pass"; reason: string };
 type SignalResult = { decision: "signal" } & FeedSignal;
+type PreparedSignalResult = SignalResult & { releaseAtMs: number };
 type BestSignalResult = SignalResult & {
   symbol: string;
   group: PairGroup;
   seconds: number;
 };
-export type FeedSignalResult = PassResult | SignalResult;
+export type FeedSignalResult = PassResult | PreparedSignalResult;
 export type FeedBestResult = PassResult | BestSignalResult;
 
 type Pending = {
@@ -630,20 +631,11 @@ function summarizeCandleCadence(series: HistoricalCandle[][], expectedSeconds: n
   };
 }
 
-async function waitUntil(timestampMs: number) {
-  const remainingMs = timestampMs - Date.now();
-  if (remainingMs > 0) {
-    await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
-  }
-}
-
 export async function feedSignal(
   symbol: string,
   expirySeconds: number,
-  duringCopyWindow = false,
 ): Promise<FeedSignalResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
-  const signalReadyAtMs = Date.now() + (duringCopyWindow ? SIGNAL_COPY_DELAY_MS : 0);
   const pipelineStartedAt = performance.now();
   await ensureFeed();
   const pair = pairs.get(symbol);
@@ -695,34 +687,62 @@ export async function feedSignal(
     inputQuoteMs,
     analysisMs,
     elapsedMs: Math.round(performance.now() - pipelineStartedAt),
-    copyWindow: duringCopyWindow,
     decision: review.decision,
   }));
   if (review.decision === "pass") return review;
   if (!acceptsMarketAiReview(review, [symbol])) {
     return { decision: "pass", reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан." };
   }
-  await waitUntil(signalReadyAtMs);
-  const analysisWindowFailure = entryWindowFailure(candles);
-  if (analysisWindowFailure) return analysisWindowFailure;
-  const entryQuoteStartedAt = performance.now();
-  const entryQuote = freshQuoteFromCache(symbol);
-  const entryQuoteMs = Math.round(performance.now() - entryQuoteStartedAt);
-  const finalWindowFailure = entryWindowFailure(candles);
-  if (finalWindowFailure) return finalWindowFailure;
+  const entryHistory = await loadCandles(
+    symbol,
+    60,
+    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
+    1,
+  );
+  const releaseAtMs = signalReleaseAt(entryHistory.candles, Date.now());
+  if (releaseAtMs === null) {
+    return { decision: "pass", reason: "Не удалось подготовить безопасное окно входа. Сигнал не выдан." };
+  }
   const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
-  signal.openPrice = entryQuote.price;
+  signal.openPrice = inputQuote.price;
   console.info("[signal-pipeline]", JSON.stringify({
     symbol,
     historyMs,
     inputQuoteMs,
     analysisMs,
-    entryQuoteMs,
     elapsedMs: Math.round(performance.now() - pipelineStartedAt),
-    copyWindow: duringCopyWindow,
+    releaseDelayMs: Math.max(0, releaseAtMs - Date.now()),
     decision: "signal",
   }));
-  return { decision: "signal", ...signal };
+  return { decision: "signal", ...signal, releaseAtMs };
+}
+
+export async function feedConfirmSignalEntry(symbol: string) {
+  await ensureFeed();
+  const pair = pairs.get(symbol);
+  if (
+    !pair ||
+    pair.group !== "fx" ||
+    !pair.symbol.toLowerCase().includes("otc") ||
+    pair.payout < MIN_SIGNAL_PAYOUT
+  ) {
+    throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
+  }
+
+  const history = await loadCandles(
+    symbol,
+    60,
+    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
+    1,
+  );
+  const initialWindowFailure = entryWindowFailure(history.candles);
+  if (initialWindowFailure) throw new Error(initialWindowFailure.reason);
+
+  const quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+  const finalWindowFailure = entryWindowFailure(history.candles);
+  if (finalWindowFailure) throw new Error(finalWindowFailure.reason);
+
+  return { openPrice: quote.price };
 }
 
 export async function feedBest(
@@ -826,7 +846,13 @@ export async function feedBest(
     if (!candidate) {
       throw new Error("Не удалось подготовить данные выбранной пары.");
     }
-    const initialWindowFailure = entryWindowFailure(candidate.candles);
+    const initialEntryHistory = await loadCandles(
+      candidate.pair.symbol,
+      60,
+      CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
+      1,
+    );
+    const initialWindowFailure = entryWindowFailure(initialEntryHistory.candles);
     if (initialWindowFailure) {
       stage = "entry-window";
       logTiming("pass");
@@ -865,7 +891,13 @@ export async function feedBest(
       logTiming("pass");
       return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
     }
-    const analysisWindowFailure = entryWindowFailure(best.candles);
+    const finalEntryHistory = await loadCandles(
+      best.pair.symbol,
+      60,
+      CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
+      1,
+    );
+    const analysisWindowFailure = entryWindowFailure(finalEntryHistory.candles);
     if (analysisWindowFailure) {
       stage = "entry-window";
       logTiming("pass");
@@ -875,7 +907,7 @@ export async function feedBest(
     const quoteStartedAt = performance.now();
     const entryQuote = await waitFreshQuote(best.pair.symbol);
     quoteMs += performance.now() - quoteStartedAt;
-    const finalWindowFailure = entryWindowFailure(best.candles);
+    const finalWindowFailure = entryWindowFailure(finalEntryHistory.candles);
     if (finalWindowFailure) {
       stage = "entry-window";
       logTiming("pass");

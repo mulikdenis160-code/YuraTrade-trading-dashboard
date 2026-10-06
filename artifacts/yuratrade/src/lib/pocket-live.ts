@@ -21,7 +21,6 @@ export const takeSignal = createServerFn({ method: "POST" })
   .validator((input: {
     symbol: string;
     expirySeconds: number;
-    duringCopyWindow?: boolean;
   }) => {
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     const expirySeconds = Number(input?.expirySeconds);
@@ -31,12 +30,22 @@ export const takeSignal = createServerFn({ method: "POST" })
     return {
       symbol,
       expirySeconds,
-      duringCopyWindow: input?.duringCopyWindow === true,
     };
   })
   .handler(async ({ data }) => {
     const { feedSignal } = await import("./pocket-live.server");
-    return feedSignal(data.symbol, data.expirySeconds, data.duringCopyWindow);
+    return feedSignal(data.symbol, data.expirySeconds);
+  });
+
+export const confirmSignalEntry = createServerFn({ method: "POST" })
+  .validator((input: { symbol: string }) => {
+    const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
+    if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
+    return { symbol };
+  })
+  .handler(async ({ data }) => {
+    const { feedConfirmSignalEntry } = await import("./pocket-live.server");
+    return feedConfirmSignalEntry(data.symbol);
   });
 
 export const chooseSignalPair = createServerFn({ method: "POST" })

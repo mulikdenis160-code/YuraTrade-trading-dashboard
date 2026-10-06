@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { chooseSignalPair, loadFeed, takeSignal } from "@/lib/pocket-live";
+import { chooseSignalPair, confirmSignalEntry, loadFeed, takeSignal } from "@/lib/pocket-live";
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { readSignalJournal, recentlyUsedSignalSymbols } from "@/lib/signal-journal";
 import { AnalysisModal } from "@/components/analysis-modal";
 import { copyPairName } from "@/lib/pair-clipboard";
 import {
-  SIGNAL_ANALYSIS_TIMEOUT_MS,
-  SIGNAL_COPY_DELAY_MS,
+  SIGNAL_PAIR_SEARCH_LIMIT,
+  SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
@@ -154,46 +154,62 @@ export function SignalDesk() {
     setNotice("");
     setPendingPair(null);
     try {
-      const candidate = await chooseSignalPair({
-        data: {
-          excludedSymbols: recentlyUsedSignalSymbols(readSignalJournal()),
-        },
-      });
-      if (attemptRef.current !== attempt) return;
-      const selected = {
-        ...candidate,
-        attempt,
-        seconds: expirySeconds,
-        copyUntil: Date.now() + SIGNAL_COPY_DELAY_MS,
-      };
-      setPendingPair(selected);
-      setCopyRemaining(SIGNAL_COPY_DELAY_SECONDS);
-      setCopiedPair(false);
-      setPhase("copy");
-      const signalRequest = settleSignalRequest(takeSignal({
-        data: {
-          symbol: selected.symbol,
-          expirySeconds: selected.seconds,
-          duringCopyWindow: true,
-        },
-      }));
-      await new Promise<void>((resolve) => window.setTimeout(resolve, SIGNAL_COPY_DELAY_MS));
-      if (attemptRef.current !== attempt) return;
-      setPhase("analysis");
-      const result = await waitForSignalRequest(
-        signalRequest,
-        SIGNAL_ANALYSIS_TIMEOUT_MS,
-        t("signal.analysisTimeout"),
-      );
-      if (attemptRef.current !== attempt) return;
-      if (result.decision === "pass") {
-        setNotice(result.reason);
-        setPendingPair(null);
+      const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
+      const checkedSymbols = new Set<string>();
+      let selected: PendingPair | null = null;
+      let prepared: Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }> | null = null;
+      let lastReason = "";
+
+      for (let index = 0; index < SIGNAL_PAIR_SEARCH_LIMIT; index += 1) {
+        const candidate = await chooseSignalPair({
+          data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] },
+        });
+        if (attemptRef.current !== attempt) return;
+        if (checkedSymbols.has(candidate.symbol)) break;
+        checkedSymbols.add(candidate.symbol);
+
+        const result = await waitForSignalRequest(
+          settleSignalRequest(takeSignal({
+            data: { symbol: candidate.symbol, expirySeconds },
+          })),
+          SIGNAL_PREPARATION_TIMEOUT_MS,
+          t("signal.analysisTimeout"),
+        );
+        if (attemptRef.current !== attempt) return;
+        if (result.decision === "pass") {
+          lastReason = result.reason;
+          continue;
+        }
+        prepared = result;
+        selected = {
+          ...candidate,
+          attempt,
+          seconds: expirySeconds,
+          copyUntil: result.releaseAtMs,
+        };
+        break;
+      }
+
+      if (!selected || !prepared) {
+        setNotice(lastReason || t("signal.none"));
         setPhase("idle");
         return;
       }
+
+      const readyPair = selected;
+      setPendingPair(readyPair);
+      setCopyRemaining(Math.max(0, Math.ceil((readyPair.copyUntil - Date.now()) / 1000)));
+      setCopiedPair(false);
+      setPhase("copy");
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, Math.max(0, readyPair.copyUntil - Date.now()));
+      });
+      if (attemptRef.current !== attempt) return;
+      setPhase("analysis");
+      const entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
+      if (attemptRef.current !== attempt) return;
       await openSignal(
-        { ...result, symbol: selected.symbol, group: selected.group, seconds: selected.seconds },
+        { ...prepared, openPrice: entry.openPrice, symbol: readyPair.symbol, group: readyPair.group, seconds: readyPair.seconds },
         attempt,
       );
     } catch (cause) {

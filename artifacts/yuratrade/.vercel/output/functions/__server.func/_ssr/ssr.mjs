@@ -3844,7 +3844,7 @@ var RawStream = class {
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-BqI8uEmO.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-CYve6OgE.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -3866,23 +3866,27 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e": {
 		functionName: "chooseSignalPair_createServerFn_handler",
-		importer: () => import("./pocket-live-CWW4njA5.mjs")
+		importer: () => import("./pocket-live-CRZjZgB3.mjs")
 	},
 	"65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab": {
 		functionName: "takeBest_createServerFn_handler",
-		importer: () => import("./pocket-live-CWW4njA5.mjs")
+		importer: () => import("./pocket-live-CRZjZgB3.mjs")
+	},
+	"8d16ab25d49de3ba563bd027483e243a7e3dc42cde9f9a502b86bdc62ed38062": {
+		functionName: "confirmSignalEntry_createServerFn_handler",
+		importer: () => import("./pocket-live-CRZjZgB3.mjs")
 	},
 	"c3bf91de64f793a1fdff73992de93db6878fb230b41776a1663843f0dd5e02d1": {
 		functionName: "readClose_createServerFn_handler",
-		importer: () => import("./pocket-live-CWW4njA5.mjs")
+		importer: () => import("./pocket-live-CRZjZgB3.mjs")
 	},
 	"e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857": {
 		functionName: "takeSignal_createServerFn_handler",
-		importer: () => import("./pocket-live-CWW4njA5.mjs")
+		importer: () => import("./pocket-live-CRZjZgB3.mjs")
 	},
 	"fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043": {
 		functionName: "loadFeed_createServerFn_handler",
-		importer: () => import("./pocket-live-CWW4njA5.mjs")
+		importer: () => import("./pocket-live-CRZjZgB3.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -6520,7 +6524,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-DEDqTRii.mjs").then((n) => n.t),
+		import("./router-Dw70odaB.mjs").then((n) => n.t),
 		import("./start-D337KBoP.mjs"),
 		import("./empty-plugin-adapters-CInA4tz9.mjs")
 	]);

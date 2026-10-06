@@ -1,8 +1,14 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/expiry-S4GaUEZi.js
+//#region node_modules/.nitro/vite/services/ssr/assets/expiry-Be9OTVwm.js
+var MIN_ENTRY_BUFFER_MS = 15e3;
 var SIGNAL_COPY_DELAY_MS = 1e4;
 var SIGNAL_ANALYSIS_TIMEOUT_MS = 5e3;
+var SIGNAL_PREPARATION_TIMEOUT_MS = 15e3;
 var SIGNAL_QUOTE_WAIT_MS = 2e3;
-var ANALYSIS_PERIODS_SECONDS = [60];
+var ANALYSIS_PERIODS_SECONDS = [
+	60,
+	300,
+	900
+];
 var EXPIRY_OPTIONS_MINUTES = [
 	1,
 	2,
@@ -20,8 +26,10 @@ var EXPIRY_OPTIONS_MINUTES = [
 function isValidExpirySeconds(value) {
 	return Number.isInteger(value) && value >= 60 && value <= 14400 && value % 60 === 0;
 }
-function analysisPeriodForExpiry(_expirySeconds) {
-	return 60;
+function analysisPeriodForExpiry(expirySeconds) {
+	if (expirySeconds <= 180) return 60;
+	if (expirySeconds <= 1800) return 300;
+	return 900;
 }
 function formatExpiry(seconds) {
 	const minutes = Math.max(1, Math.round(seconds / 60));
@@ -31,4 +39,4 @@ function formatExpiry(seconds) {
 	return remainingMinutes === 0 ? `${hours} ч` : `${hours} ч ${remainingMinutes} мин`;
 }
 //#endregion
-export { SIGNAL_QUOTE_WAIT_MS as a, isValidExpirySeconds as c, SIGNAL_COPY_DELAY_MS as i, EXPIRY_OPTIONS_MINUTES as n, analysisPeriodForExpiry as o, SIGNAL_ANALYSIS_TIMEOUT_MS as r, formatExpiry as s, ANALYSIS_PERIODS_SECONDS as t };
+export { SIGNAL_COPY_DELAY_MS as a, analysisPeriodForExpiry as c, SIGNAL_ANALYSIS_TIMEOUT_MS as i, formatExpiry as l, EXPIRY_OPTIONS_MINUTES as n, SIGNAL_PREPARATION_TIMEOUT_MS as o, MIN_ENTRY_BUFFER_MS as r, SIGNAL_QUOTE_WAIT_MS as s, ANALYSIS_PERIODS_SECONDS as t, isValidExpirySeconds as u };

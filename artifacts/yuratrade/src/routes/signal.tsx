@@ -2,7 +2,7 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { AnalysisModal } from "@/components/analysis-modal";
 import { PairMark } from "@/components/pair-mark";
-import { readClose, takeSignal } from "@/lib/pocket-live";
+import { confirmSignalEntry, readClose, takeSignal } from "@/lib/pocket-live";
 import {
   recordSignalOutcome,
   recordSignalStarted,
@@ -14,16 +14,11 @@ import {
 } from "@/lib/expiry";
 import {
   MAX_OVERLAYS,
-  SIGNAL_ANALYSIS_TIMEOUT_MS,
-  SIGNAL_COPY_DELAY_MS,
+  SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
 import { copyPairName } from "@/lib/pair-clipboard";
-import {
-  settleSignalRequest,
-  type SettledSignalRequest,
-  waitForSignalRequest,
-} from "@/lib/signal-request";
+import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 type Group = "fx";
@@ -176,7 +171,7 @@ function SignalCard({ search }: { search: Search }) {
   const navigate = useNavigate();
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
   const [now, setNow] = useState(() => Date.now());
-  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "copy" | "hunt" | "stop" | "no-signal">("run");
+  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "preparing-recovery" | "copy" | "hunt" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
   const [copyRemaining, setCopyRemaining] = useState(SIGNAL_COPY_DELAY_SECONDS);
   const [close, setClose] = useState<number | null>(null);
@@ -185,8 +180,9 @@ function SignalCard({ search }: { search: Search }) {
   const [live, setLive] = useState<number | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [liveMessage, setLiveMessage] = useState("");
+  const [copyUntil, setCopyUntil] = useState<number | null>(null);
+  const [preparedRecovery, setPreparedRecovery] = useState<Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }> | null>(null);
   const settled = useRef(false);
-  const preparedSignalRequest = useRef<Promise<SettledSignalRequest<Awaited<ReturnType<typeof takeSignal>>>> | null>(null);
   const journalId = signalRecordId({
     symbol: search.symbol,
     startedAt: search.started,
@@ -220,7 +216,7 @@ function SignalCard({ search }: { search: Search }) {
       step: search.step,
       startedAt: search.started,
       aiConfidence: search.aiConfidence ?? undefined,
-      strategyVersion: "direct-ai-v2",
+      strategyVersion: "direct-ai-v3-adaptive-timeframe",
       note: search.note,
       bars: search.bars,
     });
@@ -234,15 +230,7 @@ function SignalCard({ search }: { search: Search }) {
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== "copy") return;
-    const copyUntil = Date.now() + SIGNAL_COPY_DELAY_MS;
-    preparedSignalRequest.current = settleSignalRequest(takeSignal({
-      data: {
-        symbol: search.symbol,
-        expirySeconds: search.seconds,
-        duringCopyWindow: true,
-      },
-    }));
+    if (phase !== "copy" || copyUntil === null) return;
     const update = () => {
       const remaining = Math.max(0, copyUntil - Date.now());
       setCopyRemaining(Math.ceil(remaining / 1000));
@@ -251,7 +239,7 @@ function SignalCard({ search }: { search: Search }) {
     update();
     const timer = window.setInterval(update, 100);
     return () => window.clearInterval(timer);
-  }, [phase, search.seconds, search.symbol]);
+  }, [copyUntil, phase]);
 
   useEffect(() => {
     if (phase !== "run" || !search.symbol) return;
@@ -312,7 +300,9 @@ function SignalCard({ search }: { search: Search }) {
         } else {
           setCopied(false);
           setCopyRemaining(SIGNAL_COPY_DELAY_SECONDS);
-          setPhase("copy");
+          setCopyUntil(null);
+          setPreparedRecovery(null);
+          setPhase("preparing-recovery");
         }
       })
       .catch((cause: unknown) => {
@@ -323,19 +313,16 @@ function SignalCard({ search }: { search: Search }) {
   }, [left, phase, search.open, search.step, search.symbol, up]);
 
   useEffect(() => {
-    if (phase !== "hunt") return;
+    if (phase !== "preparing-recovery") return;
     let stop = false;
-    const pendingRequest = preparedSignalRequest.current
-      ?? settleSignalRequest(takeSignal({
-        data: { symbol: search.symbol, expirySeconds: search.seconds },
-      }));
-    preparedSignalRequest.current = null;
     void waitForSignalRequest(
-      pendingRequest,
-      SIGNAL_ANALYSIS_TIMEOUT_MS,
+      settleSignalRequest(takeSignal({
+        data: { symbol: search.symbol, expirySeconds: search.seconds },
+      })),
+      SIGNAL_PREPARATION_TIMEOUT_MS,
       t("signal.analysisTimeout"),
     )
-      .then(async (result) => {
+      .then((result) => {
         if (result.decision === "pass") {
           if (stop) return;
           setPhase("no-signal");
@@ -343,21 +330,42 @@ function SignalCard({ search }: { search: Search }) {
           return;
         }
         if (stop) return;
+        setPreparedRecovery(result);
+        setCopyUntil(result.releaseAtMs);
+        setCopyRemaining(Math.max(0, Math.ceil((result.releaseAtMs - Date.now()) / 1000)));
+        setPhase("copy");
+      })
+      .catch((cause: unknown) => {
+        if (stop) return;
+        setPhase("no-signal");
+        setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
+      });
+    return () => {
+      stop = true;
+    };
+  }, [phase, search.seconds, search.symbol, t]);
+
+  useEffect(() => {
+    if (phase !== "hunt" || !preparedRecovery) return;
+    let stop = false;
+    void confirmSignalEntry({ data: { symbol: search.symbol } })
+      .then(async (entry) => {
+        if (stop) return;
         await navigate({
           to: "/signal",
           replace: true,
           search: {
             symbol: search.symbol,
-            name: result.name,
+            name: preparedRecovery.name,
             group: search.group,
-            direction: result.direction,
-            open: result.openPrice,
-            payout: result.payout,
+            direction: preparedRecovery.direction,
+            open: entry.openPrice,
+            payout: preparedRecovery.payout,
             seconds: search.seconds,
-            analysisSeconds: result.analysisSeconds,
-            note: result.note,
-            bars: result.bars,
-            aiConfidence: result.aiConfidence,
+            analysisSeconds: preparedRecovery.analysisSeconds,
+            note: preparedRecovery.note,
+            bars: preparedRecovery.bars,
+            aiConfidence: preparedRecovery.aiConfidence,
             step: search.step + 1,
             started: Date.now(),
           },
@@ -366,12 +374,12 @@ function SignalCard({ search }: { search: Search }) {
       .catch((cause: unknown) => {
         if (stop) return;
         setPhase("no-signal");
-        setError(cause instanceof Error ? cause.message : "Не удалось дать перекрытие.");
+        setError(cause instanceof Error ? cause.message : "Не удалось подтвердить вход перекрытия.");
       });
     return () => {
       stop = true;
     };
-  }, [navigate, phase, search.group, search.seconds, search.step, search.symbol, t]);
+  }, [navigate, phase, preparedRecovery, search.group, search.seconds, search.step, search.symbol]);
 
   if (!search.symbol || !search.open) {
     return (
@@ -563,7 +571,9 @@ function SignalCard({ search }: { search: Search }) {
           onCopy={() => void copyCurrentPair()}
         />
       ) : null}
-      {phase === "hunt" ? <AnalysisModal pair={search.name} expiry={expiryLabel(search.seconds)} /> : null}
+      {phase === "preparing-recovery" || phase === "hunt" ? (
+        <AnalysisModal pair={search.name} expiry={expiryLabel(search.seconds)} />
+      ) : null}
 
     </div>
   );

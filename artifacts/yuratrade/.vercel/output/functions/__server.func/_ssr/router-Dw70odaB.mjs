@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { c as isValidExpirySeconds, o as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-S4GaUEZi.mjs";
+import { c as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS, u as isValidExpirySeconds } from "./expiry-Be9OTVwm.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-DEDqTRii.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-Dw70odaB.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -1549,10 +1549,14 @@ var takeSignal = createServerFn({ method: "POST" }).validator((input) => {
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) throw new Error("Выберите пару и срок экспирации от 1 минуты до 4 часов.");
 	return {
 		symbol,
-		expirySeconds,
-		duringCopyWindow: input?.duringCopyWindow === true
+		expirySeconds
 	};
 }).handler(createSsrRpc("e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857"));
+var confirmSignalEntry = createServerFn({ method: "POST" }).validator((input) => {
+	const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
+	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
+	return { symbol };
+}).handler(createSsrRpc("8d16ab25d49de3ba563bd027483e243a7e3dc42cde9f9a502b86bdc62ed38062"));
 var chooseSignalPair = createServerFn({ method: "POST" }).validator((input) => {
 	return { excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : [] };
 }).handler(createSsrRpc("4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e"));
@@ -2026,15 +2030,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-BbtLoJjL.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-BKSxtZr0.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-m0itfOOz.mjs");
+var $$splitComponentImporter$3 = () => import("./history-C05cPVwW.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-BkgOgEpr.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-DX3fKxQb.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-DXwVK0Z2.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-B4VqKgLn.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-Bm1JU8sn.mjs");
+var $$splitComponentImporter = () => import("./signal-2M1kgflv.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2088,7 +2092,7 @@ var Route$1 = createFileRoute("/signal")({
 var Route = createFileRoute("/api/ticks")({ server: { handlers: { GET: async ({ request }) => {
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-7vjy6U2m.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-DqDhhjxY.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2170,4 +2174,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { formatExpiryForLanguage as C, usePocket as S, levelForBalance as _, recentlyUsedSignalSymbols as a, signalsUsedToday as b, signalJournalCsv as c, summarizeByMarket as d, summarizeSignals as f, takeSignal as g, readClose as h, readSignalJournal as i, signalRecordId as l, loadFeed as m, Route$1 as n, recordSignalOutcome as o, chooseSignalPair as p, markExpiredPendingSignals as r, recordSignalStarted as s, router_exports as t, subscribeToSignalJournal as u, levels as v, useLanguage as w, isAdminId as x, markSignalUsed as y };
+export { usePocket as C, isAdminId as S, useLanguage as T, takeSignal as _, recentlyUsedSignalSymbols as a, markSignalUsed as b, signalJournalCsv as c, summarizeByMarket as d, summarizeSignals as f, readClose as g, loadFeed as h, readSignalJournal as i, signalRecordId as l, confirmSignalEntry as m, Route$1 as n, recordSignalOutcome as o, chooseSignalPair as p, markExpiredPendingSignals as r, recordSignalStarted as s, router_exports as t, subscribeToSignalJournal as u, levelForBalance as v, formatExpiryForLanguage as w, signalsUsedToday as x, levels as y };
