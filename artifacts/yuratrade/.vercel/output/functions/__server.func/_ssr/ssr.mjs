@@ -1728,7 +1728,7 @@ var _Stream_brand = /* @__PURE__ */ new WeakSet();
 * design, is not treated as a genuine Stream on re-serialization. Keep the two
 * implementations in sync.
 */
-var Stream = class {
+var Stream$1 = class {
 	constructor() {
 		_classPrivateMethodInitSpec(this, _Stream_brand);
 		_classPrivateFieldInitSpec(this, _buffer, []);
@@ -1800,10 +1800,10 @@ function _replay(listener) {
 	}
 }
 function isStream(value) {
-	return value instanceof Stream;
+	return value instanceof Stream$1;
 }
 function createStream() {
-	return new Stream();
+	return new Stream$1();
 }
 function createStreamFromAsyncIterable(iterable, cleanups) {
 	const stream = createStream();
@@ -3844,7 +3844,7 @@ var RawStream = class {
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-Da-VmpSY.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-u6TehjN5.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -3866,19 +3866,19 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab": {
 		functionName: "takeBest_createServerFn_handler",
-		importer: () => import("./pocket-live-o9K0kIkY.mjs")
+		importer: () => import("./pocket-live-DbSdFzfg.mjs")
 	},
 	"c3bf91de64f793a1fdff73992de93db6878fb230b41776a1663843f0dd5e02d1": {
 		functionName: "readClose_createServerFn_handler",
-		importer: () => import("./pocket-live-o9K0kIkY.mjs")
+		importer: () => import("./pocket-live-DbSdFzfg.mjs")
 	},
 	"e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857": {
 		functionName: "takeSignal_createServerFn_handler",
-		importer: () => import("./pocket-live-o9K0kIkY.mjs")
+		importer: () => import("./pocket-live-DbSdFzfg.mjs")
 	},
 	"fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043": {
 		functionName: "loadFeed_createServerFn_handler",
-		importer: () => import("./pocket-live-o9K0kIkY.mjs")
+		importer: () => import("./pocket-live-DbSdFzfg.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -6516,7 +6516,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-CqN37iIb.mjs").then((n) => n.t),
+		import("./router-CmiJ6EHd.mjs").then((n) => n.t),
 		import("./start-D337KBoP.mjs"),
 		import("./empty-plugin-adapters-CInA4tz9.mjs")
 	]);

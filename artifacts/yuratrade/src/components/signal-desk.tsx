@@ -26,7 +26,7 @@ export function SignalDesk() {
   const [notice, setNotice] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
   const [used, setUsed] = useState(0);
-  const [expiryMinutes, setExpiryMinutes] = useState(1);
+  const [expiryMinutes, setExpiryMinutes] = useState(2);
   const attemptRef = useRef(0);
 
   useEffect(() => () => {

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download, History } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StatRow } from "@/components/stats";
+import { MAX_SIGNAL_ATTEMPTS } from "@/lib/signal-config";
 import {
   markExpiredPendingSignals,
   readSignalJournal,
@@ -219,7 +220,7 @@ function HistoryPage() {
                 </div>
                 <div className="rounded-xl bg-white/4 px-3 py-2">
                   <p className="text-dim">{t("history.step")}</p>
-                  <p className="mt-1 font-semibold text-fg">{t("history.attemptCount", { current: entry.step + 1, total: 4 })}</p>
+                  <p className="mt-1 font-semibold text-fg">{t("history.attemptCount", { current: entry.step + 1, total: Math.max(MAX_SIGNAL_ATTEMPTS, entry.step + 1) })}</p>
                 </div>
               </div>
             </article>

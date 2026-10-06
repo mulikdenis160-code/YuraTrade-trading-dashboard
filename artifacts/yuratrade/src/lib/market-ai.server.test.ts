@@ -8,12 +8,12 @@ import {
   marketAiApiErrorMessage,
   MIN_DIRECT_AI_CANDLES,
   parseMarketAiReview,
-  requestMarketAiReviewWithRepair,
+  requestMarketAiReviewOnce,
 } from "./market-ai.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
 
-test("direct market analysis uses Claude Opus 5 through Replit AI Integrations", () => {
-  assert.equal(DIRECT_AI_MODEL, "claude-opus-5");
+test("direct market analysis uses Gemini 3.6 Flash when no proxy is configured", () => {
+  assert.equal(DIRECT_AI_MODEL, "gemini-3.6-flash");
 });
 
 const validReview = JSON.stringify({
@@ -53,7 +53,7 @@ test("direct AI review accepts only an allowed pair with a valid structured resp
   if (review?.decision !== "signal") return;
   assert.equal(review.symbol, "EURUSD_otc");
   assert.equal(review.confidence, 84);
-  assert.match(review.explanation.candleEvidence, /свечей/);
+  assert.match(review.explanation, /свечей/);
 });
 
 test("direct AI review rejects malformed responses and pairs outside the candidate pool", () => {
@@ -91,7 +91,7 @@ ${JSON.stringify({
   assert.equal(review.symbol, "EURUSD_otc");
   assert.equal(review.direction, "call");
   assert.equal(review.confidence, 84);
-  assert.ok(review.explanation.candleEvidence.length > 240);
+  assert.ok(review.explanation.length > 240);
 });
 
 test("direct AI review rejects an unknown symbol even when the response is otherwise usable", () => {
@@ -112,33 +112,36 @@ test("a direct AI signal uses the AI decision without a confidence threshold or 
   assert.equal(acceptsMarketAiReview(review, ["GBPUSD_otc"]), false);
 
   const lowerConfidence = parseMarketAiReview(
-    JSON.stringify({ ...JSON.parse(validReview), confidence: 79 }),
+    JSON.stringify({ ...JSON.parse(validReview), confidence: 0 }),
     ["EURUSD_otc"],
   );
   assert.equal(acceptsMarketAiReview(lowerConfidence, ["EURUSD_otc"]), true);
 });
 
-test("direct AI may abstain when candle data is valid but no direction has a clear edge", () => {
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /30 корректных свечей — только условие достаточности входных данных/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass, если OHLC боковые или хаотичные/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /candleSeconds — интервал свечи/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /числовой порог уверенности/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /higherTimeframe/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /не складывай механический балл/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /Краткосрочное движение против старшего тренда само по себе не причина для pass/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /подтверждённый разворот или ложный пробой/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /если он последовательно поддержан OHLC/);
-  assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /возвращай pass только если/u);
+test("Gemini receives one pair, simple close context, and no abstention option or confidence threshold", () => {
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /одну OTC-валютную пару/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 30 последних close/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /четыре свечи назад/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /12 последних close/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /выбери направление вверх или вниз/);
+  assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /\bpass\b|abstain|no_signal/i);
+  assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /порог уверенности/);
 });
 
-test("analysis request supplies closed candles, indicators, and completed higher-timeframe context", async () => {
+test("analysis request supplies a fresh quote, four-candle trend, 12-close volatility, and 30 closes", async () => {
   const candles = risingCandles(101);
   const last = candles.at(-1)!;
   let userContent = "";
   const result = await analyzeMarketCandidates(
-    600,
+    120,
     60,
-    [{ symbol: "EURUSD_otc", name: "EUR/USD OTC", candles }],
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: 1.12345,
+      quoteAgeMs: 125,
+    }],
     {
       nowSeconds: last.time + 30,
       request: async (messages) => {
@@ -152,22 +155,67 @@ test("analysis request supplies closed candles, indicators, and completed higher
 
   assert.equal(result.decision, "signal");
   const input = JSON.parse(userContent) as {
-    horizonCandles: number;
-    candidates: Array<{
-      candles: number[][];
-      dataQuality: { closedCandleCount: number; isFresh: boolean };
-      technicalIndicators: { rsi14: number | null };
-      higherTimeframe: { candleSeconds: number; candleCount: number; candles: number[][] } | null;
-    }>;
+    symbol: string;
+    expirySeconds: number;
+    candleSeconds: number;
+    currentPrice: number;
+    quoteAgeMs: number;
+    trend: {
+      direction: string;
+      latestClose: number;
+      closeFourCandlesEarlier: number;
+      changePercent: number;
+    };
+    volatility: { periodCandles: number; standardDeviation: number };
+    closes: number[];
   };
-  assert.equal(input.horizonCandles, 10);
-  assert.equal(input.candidates[0]?.candles.length, 64);
-  assert.equal(input.candidates[0]?.dataQuality.closedCandleCount, 100);
-  assert.equal(input.candidates[0]?.dataQuality.isFresh, true);
-  assert.equal(input.candidates[0]?.technicalIndicators.rsi14, 100);
-  assert.equal(input.candidates[0]?.higherTimeframe?.candleSeconds, 300);
-  assert.equal(input.candidates[0]?.higherTimeframe?.candleCount, 16);
-  assert.equal(input.candidates[0]?.higherTimeframe?.candles.length, 16);
+  assert.equal(input.symbol, "EURUSD_otc");
+  assert.equal(input.expirySeconds, 120);
+  assert.equal(input.candleSeconds, 60);
+  assert.equal(input.currentPrice, 1.12345);
+  assert.equal(input.quoteAgeMs, 125);
+  assert.equal(input.closes.length, 30);
+  assert.equal(input.trend.latestClose, input.closes.at(-1));
+  assert.equal(input.trend.closeFourCandlesEarlier, input.closes.at(-5));
+  assert.ok(input.trend.changePercent > 0);
+  assert.equal(input.volatility.periodCandles, 12);
+  assert.ok(input.volatility.standardDeviation > 0);
+});
+
+test("analysis submits only one pair even when multiple candidates are provided", async () => {
+  const candles = risingCandles(30);
+  const last = candles.at(-1)!;
+  let userContent = "";
+  await analyzeMarketCandidates(
+    120,
+    60,
+    [
+      {
+        symbol: "EURUSD_otc",
+        name: "EUR/USD OTC",
+        candles,
+        currentPrice: 1.1,
+        quoteAgeMs: 0,
+      },
+      {
+        symbol: "GBPUSD_otc",
+        name: "GBP/USD OTC",
+        candles,
+        currentPrice: 1.2,
+        quoteAgeMs: 0,
+      },
+    ],
+    {
+      nowSeconds: last.time + 30,
+      request: async (messages) => {
+        userContent = messages.find((message) => message.role === "user")?.content ?? "";
+        return { choices: [{ message: { content: validReview }, finish_reason: "STOP" }] };
+      },
+    },
+  );
+  const input = JSON.parse(userContent) as { symbol: string; pair: string };
+  assert.equal(input.symbol, "EURUSD_otc");
+  assert.equal(input.pair, "EUR/USD OTC");
 });
 
 test("stale candle history is rejected before calling the AI", async () => {
@@ -177,7 +225,13 @@ test("stale candle history is rejected before calling the AI", async () => {
   const result = await analyzeMarketCandidates(
     60,
     60,
-    [{ symbol: "EURUSD_otc", name: "EUR/USD OTC", candles }],
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: 1.2,
+      quoteAgeMs: 0,
+    }],
     {
       nowSeconds: last.time + 60 * 5,
       request: async () => {
@@ -194,6 +248,35 @@ test("stale candle history is rejected before calling the AI", async () => {
   assert.equal(aiCalled, false);
 });
 
+test("a quote older than 20 seconds is rejected before calling the AI", async () => {
+  const candles = risingCandles(20);
+  const last = candles.at(-1)!;
+  let aiCalled = false;
+  const result = await analyzeMarketCandidates(
+    120,
+    60,
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: 1.2,
+      quoteAgeMs: 20_001,
+    }],
+    {
+      nowSeconds: last.time + 30,
+      request: async () => {
+        aiCalled = true;
+        return { choices: [{ message: { content: validReview }, finish_reason: "STOP" }] };
+      },
+    },
+  );
+  assert.deepEqual(result, {
+    decision: "pass",
+    reason: "Живая котировка старше 20 секунд или недоступна. Сигнал не выдан.",
+  });
+  assert.equal(aiCalled, false);
+});
+
 test("a valid AI abstention preserves its reason for the interface", () => {
   const reason = "Направление не подтверждается последовательностью свечей.";
   assert.deepEqual(
@@ -202,10 +285,12 @@ test("a valid AI abstention preserves its reason for the interface", () => {
   );
 });
 
-test("direct AI abstains when a candidate has too few candles", async () => {
+test("local data checks stop the request when a candidate has too few candles", async () => {
   const result = await analyzeMarketCandidates(60, 60, [{
     symbol: "EURUSD_otc",
     name: "EUR/USD OTC",
+    currentPrice: 1,
+    quoteAgeMs: 0,
     candles: Array.from({ length: MIN_DIRECT_AI_CANDLES - 1 }, (_, index) => ({
       time: index * 60,
       open: 1,
@@ -225,6 +310,8 @@ test("direct AI rejects an otherwise large candle set when invalid rows leave to
   const result = await analyzeMarketCandidates(60, 60, [{
     symbol: "EURUSD_otc",
     name: "EUR/USD OTC",
+    currentPrice: 1,
+    quoteAgeMs: 0,
     candles: [
       ...Array.from({ length: MIN_DIRECT_AI_CANDLES - 1 }, (_, index) => ({
         time: index * 60 + 60,
@@ -240,31 +327,40 @@ test("direct AI rejects an otherwise large candle set when invalid rows leave to
   assert.equal(result.decision, "pass");
 });
 
-test("Anthropic request failures produce actionable messages without exposing raw errors", () => {
+test("Gemini request failures produce actionable messages without exposing raw errors", () => {
   assert.match(marketAiApiErrorMessage({ status: 429 }), /ограничил запросы/);
   assert.match(marketAiApiErrorMessage({ status: 401 }), /отклонил подключение/);
   assert.match(marketAiApiErrorMessage({ status: 503 }), /временно недоступен/);
 });
 
-test("an unparseable Anthropic response is retried once and the repaired signal is returned", async () => {
-  let calls = 0;
-  const review = await requestMarketAiReviewWithRepair(
-    async (messages) => {
-      calls += 1;
-      if (calls === 1) {
-        return { choices: [{ message: { content: "not valid JSON" }, finish_reason: "stop" }] };
-      }
-      const repairPrompt = messages.find(
-        (message) => message.role === "user" && message.content.includes("Предыдущий ответ нельзя проверить"),
-      )?.content ?? "";
-      assert.match(repairPrompt, /верни pass/);
-      assert.match(repairPrompt, /ясного преимущества нет/);
-      return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
-    },
-    [{ role: "user", content: "Свечи для анализа." }],
+test("a valid compact Gemini response is accepted without a second classifier", () => {
+  const review = parseMarketAiReview(
+    JSON.stringify({
+      direction: "up",
+      explanation: "Цена растёт по последним закрытиям.",
+      confidence: 0,
+    }),
     ["EURUSD_otc"],
   );
+  assert.equal(review?.decision, "signal");
+  if (review?.decision !== "signal") return;
+  assert.equal(review.symbol, "EURUSD_otc");
+  assert.equal(review.direction, "call");
+  assert.equal(review.confidence, 0);
+});
 
-  assert.equal(calls, 2);
-  assert.equal(review.decision, "signal");
+test("an unparseable Gemini response fails after exactly one model request", async () => {
+  let calls = 0;
+  await assert.rejects(
+    requestMarketAiReviewOnce(
+      async () => {
+      calls += 1;
+        return { choices: [{ message: { content: "not valid JSON" }, finish_reason: "stop" }] };
+      },
+      [{ role: "user", content: "Свечи для анализа." }],
+      ["EURUSD_otc"],
+    ),
+    /не удалось проверить/,
+  );
+  assert.equal(calls, 1);
 });

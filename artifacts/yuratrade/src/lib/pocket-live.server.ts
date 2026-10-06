@@ -1,10 +1,9 @@
 import WebSocket from "ws";
 import {
+  activeGeminiModel,
   acceptsMarketAiReview,
   analyzeMarketCandidates,
   DIRECT_AI_HISTORY_CANDLES,
-  DIRECT_AI_MODEL,
-  DIRECT_AI_MODEL_LABEL,
   MIN_DIRECT_AI_CANDLES,
   type MarketAiReview,
 } from "./market-ai.server";
@@ -23,6 +22,11 @@ import {
   type HistoricalCandle,
   type ParsedHistoryPage,
 } from "./pocket-option-history.ts";
+import {
+  MAX_QUOTE_AGE_MS,
+  MIN_ENTRY_BUFFER_MS,
+} from "./signal-config";
+import { nextCandleEntryWindow } from "./signal-entry-window";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -31,7 +35,9 @@ const AUTH_MISSING_MESSAGE =
 const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 const HISTORY_PAGE_CANDLES = 150;
-const SIGNAL_CANDIDATES_PER_SEARCH = 4;
+const SIGNAL_CANDIDATES_PER_SEARCH = 1;
+const MAX_ELIGIBLE_PAIRS = 20;
+const MIN_SIGNAL_PAYOUT = 92;
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
 const runHistoryRequest = createKeyedAsyncQueue();
 
@@ -140,6 +146,7 @@ function buildDirectAiSignal(
 ): FeedSignal {
   const pack = candles.slice(-28);
   const price = candles[candles.length - 1]?.close ?? 0;
+  const model = activeGeminiModel();
   const sample = pack[pack.length - 1]?.close ?? price;
   const digits = sample >= 100 ? 2 : sample >= 10 ? 3 : 5;
   const cut = (value: number) => Number(value.toFixed(digits));
@@ -153,13 +160,9 @@ function buildDirectAiSignal(
     analysisSeconds,
     aiConfidence: review.confidence,
     note: [
-      `Прямой анализ ${DIRECT_AI_MODEL_LABEL} (${DIRECT_AI_MODEL}) выбрал ${directionLabel}.`,
+      `Анализ ${model.label} (${model.model}) выбрал ${directionLabel}.`,
       `Самооценка ИИ: ${review.confidence}/100; это субъективная оценка, а не измеренная вероятность или историческая точность.`,
-      `ИИ — выбор пары: ${review.explanation.pairSelection}`,
-      `ИИ — разбор свечей: ${review.explanation.candleEvidence}`,
-      `ИИ — аргумент направления: ${review.explanation.directionRationale}`,
-      `ИИ — риски сценария: ${review.explanation.riskFactors}`,
-      `ИИ — что ослабит сценарий: ${review.explanation.invalidation}`,
+      `ИИ — объяснение: ${review.explanation}`,
       `Экспирация ${formatExpiry(expirySeconds)}; интервал свечи ${formatExpiry(analysisSeconds)}.`,
       "Направление выбрано прямым анализом ИИ без независимой проверки другой модели; результат не гарантирован.",
     ].join("\n"),
@@ -237,6 +240,41 @@ function waitQuote(symbol: string) {
       else reject(new Error(`Цена по паре ${symbol} не пришла за 12 секунд. Попробуйте ещё раз.`));
     }, 12_000);
   });
+}
+
+async function waitFreshQuote(symbol: string) {
+  const waitedPrice = await waitQuote(symbol);
+  const quote = quotes.get(symbol);
+  if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
+    throw new Error(`Не удалось получить живую котировку по паре ${symbol}.`);
+  }
+  const ageMs = Date.now() - quote.at;
+  if (ageMs < 0 || ageMs > MAX_QUOTE_AGE_MS) {
+    throw new Error(`Котировка по паре ${symbol} старше 20 секунд. Сигнал не выдан.`);
+  }
+  return {
+    price: quote.price || waitedPrice,
+    ageMs,
+  };
+}
+
+function entryWindowFailure(candles: HistoricalCandle[], nowMs = Date.now()): PassResult | null {
+  const window = nextCandleEntryWindow(candles, nowMs);
+  if (!window) {
+    return {
+      decision: "pass",
+      reason: "Не удалось подтвердить закрытие минутной свечи и начало следующей. Сигнал не выдан.",
+    };
+  }
+  if (!window.canEnter) {
+    return {
+      decision: "pass",
+      reason: window.remainingMs < MIN_ENTRY_BUFFER_MS
+        ? "До закрытия текущей минутной свечи осталось меньше 15 секунд. Запросите сигнал в начале следующей минуты."
+        : "Следующая минутная свеча ещё не открылась. Сигнал не выдан.",
+    };
+  }
+  return null;
 }
 
 function failPending(error: Error) {
@@ -546,6 +584,15 @@ function summarizeCandleCadence(series: HistoricalCandle[][], expectedSeconds: n
 export async function feedSignal(symbol: string, expirySeconds: number): Promise<FeedSignalResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
   await ensureFeed();
+  const pair = pairs.get(symbol);
+  if (
+    !pair ||
+    pair.group !== "fx" ||
+    !pair.symbol.toLowerCase().includes("otc") ||
+    pair.payout < MIN_SIGNAL_PAYOUT
+  ) {
+    throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
+  }
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
@@ -556,17 +603,29 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
     expectedCandleSeconds: analysisSeconds,
     ...summarizeCandleCadence([candles], analysisSeconds),
   }));
-  const pair = pairs.get(symbol);
-  if (!pair) throw new Error("Эта пара сейчас недоступна.");
+  const initialWindowFailure = entryWindowFailure(candles);
+  if (initialWindowFailure) return initialWindowFailure;
+  const inputQuote = await waitFreshQuote(symbol);
   const review = await analyzeMarketCandidates(expirySeconds, analysisSeconds, [
-    { symbol, name: pair.name, candles },
+    {
+      symbol,
+      name: pair.name,
+      candles,
+      currentPrice: inputQuote.price,
+      quoteAgeMs: inputQuote.ageMs,
+    },
   ]);
   if (review.decision === "pass") return review;
   if (!acceptsMarketAiReview(review, [symbol])) {
     return { decision: "pass", reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан." };
   }
+  const analysisWindowFailure = entryWindowFailure(candles);
+  if (analysisWindowFailure) return analysisWindowFailure;
+  const entryQuote = await waitFreshQuote(symbol);
+  const finalWindowFailure = entryWindowFailure(candles);
+  if (finalWindowFailure) return finalWindowFailure;
   const signal = buildDirectAiSignal(candles, expirySeconds, analysisSeconds, pair.name, pair.payout, review);
-  signal.openPrice = await waitQuote(symbol);
+  signal.openPrice = entryQuote.price;
   return { decision: "signal", ...signal };
 }
 
@@ -620,17 +679,31 @@ export async function feedBest(
     const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
     expectedCandleSeconds = analysisSeconds;
     const ranked = [...pairs.values()]
-      .filter((pair) => pair.payout === 92 || pair.payout === 80)
-      .sort((a, b) => b.payout - a.payout);
-    if (ranked.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
-    const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
-    const available = ranked.filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
-    if (available.length === 0) {
-      throw new Error("Все подходящие пары недавно выдавались. Повтор по той же паре временно остановлен.");
+      .filter(
+        (pair) =>
+          pair.group === "fx" &&
+          pair.symbol.toLowerCase().includes("otc") &&
+          pair.payout >= MIN_SIGNAL_PAYOUT,
+      )
+      .sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name))
+      .slice(0, MAX_ELIGIBLE_PAIRS);
+    if (ranked.length === 0) {
+      throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
     }
-    const pool = selectSignalCandidates(available);
+    const excluded = new Set(excludedSymbols.slice(0, 24).map((symbol) => symbol.toLowerCase()));
+    let pool: FeedPair[] = [];
+    for (let index = 0; index < ranked.length; index += 1) {
+      const next = selectSignalCandidates(ranked)[0];
+      if (next && !excluded.has(next.symbol.toLowerCase())) {
+        pool = [next];
+        break;
+      }
+    }
+    if (pool.length === 0) pool = selectSignalCandidates(ranked);
     poolSize = pool.length;
-    if (pool.length === 0) throw new Error("Нет активных пар с выплатой 92% или 80%.");
+    if (pool.length === 0) {
+      throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
+    }
     const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
     let historyFailure = "";
     stage = "history";
@@ -669,6 +742,20 @@ export async function feedBest(
       }
       throw new Error(`Не удалось получить по Pocket Option минимум ${MIN_DIRECT_AI_CANDLES} исторических свечей ни для одной пары.`);
     }
+    const candidate = candidates[0];
+    if (!candidate) {
+      throw new Error("Не удалось подготовить данные выбранной пары.");
+    }
+    const initialWindowFailure = entryWindowFailure(candidate.candles);
+    if (initialWindowFailure) {
+      stage = "entry-window";
+      logTiming("pass");
+      return initialWindowFailure;
+    }
+    stage = "fresh-quote";
+    const inputQuoteStartedAt = performance.now();
+    const inputQuote = await waitFreshQuote(candidate.pair.symbol);
+    quoteMs += performance.now() - inputQuoteStartedAt;
     stage = "analysis";
     const analysisStartedAt = performance.now();
     let review: MarketAiReview;
@@ -680,6 +767,8 @@ export async function feedBest(
           symbol: candidate.pair.symbol,
           name: candidate.pair.name,
           candles: candidate.candles,
+          currentPrice: inputQuote.price,
+          quoteAgeMs: inputQuote.ageMs,
         })),
       );
     } finally {
@@ -696,6 +785,22 @@ export async function feedBest(
       logTiming("pass");
       return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
     }
+    const analysisWindowFailure = entryWindowFailure(best.candles);
+    if (analysisWindowFailure) {
+      stage = "entry-window";
+      logTiming("pass");
+      return analysisWindowFailure;
+    }
+    stage = "fresh-quote";
+    const quoteStartedAt = performance.now();
+    const entryQuote = await waitFreshQuote(best.pair.symbol);
+    quoteMs += performance.now() - quoteStartedAt;
+    const finalWindowFailure = entryWindowFailure(best.candles);
+    if (finalWindowFailure) {
+      stage = "entry-window";
+      logTiming("pass");
+      return finalWindowFailure;
+    }
     const signal = buildDirectAiSignal(
       best.candles,
       expirySeconds,
@@ -704,10 +809,7 @@ export async function feedBest(
       best.pair.payout,
       review,
     );
-    stage = "fresh-quote";
-    const quoteStartedAt = performance.now();
-    signal.openPrice = await waitQuote(best.pair.symbol);
-    quoteMs = performance.now() - quoteStartedAt;
+    signal.openPrice = entryQuote.price;
     stage = "complete";
     logTiming("signal");
     return {

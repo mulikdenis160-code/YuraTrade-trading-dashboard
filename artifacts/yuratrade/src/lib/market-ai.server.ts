@@ -24,13 +24,7 @@ const signalReviewSchema = z.object({
   symbol: z.string().min(1).max(80),
   direction: z.enum(["call", "put"]),
   confidence: z.number().int().min(0).max(100),
-  explanation: z.object({
-    pairSelection: z.string().trim().min(1).max(1200),
-    candleEvidence: z.string().trim().min(1).max(1200),
-    directionRationale: z.string().trim().min(1).max(1200),
-    riskFactors: z.string().trim().min(1).max(1200),
-    invalidation: z.string().trim().min(1).max(1200),
-  }),
+  explanation: z.string().trim().min(1).max(1200),
 });
 
 const passReviewSchema = z.object({
@@ -48,8 +42,8 @@ export type MarketAiReview = z.infer<typeof reviewSchema>;
 export const DIRECT_AI_SYSTEM_PROMPT = [
   "Ты анализируешь одну OTC-валютную пару по минутным закрытиям. Доступно до 30 последних close по порядку от старых к новым, текущая живая цена, сравнение последнего close с close четыре свечи назад и стандартное отклонение 12 последних close.",
   "Тренд уже рассчитан как сравнение последнего закрытия с закрытием четырьмя минутными свечами ранее. Волатильность — population standard deviation двенадцати последних закрытий в тех же ценовых единицах.",
-  "Используй только переданные значения; не выдумывай OHLC, индикаторы, новости или дополнительные цены. Учти срок экспирации 120 секунд.",
-  "При корректных входных данных обязательно выбери направление вверх или вниз. Не возвращай pass, abstain, no_signal, decision или symbol. Не используй вторую модель-классификатор и не применяй порог уверенности.",
+  "Используй только переданные значения; не выдумывай OHLC, индикаторы, новости или дополнительные цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
+  "При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
   "Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки.",
 ].join(" ");
 
@@ -178,36 +172,18 @@ function matchAllowedSymbol(value: unknown, allowedSymbols: string[]) {
 function normalizeExplanation(
   value: unknown,
   root: Record<string, unknown>,
-) {
-  const source = isRecord(value) ? value : {};
-  const general = typeof value === "string"
-    ? value.trim()
-    : firstString(root, ["analysis", "reasoning", "rationale", "summary", "reason"]);
-  const missing = "ИИ не предоставил отдельное пояснение для этого пункта.";
-  const pairSelection = firstString(source, [
-    "pairSelection", "pair_selection", "pairReason", "pair_reason",
-  ]).slice(0, 1200);
-  const candleEvidence = firstString(source, [
-    "candleEvidence", "candle_evidence", "evidence", "candleAnalysis", "candle_analysis",
-  ]).slice(0, 1200);
-  const directionRationale = firstString(source, [
-    "directionRationale", "direction_rationale", "rationale", "directionReason", "direction_reason",
-  ]).slice(0, 1200) || general.slice(0, 1200);
-  const riskFactors = firstString(source, ["riskFactors", "risk_factors", "risks", "risk"]).slice(0, 1200);
-  const invalidation = firstString(source, [
-    "invalidation", "invalidationCondition", "invalidation_condition", "invalidationSignal",
-  ]).slice(0, 1200);
-  const explanation = {
-    pairSelection: pairSelection || missing,
-    candleEvidence: candleEvidence || missing,
-    directionRationale: directionRationale || missing,
-    riskFactors: riskFactors || missing,
-    invalidation: invalidation || missing,
-  };
-  const hasExplanation = Boolean(
-    pairSelection || candleEvidence || directionRationale || riskFactors || invalidation,
-  );
-  return hasExplanation ? explanation : null;
+): string | null {
+  if (typeof value === "string") return value.trim().slice(0, 1200) || null;
+  const source = isRecord(value) ? value : root;
+  const parts = [
+    firstString(source, ["explanation", "summary", "analysis", "reasoning", "rationale", "reason"]),
+    firstString(source, ["candleEvidence", "candle_evidence", "evidence", "candleAnalysis", "candle_analysis"]),
+    firstString(source, ["directionRationale", "direction_rationale", "directionReason", "direction_reason"]),
+    firstString(source, ["riskFactors", "risk_factors", "risks", "risk"]),
+    firstString(source, ["invalidation", "invalidationCondition", "invalidation_condition", "invalidationSignal"]),
+  ];
+  const explanation = [...new Set(parts.map((part) => part.trim()).filter(Boolean))].join(" ");
+  return explanation.slice(0, 1200) || null;
 }
 
 function standardDeviation(values: number[]) {
@@ -366,7 +342,7 @@ export async function requestMarketAiReviewOnce(
   if (choice?.message.refusal) {
     throw new Error("Gemini отказался выполнить анализ. Сигнал не выдан.");
   }
-  if (choice?.finish_reason.toLowerCase().includes("max_tokens")) {
+  if (choice?.finish_reason?.toLowerCase().includes("max_tokens")) {
     throw new Error("Gemini оборвал ответ по лимиту длины. Сигнал не выдан.");
   }
   throw new Error("Gemini вернул ответ, который не удалось проверить. Сигнал не выдан.");
@@ -382,14 +358,19 @@ export async function analyzeMarketCandidates(
   } = {},
 ): Promise<MarketAiReview> {
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
-  const preparedCandidates = candidates.map((candidate) => ({
+  const preparedCandidates = candidates.slice(0, 1).map((candidate) => ({
     ...candidate,
     context: buildMarketAnalysisContext(candidate.candles, candleSeconds, nowSeconds),
   }));
   const eligibleCandidates = preparedCandidates.filter(
     (candidate) =>
       candidate.context.candles.length >= MIN_DIRECT_AI_CANDLES &&
-      candidate.context.dataQuality.isFresh,
+      candidate.context.dataQuality.isFresh &&
+      Number.isFinite(candidate.currentPrice) &&
+      candidate.currentPrice > 0 &&
+      Number.isFinite(candidate.quoteAgeMs) &&
+      candidate.quoteAgeMs >= 0 &&
+      candidate.quoteAgeMs <= 20_000,
   );
   if (eligibleCandidates.length === 0) {
     const hasEnoughButStaleHistory = preparedCandidates.some(
@@ -401,47 +382,63 @@ export async function analyzeMarketCandidates(
       decision: "pass",
       reason: hasEnoughButStaleHistory
         ? "Последняя закрытая свеча слишком старая для надёжного анализа. Сигнал не выдан."
-        : `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} закрытых корректных свечей на пару.`,
+        : preparedCandidates.some((candidate) =>
+            !Number.isFinite(candidate.currentPrice) ||
+            !Number.isFinite(candidate.quoteAgeMs) ||
+            candidate.quoteAgeMs < 0 ||
+            candidate.quoteAgeMs > 20_000
+          )
+          ? "Живая котировка старше 20 секунд или недоступна. Сигнал не выдан."
+          : `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} закрытых корректных свечей на пару.`,
     };
   }
 
+  const candidate = eligibleCandidates[0];
+  if (!candidate) {
+    return { decision: "pass", reason: "Не удалось подготовить данные выбранной пары. Сигнал не выдан." };
+  }
+  const closes = candidate.context.candles
+    .slice(-DIRECT_AI_VISIBLE_CANDLES)
+    .map((candle) => candle.close);
+  const latestClose = closes.at(-1);
+  const closeFourCandlesEarlier = closes.at(-5);
+  const volatility = standardDeviation(closes.slice(-12));
+  if (
+    latestClose === undefined ||
+    closeFourCandlesEarlier === undefined ||
+    volatility === null
+  ) {
+    return {
+      decision: "pass",
+      reason: `Для анализа нужны минимум ${MIN_DIRECT_AI_CANDLES} закрытых корректных свечей.`,
+    };
+  }
+  const trendChange = latestClose - closeFourCandlesEarlier;
+  const trend = latestClose > closeFourCandlesEarlier
+    ? "up"
+    : latestClose < closeFourCandlesEarlier
+      ? "down"
+      : "flat";
   const input = {
+    symbol: candidate.symbol,
+    pair: candidate.name,
     expirySeconds,
     candleSeconds,
-    horizonCandles: expirySeconds / candleSeconds,
-    candleFormat: "Массив candles содержит до 64 последних закрытых OHLC oldest-to-newest; значения в basis points относительно close предыдущей свечи. technicalIndicators и dataQuality рассчитаны по всей доступной истории (до 128 закрытых свечей). higherTimeframe содержит до 16 последних полностью собранных свечей.",
-    indicatorFormat: {
-      recentReturnBps: "Изменение close за указанное число свечей в basis points.",
-      ema9Vs21Bps: "EMA 9 относительно EMA 21; положительное значение означает EMA 9 выше EMA 21.",
-      emaSlope5Bps: "Изменение EMA за 5 свечей в basis points; знак показывает направление наклона.",
-      rsi14: "RSI 14 в диапазоне 0..100.",
-      macdHistogramBps: "Знак и величина MACD-гистограммы в basis points относительно последнего close.",
-      bollingerZ20: "Отклонение последнего close от средней Bollinger 20 в стандартных отклонениях.",
-      atr14Bps: "Средний истинный диапазон за 14 свечей в basis points.",
-      atr5To14Ratio: "Отношение ATR 5 к ATR 14; выше 1 означает недавнее расширение диапазона.",
-      prior20HighDistanceBps: "Предыдущий максимум 20 свечей относительно текущего close; отрицательное значение означает close выше максимума.",
-      prior20LowDistanceBps: "Текущий close относительно предыдущего минимума 20 свечей; отрицательное значение означает close ниже минимума.",
-      null: "Истории недостаточно для надёжного расчёта этого показателя.",
+    currentPrice: candidate.currentPrice,
+    quoteAgeMs: Math.round(candidate.quoteAgeMs),
+    trend: {
+      comparison: "последний закрытый close против close четыре минутные свечи назад",
+      direction: trend,
+      latestClose,
+      closeFourCandlesEarlier,
+      change: Number(trendChange.toPrecision(8)),
+      changePercent: Number(((trendChange / closeFourCandlesEarlier) * 100).toPrecision(8)),
     },
-    candidates: eligibleCandidates.map((candidate) => ({
-      symbol: candidate.symbol,
-      name: candidate.name,
-      dataQuality: candidate.context.dataQuality,
-      technicalIndicators: candidate.context.technicalIndicators,
-      higherTimeframe: candidate.context.higherTimeframe
-        ? {
-            candleSeconds: candidate.context.higherTimeframe.candleSeconds,
-            candleCount: Math.min(
-              DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES,
-              candidate.context.higherTimeframe.candles.length,
-            ),
-            candles: candlesInBasisPoints(
-              candidate.context.higherTimeframe.candles.slice(-DIRECT_AI_VISIBLE_HIGHER_TIMEFRAME_CANDLES),
-            ),
-          }
-        : null,
-      candles: candlesInBasisPoints(candidate.context.candles),
-    })),
+    volatility: {
+      periodCandles: 12,
+      standardDeviation: Number(volatility.toPrecision(8)),
+    },
+    closes,
   };
 
   const userPrompt = JSON.stringify(input);
@@ -449,10 +446,9 @@ export async function analyzeMarketCandidates(
     { role: "system", content: DIRECT_AI_SYSTEM_PROMPT },
     { role: "user", content: userPrompt },
   ];
-  const allowedSymbols = eligibleCandidates.map((candidate) => candidate.symbol);
-  return requestMarketAiReviewWithRepair(
+  return requestMarketAiReviewOnce(
     options.request ?? requestMarketAiCompletion,
     baseMessages,
-    allowedSymbols,
+    [candidate.symbol],
   );
 }

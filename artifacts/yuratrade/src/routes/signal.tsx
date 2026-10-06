@@ -12,6 +12,7 @@ import {
   analysisPeriodForExpiry,
   isValidExpirySeconds,
 } from "@/lib/expiry";
+import { MAX_OVERLAYS } from "@/lib/signal-config";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 
 type Group = "fx";
@@ -100,7 +101,7 @@ export const Route = createFileRoute("/signal")({
     const direction = search.direction === "put" ? "put" : "call";
     const parsedSeconds = Number(search.seconds);
     const parsedConfidence = Number(search.aiConfidence);
-    const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : 60;
+    const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : 120;
     return {
       symbol: validGroup && typeof search.symbol === "string" ? search.symbol : "",
       name: validGroup && typeof search.name === "string" ? search.name : "",
@@ -115,7 +116,7 @@ export const Route = createFileRoute("/signal")({
       aiConfidence: Number.isFinite(parsedConfidence)
         ? Math.min(100, Math.max(0, Math.round(parsedConfidence)))
         : null,
-      step: Math.min(3, Math.max(0, Number(search.step) || 0)),
+      step: Math.min(MAX_OVERLAYS, Math.max(0, Number(search.step) || 0)),
       started: Number(search.started) || Date.now(),
     };
   },
@@ -287,7 +288,7 @@ function SignalCard({ search }: { search: Search }) {
           setPhase("draw");
           return;
         }
-        setPhase(won ? "win" : search.step >= 3 ? "stop" : "hunt");
+        setPhase(won ? "win" : search.step >= MAX_OVERLAYS ? "stop" : "hunt");
       })
       .catch((cause: unknown) => {
         setPhase("run");
