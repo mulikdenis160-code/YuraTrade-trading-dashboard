@@ -108,8 +108,8 @@ export function SignalDesk() {
     const found: ExpirySuggestion[] = [];
     let firstError = "";
 
-    for (const minutes of alternatives) {
-      if (attemptRef.current !== attempt) return;
+    const results = await Promise.all(alternatives.map(async (minutes) => {
+      if (attemptRef.current !== attempt) return { minutes, result: null, error: "" };
       try {
         const result = await takeBest({
           data: {
@@ -117,15 +117,23 @@ export function SignalDesk() {
             excludedSymbols,
           },
         });
-        if (result.decision === "signal") found.push({ minutes, candidate: result });
+        return { minutes, result, error: "" };
       } catch (cause) {
-        if (!firstError) {
-          firstError = cause instanceof Error ? cause.message : t("signal.none");
-        }
+        return {
+          minutes,
+          result: null,
+          error: cause instanceof Error ? cause.message : t("signal.none"),
+        };
       }
-    }
+    }));
 
     if (attemptRef.current !== attempt) return;
+    for (const outcome of results) {
+      if (outcome.result?.decision === "signal") {
+        found.push({ minutes: outcome.minutes, candidate: outcome.result });
+      }
+      if (!firstError && outcome.error) firstError = outcome.error;
+    }
     setSuggestedSignals(found);
     setAlternativeSearchError(firstError);
     setAlternativesChecked(true);

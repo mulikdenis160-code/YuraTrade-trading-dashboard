@@ -13,7 +13,11 @@ import {
   formatExpiry,
   isValidExpirySeconds,
 } from "./expiry";
-import { createRotatingCandidateSelector } from "./signal-candidate-pool.ts";
+import { createKeyedAsyncQueue } from "./async-keyed-queue";
+import {
+  createRotatingCandidateSelector,
+  loadCandidatesInParallel,
+} from "./signal-candidate-pool.ts";
 
 const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
@@ -23,6 +27,7 @@ const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 const HISTORY_PAGE_CANDLES = 150;
 const SIGNAL_CANDIDATES_PER_SEARCH = 4;
+const runHistoryRequest = createKeyedAsyncQueue();
 
 export type PairGroup = "fx" | "crypto" | "stock" | "commodity";
 
@@ -71,12 +76,11 @@ let ready: Promise<void> | null = null;
 let connectionError = "";
 let retryAfter = 0;
 let expectAssets = false;
-let expectHistory = false;
 let expectBalance = false;
 const quotes = new Map<string, { price: number; at: number }>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
-let pending: Pending | null = null;
+const pendingHistory = new Map<string, Pending>();
 
 function textOf(data: WebSocket.RawData) {
   if (typeof data === "string") return data;
@@ -249,10 +253,11 @@ function waitQuote(symbol: string) {
 }
 
 function failPending(error: Error) {
-  if (!pending) return;
-  clearTimeout(pending.timer);
-  pending.reject(error);
-  pending = null;
+  for (const request of pendingHistory.values()) {
+    clearTimeout(request.timer);
+    request.reject(error);
+  }
+  pendingHistory.clear();
 }
 
 function handleMessage(current: WebSocket, message: string) {
@@ -282,10 +287,6 @@ function handleMessage(current: WebSocket, message: string) {
     expectAssets = true;
     return;
   }
-  if (message.includes("loadHistoryPeriod")) {
-    expectHistory = true;
-    return;
-  }
   if (expectAssets && message.startsWith("[")) {
     expectAssets = false;
     try {
@@ -295,16 +296,17 @@ function handleMessage(current: WebSocket, message: string) {
     }
     return;
   }
-  if (expectHistory && message.startsWith("{")) {
-    expectHistory = false;
+  if (message.startsWith("{")) {
     try {
       const parsed = JSON.parse(message) as { asset?: string; data?: unknown[] };
-      if (pending && parsed.asset === pending.asset && Array.isArray(parsed.data)) {
-        const candles = asCandles(parsed.data);
-        clearTimeout(pending.timer);
-        const resolve = pending.resolve;
-        pending = null;
-        resolve(candles);
+      if (typeof parsed.asset === "string" && Array.isArray(parsed.data)) {
+        const request = pendingHistory.get(parsed.asset);
+        if (request) {
+          clearTimeout(request.timer);
+          pendingHistory.delete(parsed.asset);
+          request.resolve(asCandles(parsed.data));
+          return;
+        }
       }
     } catch {
       /* ignore a bad history frame */
@@ -358,6 +360,7 @@ function connect() {
     socket = null;
     retryAfter = Date.now() + 2000;
     connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
+    failPending(new Error(connectionError));
   });
   socket = next;
   next.on("message", (data) => handleMessage(next, textOf(data)));
@@ -366,6 +369,7 @@ function connect() {
     socket = null;
     retryAfter = Date.now() + 2000;
     if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
+    failPending(new Error(connectionError));
   });
 }
 
@@ -403,41 +407,40 @@ export async function feedSnapshot() {
 }
 
 async function loadHistoryPage(symbol: string, seconds: number, time: number) {
-  await ensureFeed();
-  if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
-  if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
-  if (pending) failPending(new Error("Запрос сменён."));
-  const current = socket;
-  return new Promise<HistoricalCandle[]>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (pending?.asset === symbol) {
-        pending = null;
-        expectHistory = false;
+  return runHistoryRequest(symbol, async () => {
+    await ensureFeed();
+    if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
+    const current = socket;
+    return new Promise<HistoricalCandle[]>((resolve, reject) => {
+      let request: Pending;
+      const timer = setTimeout(() => {
+        if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+        reject(new Error("История свечей не пришла. Попробуйте ещё раз."));
+      }, 12000);
+      request = { asset: symbol, resolve, reject, timer };
+      pendingHistory.set(symbol, request);
+      try {
+        current.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: seconds }]));
+        current.send(
+          "42" +
+            JSON.stringify([
+              "loadHistoryPeriod",
+              {
+                asset: symbol,
+                index: 7000 + Math.floor(Math.random() * 2000),
+                time,
+                offset: seconds * HISTORY_PAGE_CANDLES,
+                period: seconds,
+              },
+            ]),
+        );
+      } catch {
+        clearTimeout(timer);
+        if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+        reject(new Error("Не удалось запросить историю свечей Pocket Option."));
       }
-      reject(new Error("История свечей не пришла. Попробуйте ещё раз."));
-    }, 12000);
-    pending = { asset: symbol, resolve, reject, timer };
-    try {
-      current.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: seconds }]));
-      current.send(
-        "42" +
-          JSON.stringify([
-            "loadHistoryPeriod",
-            {
-              asset: symbol,
-              index: 7000 + Math.floor(Math.random() * 2000),
-              time,
-              offset: seconds * HISTORY_PAGE_CANDLES,
-              period: seconds,
-            },
-          ]),
-      );
-    } catch {
-      clearTimeout(timer);
-      if (pending?.asset === symbol) pending = null;
-      expectHistory = false;
-      reject(new Error("Не удалось запросить историю свечей Pocket Option."));
-    }
+    });
   });
 }
 
@@ -535,16 +538,18 @@ export async function feedBest(
   const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
   let historyResponses = 0;
   let historyFailure = "";
-  for (const pair of pool) {
-    try {
-      const candles = await loadCandles(pair.symbol, analysisSeconds);
-      historyResponses += 1;
-      if (candles.length < MIN_DIRECT_AI_CANDLES) continue;
-      candidates.push({ pair, candles });
-    } catch (cause) {
-      if (cause instanceof Error) historyFailure = cause.message;
-      // Continue to another pair if its history request fails.
+  const historyResults = await loadCandidatesInParallel(
+    pool,
+    (pair) => loadCandles(pair.symbol, analysisSeconds),
+  );
+  for (const result of historyResults) {
+    if (!result.ok) {
+      if (!historyFailure && result.error instanceof Error) historyFailure = result.error.message;
+      continue;
     }
+    historyResponses += 1;
+    if (result.value.length < MIN_DIRECT_AI_CANDLES) continue;
+    candidates.push({ pair: result.item, candles: result.value });
   }
   if (candidates.length === 0) {
     if (historyResponses === 0 && historyFailure) {
