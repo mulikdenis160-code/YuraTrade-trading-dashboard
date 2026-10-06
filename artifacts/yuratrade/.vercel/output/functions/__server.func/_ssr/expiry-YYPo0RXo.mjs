@@ -1,9 +1,9 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/expiry-CAHRvRJV.js
+//#region node_modules/.nitro/vite/services/ssr/assets/expiry-YYPo0RXo.js
 var MIN_ENTRY_BUFFER_MS = 15e3;
 var SIGNAL_COPY_DELAY_MS = 1e4;
-var SIGNAL_ANALYSIS_TIMEOUT_MS = 6e3;
-var SIGNAL_PREPARATION_TIMEOUT_MS = 7e3;
-var SIGNAL_HISTORY_PAGE_TIMEOUT_MS = 2500;
+var SIGNAL_ANALYSIS_TIMEOUT_MS = 18e3;
+var SIGNAL_PREPARATION_TIMEOUT_MS = 2e4;
+var SIGNAL_HISTORY_PAGE_TIMEOUT_MS = 5e3;
 var SIGNAL_QUOTE_WAIT_MS = 2e3;
 var ANALYSIS_PERIODS_SECONDS = [
 	60,

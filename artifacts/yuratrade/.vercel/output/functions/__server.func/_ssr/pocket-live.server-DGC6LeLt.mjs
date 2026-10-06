@@ -1,8 +1,8 @@
-import { a as SIGNAL_COPY_DELAY_MS, c as SIGNAL_QUOTE_WAIT_MS, d as isValidExpirySeconds, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./expiry-CAHRvRJV.mjs";
+import { a as SIGNAL_COPY_DELAY_MS, c as SIGNAL_QUOTE_WAIT_MS, d as isValidExpirySeconds, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./expiry-YYPo0RXo.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B7ikjGVl.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DGC6LeLt.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -827,7 +827,7 @@ var SIGNAL_CANDIDATES_PER_SEARCH = 1;
 var MAX_ELIGIBLE_PAIRS = 20;
 var MIN_SIGNAL_PAYOUT = 92;
 var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
-var SIGNAL_PREPARATION_TIMEOUT_MESSAGE = "Поиск сигнала не завершился за 7 секунд. Сигнал не выдан.";
+var SIGNAL_PREPARATION_TIMEOUT_MESSAGE = "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 var runHistoryRequest = createKeyedAsyncQueue();
 function waitForSignalPreparation(request, deadlineAtMs) {
 	return waitForSignalRequest(settleSignalRequest(request), Math.max(0, deadlineAtMs - Date.now()), SIGNAL_PREPARATION_TIMEOUT_MESSAGE);

@@ -46,7 +46,7 @@ const MAX_ELIGIBLE_PAIRS = 20;
 const MIN_SIGNAL_PAYOUT = 92;
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
-  "Поиск сигнала не завершился за 7 секунд. Сигнал не выдан.";
+  "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 const runHistoryRequest = createKeyedAsyncQueue();
 
 function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
