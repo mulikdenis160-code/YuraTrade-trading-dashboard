@@ -7,9 +7,10 @@ export const DIRECT_AI_MODEL = "gemini-3.6-flash";
 export const DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
 export const PROXY_AI_MODEL = "gemini-2.5-flash";
 export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
-export const DIRECT_AI_HISTORY_CANDLES = 32;
+export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 15;
 const DIRECT_AI_VISIBLE_CANDLES = 30;
+const HIGHER_TIMEFRAME_VISIBLE_CANDLES = 24;
 
 export type MarketAiCandidate = {
   symbol: string;
@@ -40,9 +41,11 @@ const reviewSchema = z.discriminatedUnion("decision", [
 export type MarketAiReview = z.infer<typeof reviewSchema>;
 
 export const DIRECT_AI_SYSTEM_PROMPT = [
-  "Ты анализируешь одну OTC-валютную пару по минутным закрытиям. Доступно до 30 последних close по порядку от старых к новым, текущая живая цена, сравнение последнего close с close четыре свечи назад и стандартное отклонение 12 последних close.",
-  "Тренд уже рассчитан как сравнение последнего закрытия с закрытием четырьмя минутными свечами ранее. Волатильность — population standard deviation двенадцати последних закрытий в тех же ценовых единицах.",
-  "Используй только переданные значения; не выдумывай OHLC, индикаторы, новости или дополнительные цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
+  "Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых OHLC-свечей, до 24 полностью собранных свечей старшего таймфрейма, до 128 проверенных закрытых свечей для расчёта индикаторов и краткая серия close.",
+  "Используй dataQuality для оценки полноты и свежести. Времена свечей заданы в Unix-секундах; null означает, что показатель недоступен, а не ноль. Значения с суффиксом Bps заданы в базисных пунктах.",
+  "Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
+  "Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
+  "Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
   "При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
   "Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки.",
 ].join(" ");
@@ -400,6 +403,15 @@ export async function analyzeMarketCandidates(
   const closes = candidate.context.candles
     .slice(-DIRECT_AI_VISIBLE_CANDLES)
     .map((candle) => candle.close);
+  const recentCandles = candidate.context.candles
+    .slice(-DIRECT_AI_VISIBLE_CANDLES)
+    .map((candle) => ({
+      time: candle.time,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    }));
   const latestClose = closes.at(-1);
   const closeFourCandlesEarlier = closes.at(-5);
   const volatility = standardDeviation(closes.slice(-12));
@@ -426,6 +438,27 @@ export async function analyzeMarketCandidates(
     candleSeconds,
     currentPrice: candidate.currentPrice,
     quoteAgeMs: Math.round(candidate.quoteAgeMs),
+    quoteVsLastCloseBps: Number((((candidate.currentPrice / latestClose) - 1) * 10_000).toFixed(3)),
+    dataQuality: {
+      ...candidate.context.dataQuality,
+      expectedCandleSeconds: candleSeconds,
+    },
+    technicalIndicators: candidate.context.technicalIndicators,
+    higherTimeframe: candidate.context.higherTimeframe
+      ? {
+          candleSeconds: candidate.context.higherTimeframe.candleSeconds,
+          candles: candidate.context.higherTimeframe.candles
+            .slice(-HIGHER_TIMEFRAME_VISIBLE_CANDLES)
+            .map((candle) => ({
+              time: candle.time,
+              open: candle.open,
+              high: candle.high,
+              low: candle.low,
+              close: candle.close,
+            })),
+          technicalIndicators: candidate.context.higherTimeframe.technicalIndicators,
+        }
+      : null,
     trend: {
       comparison: "последний закрытый close против close четыре минутные свечи назад",
       direction: trend,
@@ -439,9 +472,30 @@ export async function analyzeMarketCandidates(
       standardDeviation: Number(volatility.toPrecision(8)),
     },
     closes,
+    candles: recentCandles,
   };
 
   const userPrompt = JSON.stringify(input);
+  console.info("[signal-ai-input]", JSON.stringify({
+    symbol: input.symbol,
+    expirySeconds: input.expirySeconds,
+    candleSeconds: input.candleSeconds,
+    currentPrice: input.currentPrice,
+    quoteAgeMs: input.quoteAgeMs,
+    quoteVsLastCloseBps: input.quoteVsLastCloseBps,
+    dataQuality: input.dataQuality,
+    technicalIndicators: input.technicalIndicators,
+    higherTimeframe: input.higherTimeframe
+      ? {
+          candleSeconds: input.higherTimeframe.candleSeconds,
+          candleCount: input.higherTimeframe.candles.length,
+          technicalIndicators: input.higherTimeframe.technicalIndicators,
+        }
+      : null,
+    aiVisibleCandleCount: input.candles.length,
+    latestClosedCandles: input.candles.slice(-3),
+    payloadBytes: Buffer.byteLength(userPrompt, "utf8"),
+  }));
   const baseMessages: ReviewMessage[] = [
     { role: "system", content: DIRECT_AI_SYSTEM_PROMPT },
     { role: "user", content: userPrompt },

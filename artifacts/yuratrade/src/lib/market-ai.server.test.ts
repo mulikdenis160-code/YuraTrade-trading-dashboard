@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
+  DIRECT_AI_HISTORY_CANDLES,
   DIRECT_AI_MODEL,
   DIRECT_AI_SYSTEM_PROMPT,
   marketAiApiErrorMessage,
@@ -118,17 +119,19 @@ test("a direct AI signal uses the AI decision without a confidence threshold or 
   assert.equal(acceptsMarketAiReview(lowerConfidence, ["EURUSD_otc"]), true);
 });
 
-test("Gemini receives one pair, simple close context, and no abstention option or confidence threshold", () => {
+test("Gemini receives one pair, technical context, and no abstention option or confidence threshold", () => {
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /одну OTC-валютную пару/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 30 последних close/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /четыре свечи назад/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /12 последних close/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 128 проверенных закрытых свечей/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /ADX 14 и \+DI\/-DI/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /старшим таймфреймом/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /четырьмя свечами ранее/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /выбери направление вверх или вниз/);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /\bpass\b|abstain|no_signal/i);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /порог уверенности/);
+  assert.equal(DIRECT_AI_HISTORY_CANDLES, 128);
 });
 
-test("analysis request supplies a fresh quote, four-candle trend, 12-close volatility, and 30 closes", async () => {
+test("analysis request transfers verified OHLC, indicators, quality, higher timeframe, and quote context", async () => {
   const candles = risingCandles(101);
   const last = candles.at(-1)!;
   let userContent = "";
@@ -167,7 +170,29 @@ test("analysis request supplies a fresh quote, four-candle trend, 12-close volat
       changePercent: number;
     };
     volatility: { periodCandles: number; standardDeviation: number };
+    quoteVsLastCloseBps: number;
+    dataQuality: {
+      closedCandleCount: number;
+      latestClosedCandleTime: number | null;
+      missingIntervals: number;
+      isFresh: boolean;
+    };
+    technicalIndicators: {
+      ema: { ema50Slope5Bps: number | null };
+      rsi14: number | null;
+      directionalMovement: {
+        adx14: number | null;
+        plusDi14: number | null;
+        minusDi14: number | null;
+      };
+    };
+    higherTimeframe: {
+      candleSeconds: number;
+      candles: Array<{ time: number; open: number; high: number; low: number; close: number }>;
+      technicalIndicators: { recentReturnBps: { bars14: number | null } };
+    } | null;
     closes: number[];
+    candles: Array<{ time: number; open: number; high: number; low: number; close: number }>;
   };
   assert.equal(input.symbol, "EURUSD_otc");
   assert.equal(input.expirySeconds, 120);
@@ -175,6 +200,23 @@ test("analysis request supplies a fresh quote, four-candle trend, 12-close volat
   assert.equal(input.currentPrice, 1.12345);
   assert.equal(input.quoteAgeMs, 125);
   assert.equal(input.closes.length, 30);
+  assert.equal(input.candles.length, 30);
+  assert.equal(input.candles[0]?.time, candles[70]?.time);
+  assert.equal(input.dataQuality.closedCandleCount, 100);
+  assert.equal(input.dataQuality.latestClosedCandleTime, candles[99]?.time);
+  assert.equal(input.dataQuality.missingIntervals, 0);
+  assert.equal(input.dataQuality.isFresh, true);
+  assert.ok(Number.isFinite(input.quoteVsLastCloseBps));
+  assert.notEqual(input.technicalIndicators.ema.ema50Slope5Bps, null);
+  assert.equal(input.technicalIndicators.rsi14, 100);
+  assert.ok(input.technicalIndicators.directionalMovement.adx14! > 20);
+  assert.ok(
+    input.technicalIndicators.directionalMovement.plusDi14! >
+      input.technicalIndicators.directionalMovement.minusDi14!,
+  );
+  assert.equal(input.higherTimeframe?.candleSeconds, 300);
+  assert.equal(input.higherTimeframe?.candles.length, 20);
+  assert.ok(input.higherTimeframe?.technicalIndicators.recentReturnBps.bars14! > 0);
   assert.equal(input.trend.latestClose, input.closes.at(-1));
   assert.equal(input.trend.closeFourCandlesEarlier, input.closes.at(-5));
   assert.ok(input.trend.changePercent > 0);

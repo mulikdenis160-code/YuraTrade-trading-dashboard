@@ -637,9 +637,12 @@ export async function feedSignal(symbol: string, expirySeconds: number): Promise
   const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
   const candles = history.candles;
   console.info("[signal-history]", JSON.stringify({
+    symbol,
     candleCount: candles.length,
     rejectedRows: history.rejectedRows,
     expectedCandleSeconds: analysisSeconds,
+    firstCandle: candles[0] ?? null,
+    lastReceivedCandle: candles.at(-1) ?? null,
     ...summarizeCandleCadence([candles], analysisSeconds),
   }));
   const initialWindowFailure = entryWindowFailure(candles);

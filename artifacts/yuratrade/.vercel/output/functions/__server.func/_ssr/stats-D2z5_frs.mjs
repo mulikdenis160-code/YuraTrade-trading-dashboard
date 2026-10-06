@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { f as summarizeSignals, i as readSignalJournal, u as subscribeToSignalJournal, w as useLanguage } from "./router-DYel_wu5.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/stats-CYgVu_Jd.js
+import { f as summarizeSignals, i as readSignalJournal, u as subscribeToSignalJournal, w as useLanguage } from "./router-DrbMXmqe.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/stats-D2z5_frs.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function StatRow() {

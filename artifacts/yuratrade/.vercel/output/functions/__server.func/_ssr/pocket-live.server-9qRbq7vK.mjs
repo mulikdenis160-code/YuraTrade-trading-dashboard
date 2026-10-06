@@ -1,7 +1,7 @@
 import { a as formatExpiry, i as analysisPeriodForExpiry, o as isValidExpirySeconds } from "./expiry-Wv4yeTgP.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-C9Cng8Ez.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-9qRbq7vK.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -75,6 +75,65 @@ function averageTrueRange(candles, period) {
 		return Math.max(candle.high - candle.low, Math.abs(candle.high - previousClose), Math.abs(candle.low - previousClose));
 	}).slice(-period));
 }
+function directionalMovement(candles, period = 14) {
+	const unavailable = {
+		adx14: null,
+		plusDi14: null,
+		minusDi14: null
+	};
+	if (candles.length < period * 2) return unavailable;
+	const trueRanges = [];
+	const plusMoves = [];
+	const minusMoves = [];
+	for (let index = 1; index < candles.length; index += 1) {
+		const current = candles[index];
+		const previous = candles[index - 1];
+		if (!current || !previous) return unavailable;
+		const upMove = current.high - previous.high;
+		const downMove = previous.low - current.low;
+		trueRanges.push(Math.max(current.high - current.low, Math.abs(current.high - previous.close), Math.abs(current.low - previous.close)));
+		plusMoves.push(upMove > downMove && upMove > 0 ? upMove : 0);
+		minusMoves.push(downMove > upMove && downMove > 0 ? downMove : 0);
+	}
+	if (trueRanges.length < period * 2 - 1) return unavailable;
+	let smoothedTrueRange = trueRanges.slice(0, period).reduce((sum, value) => sum + value, 0);
+	let smoothedPlus = plusMoves.slice(0, period).reduce((sum, value) => sum + value, 0);
+	let smoothedMinus = minusMoves.slice(0, period).reduce((sum, value) => sum + value, 0);
+	const dxValues = [];
+	const appendDx = () => {
+		if (smoothedTrueRange <= 0) {
+			dxValues.push(0);
+			return;
+		}
+		const plusDi = smoothedPlus / smoothedTrueRange * 100;
+		const minusDi = smoothedMinus / smoothedTrueRange * 100;
+		const sum = plusDi + minusDi;
+		dxValues.push(sum === 0 ? 0 : Math.abs(plusDi - minusDi) / sum * 100);
+	};
+	appendDx();
+	for (let index = period; index < trueRanges.length; index += 1) {
+		const trueRange = trueRanges[index];
+		const plusMove = plusMoves[index];
+		const minusMove = minusMoves[index];
+		if (trueRange === void 0 || plusMove === void 0 || minusMove === void 0) continue;
+		smoothedTrueRange = smoothedTrueRange - smoothedTrueRange / period + trueRange;
+		smoothedPlus = smoothedPlus - smoothedPlus / period + plusMove;
+		smoothedMinus = smoothedMinus - smoothedMinus / period + minusMove;
+		appendDx();
+	}
+	if (dxValues.length < period || smoothedTrueRange <= 0) return unavailable;
+	let adx = average(dxValues.slice(0, period));
+	if (adx === null) return unavailable;
+	for (let index = period; index < dxValues.length; index += 1) {
+		const dx = dxValues[index];
+		if (dx !== void 0) adx = (adx * (period - 1) + dx) / period;
+	}
+	return {
+		adx14: round(adx),
+		plusDi14: round(smoothedPlus / smoothedTrueRange * 100),
+		minusDi14: round(smoothedMinus / smoothedTrueRange * 100)
+	};
+}
 function macdHistogram(closes) {
 	const fast = emaSeries(closes, 12);
 	const slow = emaSeries(closes, 26);
@@ -128,6 +187,7 @@ function technicalIndicators(candles) {
 	const priorLow = priorCandles.length === 20 ? Math.min(...priorCandles.map((candle) => candle.low)) : null;
 	const atr5 = averageTrueRange(candles, 5);
 	const atr14 = averageTrueRange(candles, 14);
+	const directional = directionalMovement(candles);
 	return {
 		recentReturnBps: {
 			bars5: returnOverBars(closes, 5),
@@ -145,7 +205,8 @@ function technicalIndicators(candles) {
 		atr14Bps: atr14 !== null && lastClose !== void 0 ? signedMagnitudeBps(atr14, lastClose) : null,
 		atr5To14Ratio: atr5 !== null && atr14 !== null && atr14 > 0 ? round(atr5 / atr14) : null,
 		prior20HighDistanceBps: priorHigh !== null && lastClose !== void 0 ? basisPoints(priorHigh, lastClose) : null,
-		prior20LowDistanceBps: priorLow !== null && lastClose !== void 0 ? basisPoints(lastClose, priorLow) : null
+		prior20LowDistanceBps: priorLow !== null && lastClose !== void 0 ? basisPoints(lastClose, priorLow) : null,
+		directionalMovement: directional
 	};
 }
 function aggregateHigherTimeframe(candles, candleSeconds, higherSeconds) {
@@ -208,13 +269,15 @@ function buildMarketAnalysisContext(inputCandles, candleSeconds, nowSeconds = Ma
 			closedCandleCount: candles.length,
 			droppedOpenCandles: normalized.length - closedCandles.length,
 			missingIntervals: countMissingIntervals(candles, candleSeconds),
+			latestClosedCandleTime: latest?.time ?? null,
 			latestClosedAgeSeconds,
 			isFresh: latestClosedAgeSeconds !== null && latestClosedAgeSeconds <= candleSeconds * 3
 		},
 		technicalIndicators: technicalIndicators(candles),
 		higherTimeframe: higherSeconds ? {
 			candleSeconds: higherSeconds,
-			candles: higherCandles
+			candles: higherCandles,
+			technicalIndicators: technicalIndicators(higherCandles)
 		} : null
 	};
 }
@@ -235,9 +298,11 @@ var passReviewSchema = object({
 });
 discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
 var DIRECT_AI_SYSTEM_PROMPT = [
-	"Ты анализируешь одну OTC-валютную пару по минутным закрытиям. Доступно до 30 последних close по порядку от старых к новым, текущая живая цена, сравнение последнего close с close четыре свечи назад и стандартное отклонение 12 последних close.",
-	"Тренд уже рассчитан как сравнение последнего закрытия с закрытием четырьмя минутными свечами ранее. Волатильность — population standard deviation двенадцати последних закрытий в тех же ценовых единицах.",
-	"Используй только переданные значения; не выдумывай OHLC, индикаторы, новости или дополнительные цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
+	"Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых OHLC-свечей, до 24 полностью собранных свечей старшего таймфрейма, до 128 проверенных закрытых свечей для расчёта индикаторов и краткая серия close.",
+	"Используй dataQuality для оценки полноты и свежести. Времена свечей заданы в Unix-секундах; null означает, что показатель недоступен, а не ноль. Значения с суффиксом Bps заданы в базисных пунктах.",
+	"Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
+	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
+	"Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
 	"При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
 	"Верни только один JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"краткое объяснение на русском по переданным данным\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
 ].join(" ");
@@ -536,6 +601,13 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		reason: "Не удалось подготовить данные выбранной пары. Сигнал не выдан."
 	};
 	const closes = candidate.context.candles.slice(-30).map((candle) => candle.close);
+	const recentCandles = candidate.context.candles.slice(-30).map((candle) => ({
+		time: candle.time,
+		open: candle.open,
+		high: candle.high,
+		low: candle.low,
+		close: candle.close
+	}));
 	const latestClose = closes.at(-1);
 	const closeFourCandlesEarlier = closes.at(-5);
 	const volatility = standardDeviation(closes.slice(-12));
@@ -552,6 +624,23 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 		candleSeconds,
 		currentPrice: candidate.currentPrice,
 		quoteAgeMs: Math.round(candidate.quoteAgeMs),
+		quoteVsLastCloseBps: Number(((candidate.currentPrice / latestClose - 1) * 1e4).toFixed(3)),
+		dataQuality: {
+			...candidate.context.dataQuality,
+			expectedCandleSeconds: candleSeconds
+		},
+		technicalIndicators: candidate.context.technicalIndicators,
+		higherTimeframe: candidate.context.higherTimeframe ? {
+			candleSeconds: candidate.context.higherTimeframe.candleSeconds,
+			candles: candidate.context.higherTimeframe.candles.slice(-24).map((candle) => ({
+				time: candle.time,
+				open: candle.open,
+				high: candle.high,
+				low: candle.low,
+				close: candle.close
+			})),
+			technicalIndicators: candidate.context.higherTimeframe.technicalIndicators
+		} : null,
 		trend: {
 			comparison: "последний закрытый close против close четыре минутные свечи назад",
 			direction: trend,
@@ -564,9 +653,28 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 			periodCandles: 12,
 			standardDeviation: Number(volatility.toPrecision(8))
 		},
-		closes
+		closes,
+		candles: recentCandles
 	};
 	const userPrompt = JSON.stringify(input);
+	console.info("[signal-ai-input]", JSON.stringify({
+		symbol: input.symbol,
+		expirySeconds: input.expirySeconds,
+		candleSeconds: input.candleSeconds,
+		currentPrice: input.currentPrice,
+		quoteAgeMs: input.quoteAgeMs,
+		quoteVsLastCloseBps: input.quoteVsLastCloseBps,
+		dataQuality: input.dataQuality,
+		technicalIndicators: input.technicalIndicators,
+		higherTimeframe: input.higherTimeframe ? {
+			candleSeconds: input.higherTimeframe.candleSeconds,
+			candleCount: input.higherTimeframe.candles.length,
+			technicalIndicators: input.higherTimeframe.technicalIndicators
+		} : null,
+		aiVisibleCandleCount: input.candles.length,
+		latestClosedCandles: input.candles.slice(-3),
+		payloadBytes: Buffer.byteLength(userPrompt, "utf8")
+	}));
 	const baseMessages = [{
 		role: "system",
 		content: DIRECT_AI_SYSTEM_PROMPT
@@ -1061,8 +1169,8 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3) {
 	const collected = /* @__PURE__ */ new Map();
 	let rejectedRows = 0;
 	let cursor = Math.floor(Date.now() / 1e3);
-	const maxPages = Math.ceil(32 / HISTORY_PAGE_CANDLES) + 1;
-	for (let page = 0; page < maxPages && collected.size < 32; page += 1) {
+	const maxPages = Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
+	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
 		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
 		rejectedRows += history.rejectedRows;
 		const candles = history.candles;
@@ -1074,7 +1182,7 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3) {
 		cursor = oldestTime - 1;
 	}
 	return {
-		candles: [...collected.values()].sort((a, b) => a.time - b.time).slice(-32),
+		candles: [...collected.values()].sort((a, b) => a.time - b.time).slice(-128),
 		rejectedRows
 	};
 }
@@ -1152,9 +1260,12 @@ async function feedSignal(symbol, expirySeconds) {
 	const history = await loadCandles(symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS);
 	const candles = history.candles;
 	console.info("[signal-history]", JSON.stringify({
+		symbol,
 		candleCount: candles.length,
 		rejectedRows: history.rejectedRows,
 		expectedCandleSeconds: analysisSeconds,
+		firstCandle: candles[0] ?? null,
+		lastReceivedCandle: candles.at(-1) ?? null,
 		...summarizeCandleCadence([candles], analysisSeconds)
 	}));
 	const initialWindowFailure = entryWindowFailure(candles);

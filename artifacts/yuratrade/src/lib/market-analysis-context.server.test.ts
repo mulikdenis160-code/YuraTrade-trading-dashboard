@@ -39,9 +39,30 @@ test("analysis context adds indicator and complete higher-timeframe evidence", (
   assert.equal(context.technicalIndicators.rsi14, 100);
   assert.notEqual(context.technicalIndicators.macdHistogramBps, null);
   assert.ok(Number.isFinite(context.technicalIndicators.macdHistogramBps));
+  assert.ok(context.technicalIndicators.directionalMovement.adx14! > 20);
+  assert.ok(
+    context.technicalIndicators.directionalMovement.plusDi14! >
+      context.technicalIndicators.directionalMovement.minusDi14!,
+  );
   assert.ok(context.technicalIndicators.atr14Bps! > 0);
   assert.ok(context.technicalIndicators.prior20HighDistanceBps! < 0);
   assert.ok(context.technicalIndicators.prior20LowDistanceBps! > 0);
+  assert.ok(context.higherTimeframe?.technicalIndicators.recentReturnBps.bars14! > 0);
+});
+
+test("flat candles report weak ADX instead of inventing a directional trend", () => {
+  const candles = Array.from({ length: 64 }, (_, index) => ({
+    time: 6_000 + index * 60,
+    open: 1.1,
+    high: 1.10005,
+    low: 1.09995,
+    close: 1.1,
+  }));
+  const context = buildMarketAnalysisContext(candles, 60, 10_000);
+
+  assert.equal(context.technicalIndicators.directionalMovement.adx14, 0);
+  assert.equal(context.technicalIndicators.directionalMovement.plusDi14, 0);
+  assert.equal(context.technicalIndicators.directionalMovement.minusDi14, 0);
 });
 
 test("open candles are excluded and stale histories are marked unsafe", () => {

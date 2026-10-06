@@ -20,6 +20,11 @@ export type MarketTechnicalIndicators = {
   atr5To14Ratio: NullableNumber;
   prior20HighDistanceBps: NullableNumber;
   prior20LowDistanceBps: NullableNumber;
+  directionalMovement: {
+    adx14: NullableNumber;
+    plusDi14: NullableNumber;
+    minusDi14: NullableNumber;
+  };
 };
 
 export type MarketAnalysisContext = {
@@ -28,6 +33,7 @@ export type MarketAnalysisContext = {
     closedCandleCount: number;
     droppedOpenCandles: number;
     missingIntervals: number;
+    latestClosedCandleTime: number | null;
     latestClosedAgeSeconds: number | null;
     isFresh: boolean;
   };
@@ -35,6 +41,7 @@ export type MarketAnalysisContext = {
   higherTimeframe: {
     candleSeconds: number;
     candles: MarketCandle[];
+    technicalIndicators: MarketTechnicalIndicators;
   } | null;
 };
 
@@ -148,6 +155,73 @@ function averageTrueRange(candles: MarketCandle[], period: number) {
   return average(ranges.slice(-period));
 }
 
+function directionalMovement(candles: MarketCandle[], period = 14) {
+  const unavailable = { adx14: null, plusDi14: null, minusDi14: null };
+  if (candles.length < period * 2) return unavailable;
+
+  const trueRanges: number[] = [];
+  const plusMoves: number[] = [];
+  const minusMoves: number[] = [];
+  for (let index = 1; index < candles.length; index += 1) {
+    const current = candles[index];
+    const previous = candles[index - 1];
+    if (!current || !previous) return unavailable;
+
+    const upMove = current.high - previous.high;
+    const downMove = previous.low - current.low;
+    trueRanges.push(Math.max(
+      current.high - current.low,
+      Math.abs(current.high - previous.close),
+      Math.abs(current.low - previous.close),
+    ));
+    plusMoves.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusMoves.push(downMove > upMove && downMove > 0 ? downMove : 0);
+  }
+
+  if (trueRanges.length < period * 2 - 1) return unavailable;
+  let smoothedTrueRange = trueRanges.slice(0, period).reduce((sum, value) => sum + value, 0);
+  let smoothedPlus = plusMoves.slice(0, period).reduce((sum, value) => sum + value, 0);
+  let smoothedMinus = minusMoves.slice(0, period).reduce((sum, value) => sum + value, 0);
+  const dxValues: number[] = [];
+
+  const appendDx = () => {
+    if (smoothedTrueRange <= 0) {
+      dxValues.push(0);
+      return;
+    }
+    const plusDi = (smoothedPlus / smoothedTrueRange) * 100;
+    const minusDi = (smoothedMinus / smoothedTrueRange) * 100;
+    const sum = plusDi + minusDi;
+    dxValues.push(sum === 0 ? 0 : (Math.abs(plusDi - minusDi) / sum) * 100);
+  };
+
+  appendDx();
+  for (let index = period; index < trueRanges.length; index += 1) {
+    const trueRange = trueRanges[index];
+    const plusMove = plusMoves[index];
+    const minusMove = minusMoves[index];
+    if (trueRange === undefined || plusMove === undefined || minusMove === undefined) continue;
+    smoothedTrueRange = smoothedTrueRange - smoothedTrueRange / period + trueRange;
+    smoothedPlus = smoothedPlus - smoothedPlus / period + plusMove;
+    smoothedMinus = smoothedMinus - smoothedMinus / period + minusMove;
+    appendDx();
+  }
+
+  if (dxValues.length < period || smoothedTrueRange <= 0) return unavailable;
+  let adx = average(dxValues.slice(0, period));
+  if (adx === null) return unavailable;
+  for (let index = period; index < dxValues.length; index += 1) {
+    const dx = dxValues[index];
+    if (dx !== undefined) adx = ((adx * (period - 1)) + dx) / period;
+  }
+
+  return {
+    adx14: round(adx),
+    plusDi14: round((smoothedPlus / smoothedTrueRange) * 100),
+    minusDi14: round((smoothedMinus / smoothedTrueRange) * 100),
+  };
+}
+
 function macdHistogram(closes: number[]) {
   const fast = emaSeries(closes, 12);
   const slow = emaSeries(closes, 26);
@@ -214,6 +288,7 @@ function technicalIndicators(candles: MarketCandle[]): MarketTechnicalIndicators
     : null;
   const atr5 = averageTrueRange(candles, 5);
   const atr14 = averageTrueRange(candles, 14);
+  const directional = directionalMovement(candles);
 
   return {
     recentReturnBps: {
@@ -248,6 +323,7 @@ function technicalIndicators(candles: MarketCandle[]): MarketTechnicalIndicators
       priorLow !== null && lastClose !== undefined
         ? basisPoints(lastClose, priorLow)
         : null,
+    directionalMovement: directional,
   };
 }
 
@@ -341,12 +417,17 @@ export function buildMarketAnalysisContext(
       closedCandleCount: candles.length,
       droppedOpenCandles: normalized.length - closedCandles.length,
       missingIntervals: countMissingIntervals(candles, candleSeconds),
+      latestClosedCandleTime: latest?.time ?? null,
       latestClosedAgeSeconds,
       isFresh: latestClosedAgeSeconds !== null && latestClosedAgeSeconds <= candleSeconds * 3,
     },
     technicalIndicators: technicalIndicators(candles),
     higherTimeframe: higherSeconds
-      ? { candleSeconds: higherSeconds, candles: higherCandles }
+      ? {
+          candleSeconds: higherSeconds,
+          candles: higherCandles,
+          technicalIndicators: technicalIndicators(higherCandles),
+        }
       : null,
   };
 }
