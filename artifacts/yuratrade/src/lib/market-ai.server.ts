@@ -10,6 +10,7 @@ export const PROXY_AI_MODEL = "gemini-2.5-flash";
 export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 15;
+export const GEMINI_MAX_OUTPUT_TOKENS = 8_192;
 const DIRECT_AI_VISIBLE_CANDLES = 30;
 const HIGHER_TIMEFRAME_VISIBLE_CANDLES = 24;
 
@@ -320,7 +321,7 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
     config: {
       systemInstruction: system,
       responseMimeType: "application/json",
-      maxOutputTokens: 512,
+      maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
     },
   }).then((response) => ({
     choices: [{

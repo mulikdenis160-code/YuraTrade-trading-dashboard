@@ -1,7 +1,7 @@
 import { a as SIGNAL_COPY_DELAY_MS, c as analysisPeriodForExpiry, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as formatExpiry, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_QUOTE_WAIT_MS, u as isValidExpirySeconds } from "./expiry-Be9OTVwm.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DqDhhjxY.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-BZOzs3nU.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -285,6 +285,7 @@ var DIRECT_AI_MODEL = "gemini-3.6-flash";
 var DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
 var PROXY_AI_MODEL = "gemini-2.5-flash";
 var PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
+var GEMINI_MAX_OUTPUT_TOKENS = 8192;
 var signalReviewSchema = object({
 	decision: literal("signal"),
 	symbol: string().min(1).max(80),
@@ -567,7 +568,7 @@ function requestMarketAiCompletion(messages) {
 		config: {
 			systemInstruction: system,
 			responseMimeType: "application/json",
-			maxOutputTokens: 512
+			maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS
 		}
 	}).then((response) => ({ choices: [{
 		message: { content: response.text || null },

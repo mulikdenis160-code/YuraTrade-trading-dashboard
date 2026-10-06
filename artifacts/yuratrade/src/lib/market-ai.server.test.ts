@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
+  GEMINI_MAX_OUTPUT_TOKENS,
   DIRECT_AI_HISTORY_CANDLES,
   DIRECT_AI_MODEL,
   DIRECT_AI_SYSTEM_PROMPT,
@@ -477,9 +478,26 @@ test("direct AI rejects an otherwise large candle set when invalid rows leave to
 });
 
 test("Gemini request failures produce actionable messages without exposing raw errors", () => {
+  assert.equal(GEMINI_MAX_OUTPUT_TOKENS, 8_192);
   assert.match(marketAiApiErrorMessage({ status: 429 }), /ограничил запросы/);
   assert.match(marketAiApiErrorMessage({ status: 401 }), /отклонил подключение/);
   assert.match(marketAiApiErrorMessage({ status: 503 }), /временно недоступен/);
+});
+
+test("Gemini token-limit truncation fails explicitly instead of parsing partial JSON", async () => {
+  await assert.rejects(
+    requestMarketAiReviewOnce(
+      async () => ({
+        choices: [{
+          message: { content: "{\"direction\":\"up\",\"explanation\":\"partial" },
+          finish_reason: "MAX_TOKENS",
+        }],
+      }),
+      [{ role: "user", content: "Проведи короткий анализ." }],
+      ["EURUSD_otc"],
+    ),
+    /Gemini оборвал ответ по лимиту длины/,
+  );
 });
 
 test("a valid compact Gemini response is accepted without a second classifier", () => {
