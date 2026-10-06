@@ -189,10 +189,9 @@ function SignalCard({ search }: { search: Search }) {
   const navigate = useNavigate();
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
   const [now, setNow] = useState(() => Date.now());
-  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "prep" | "hunt" | "stop" | "no-signal">("run");
+  const [phase, setPhase] = useState<"run" | "check" | "win" | "draw" | "hunt" | "stop" | "no-signal">("run");
   const [copied, setCopied] = useState(false);
   const [close, setClose] = useState<number | null>(null);
-  const [prepLeft, setPrepLeft] = useState(10);
   const [error, setError] = useState("");
   const [journalWarning, setJournalWarning] = useState("");
   const [live, setLive] = useState<number | null>(null);
@@ -288,7 +287,7 @@ function SignalCard({ search }: { search: Search }) {
           setPhase("draw");
           return;
         }
-        setPhase(won ? "win" : search.step >= 3 ? "stop" : "prep");
+        setPhase(won ? "win" : search.step >= 3 ? "stop" : "hunt");
       })
       .catch((cause: unknown) => {
         setPhase("run");
@@ -298,23 +297,8 @@ function SignalCard({ search }: { search: Search }) {
   }, [left, phase, search.open, search.step, search.symbol, up]);
 
   useEffect(() => {
-    if (phase !== "prep") return;
-    const ends = Date.now() + 10000;
-    const timer = window.setInterval(() => {
-      const left = Math.max(0, Math.ceil((ends - Date.now()) / 1000));
-      setPrepLeft(left);
-      if (left <= 0) {
-        window.clearInterval(timer);
-        setPhase("hunt");
-      }
-    }, 200);
-    return () => window.clearInterval(timer);
-  }, [phase]);
-
-  useEffect(() => {
     if (phase !== "hunt") return;
     let stop = false;
-    const started = Date.now();
     void takeSignal({ data: { symbol: search.symbol, expirySeconds: search.seconds } })
       .then(async (result) => {
         if (result.decision === "pass") {
@@ -323,8 +307,6 @@ function SignalCard({ search }: { search: Search }) {
           setError(result.reason);
           return;
         }
-        const wait = Math.max(0, 2200 - (Date.now() - started));
-        await new Promise((resolve) => window.setTimeout(resolve, wait));
         if (stop) return;
         await navigate({
           to: "/signal",
@@ -348,7 +330,7 @@ function SignalCard({ search }: { search: Search }) {
       })
       .catch((cause: unknown) => {
         if (stop) return;
-        setPhase("prep");
+        setPhase("no-signal");
         setError(cause instanceof Error ? cause.message : "Не удалось дать перекрытие.");
       });
     return () => {
@@ -498,20 +480,6 @@ function SignalCard({ search }: { search: Search }) {
         {error ? <p className="mt-3 text-sm text-loss">{error}</p> : null}
         {journalWarning ? <p className="mt-3 text-xs leading-relaxed text-loss" role="status">{journalWarning}</p> : null}
       </article>
-
-      {phase === "prep" ? (
-        <div className="panel arrive mt-4 px-6 py-8 text-center">
-          <p className="text-sm font-semibold tracking-[0.16em] text-loss uppercase">{t("common.loss")}</p>
-          <p className="mt-2 text-lg font-bold text-fg">{t("common.prepareRecovery")}</p>
-          {close !== null ? (
-            <p className="mt-2 font-mono text-sm text-loss">
-              {search.open.toFixed(digitsOf(search.open))} → {close.toFixed(digitsOf(close))}
-            </p>
-          ) : null}
-          <p className="mt-3 font-mono text-5xl font-bold text-fg">{prepLeft}</p>
-          <p className="mt-2 text-sm text-dim">{t("common.samePairAttempts", { count: 3 - search.step })}</p>
-        </div>
-      ) : null}
 
       {phase === "win" && close !== null ? (
         <div className="win-screen">
