@@ -85,6 +85,12 @@ const copy = {
   "batch.wins": ["Победы", "Перемоги", "Wins"],
   "batch.losses": ["Поражения", "Поразки", "Losses"],
   "batch.draws": ["Ничьи", "Нічиї", "Draws"],
+  "batch.winRate": ["Проходимость", "Прохідність", "Win rate"],
+  "batch.winRateHelp": [
+    "По победам и поражениям; ничьи не учитываются",
+    "За перемогами та поразками; нічиї не враховуються",
+    "Based on wins and losses; draws are excluded",
+  ],
   "batch.retry": ["Следующая попытка через {seconds} с", "Наступна спроба через {seconds} с", "Next attempt in {seconds}s"],
   "batch.error": ["Пауза: {reason}", "Пауза: {reason}", "Paused: {reason}"],
   "batch.startFailed": [

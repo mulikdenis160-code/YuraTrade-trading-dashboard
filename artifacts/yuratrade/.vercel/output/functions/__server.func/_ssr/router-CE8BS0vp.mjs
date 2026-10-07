@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { d as isValidExpirySeconds, l as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-CdwuYFWS.mjs";
-import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
+import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, m as useNavigate, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-Crm-X8Bz.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-CE8BS0vp.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -464,6 +464,111 @@ var copy = {
 		"Час експірації",
 		"Expiry time"
 	],
+	"batch.title": [
+		"Тест точности · 20 серий",
+		"Тест точності · 20 серій",
+		"Accuracy test · 20 series"
+	],
+	"batch.description": [
+		"Сигналы проверяются последовательно по реальным котировкам и сохраняются в истории этого браузера. Сделки не открываются.",
+		"Сигнали перевіряються послідовно за реальними котируваннями та зберігаються в історії цього браузера. Угоди не відкриваються.",
+		"Signals are checked sequentially against live quotes and saved in this browser’s history. No trades are placed."
+	],
+	"batch.start": [
+		"Запустить тест из 20",
+		"Запустити тест із 20",
+		"Start 20-series test"
+	],
+	"batch.pause": [
+		"Пауза",
+		"Пауза",
+		"Pause"
+	],
+	"batch.resume": [
+		"Продолжить",
+		"Продовжити",
+		"Resume"
+	],
+	"batch.stop": [
+		"Остановить",
+		"Зупинити",
+		"Stop"
+	],
+	"batch.running": [
+		"Выполняется",
+		"Виконується",
+		"Running"
+	],
+	"batch.paused": [
+		"На паузе",
+		"На паузі",
+		"Paused"
+	],
+	"batch.stopping": [
+		"Завершает текущую серию",
+		"Завершує поточну серію",
+		"Finishing current series"
+	],
+	"batch.completed": [
+		"Тест завершён",
+		"Тест завершено",
+		"Test completed"
+	],
+	"batch.stopped": [
+		"Остановлен",
+		"Зупинено",
+		"Stopped"
+	],
+	"batch.progress": [
+		"Серий завершено",
+		"Серій завершено",
+		"Series completed"
+	],
+	"batch.wins": [
+		"Победы",
+		"Перемоги",
+		"Wins"
+	],
+	"batch.losses": [
+		"Поражения",
+		"Поразки",
+		"Losses"
+	],
+	"batch.draws": [
+		"Ничьи",
+		"Нічиї",
+		"Draws"
+	],
+	"batch.winRate": [
+		"Проходимость",
+		"Прохідність",
+		"Win rate"
+	],
+	"batch.winRateHelp": [
+		"По победам и поражениям; ничьи не учитываются",
+		"За перемогами та поразками; нічиї не враховуються",
+		"Based on wins and losses; draws are excluded"
+	],
+	"batch.retry": [
+		"Следующая попытка через {seconds} с",
+		"Наступна спроба через {seconds} с",
+		"Next attempt in {seconds}s"
+	],
+	"batch.error": [
+		"Пауза: {reason}",
+		"Пауза: {reason}",
+		"Paused: {reason}"
+	],
+	"batch.startFailed": [
+		"Не удалось сохранить тест в локальном хранилище браузера.",
+		"Не вдалося зберегти тест у локальному сховищі браузера.",
+		"Could not save the test in this browser’s local storage."
+	],
+	"batch.series": [
+		"Тестовая серия {current}/{total}",
+		"Тестова серія {current}/{total}",
+		"Test series {current}/{total}"
+	],
 	"signal.analyzed": [
 		"Интервал свечи {period}; прямой анализ ИИ использует до 128 последних свечей.",
 		"Інтервал свічки {period}; прямий аналіз ШІ використовує до 128 останніх свічок.",
@@ -763,6 +868,11 @@ var copy = {
 		"{current} из {total}",
 		"{current} із {total}",
 		"{current} of {total}"
+	],
+	"history.batchSeries": [
+		"Тестовая серия {current}/20",
+		"Тестова серія {current}/20",
+		"Test series {current}/20"
 	],
 	"history.units": [
 		"ед.",
@@ -1166,7 +1276,7 @@ var copy = {
 	]
 };
 var LanguageContext = (0, import_react.createContext)(null);
-var STORAGE_KEY$1 = "prime_bot_language";
+var STORAGE_KEY$2 = "prime_bot_language";
 var languageIndex = {
 	ru: 0,
 	uk: 1,
@@ -1179,14 +1289,14 @@ function LanguageProvider({ children }) {
 	const [language, setLanguage] = (0, import_react.useState)("ru");
 	(0, import_react.useEffect)(() => {
 		try {
-			const saved = window.localStorage.getItem(STORAGE_KEY$1);
+			const saved = window.localStorage.getItem(STORAGE_KEY$2);
 			if (isLanguage(saved)) setLanguage(saved);
 		} catch {}
 	}, []);
 	(0, import_react.useEffect)(() => {
 		document.documentElement.lang = language;
 		try {
-			window.localStorage.setItem(STORAGE_KEY$1, language);
+			window.localStorage.setItem(STORAGE_KEY$2, language);
 		} catch {}
 	}, [language]);
 	const value = (0, import_react.useMemo)(() => ({
@@ -1573,6 +1683,175 @@ createServerFn({ method: "POST" }).validator((input) => {
 		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
 	};
 }).handler(createSsrRpc("65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab"));
+var SIGNAL_BATCH_RETRY_DELAY_MS = 15e3;
+function signalBatchWinRate(batch) {
+	const decisiveOutcomes = batch.wins + batch.losses;
+	return decisiveOutcomes === 0 ? null : batch.wins / decisiveOutcomes * 100;
+}
+var STORAGE_KEY$1 = "prime_signal_batch_v1";
+var BATCH_EVENT = "prime:signal-batch-updated";
+var statuses = /* @__PURE__ */ new Set([
+	"running",
+	"stopping",
+	"paused",
+	"completed",
+	"stopped"
+]);
+function storage$1() {
+	if (typeof window === "undefined") return null;
+	try {
+		return window.localStorage;
+	} catch {
+		return null;
+	}
+}
+function normalizeBatch(value) {
+	if (typeof value !== "object" || value === null) return null;
+	const batch = value;
+	if (typeof batch.id !== "string" || !statuses.has(batch.status) || !Number.isFinite(batch.expirySeconds) || !isValidExpirySeconds(Number(batch.expirySeconds)) || !Number.isFinite(batch.startedAt)) return null;
+	const target = 20;
+	const completed = Math.max(0, Math.min(target, Math.floor(Number(batch.completed) || 0)));
+	return {
+		id: batch.id,
+		status: batch.status,
+		target,
+		completed,
+		expirySeconds: Number(batch.expirySeconds),
+		startedAt: Number(batch.startedAt),
+		...Number.isFinite(batch.finishedAt) ? { finishedAt: Number(batch.finishedAt) } : {},
+		wins: Math.max(0, Math.floor(Number(batch.wins) || 0)),
+		losses: Math.max(0, Math.floor(Number(batch.losses) || 0)),
+		draws: Math.max(0, Math.floor(Number(batch.draws) || 0)),
+		consecutiveFailures: Math.max(0, Math.floor(Number(batch.consecutiveFailures) || 0)),
+		nextAttemptAt: Number.isFinite(batch.nextAttemptAt) ? Number(batch.nextAttemptAt) : Number(batch.startedAt),
+		...typeof batch.lastError === "string" && batch.lastError.trim() ? { lastError: batch.lastError.trim().slice(0, 500) } : {}
+	};
+}
+function writeSignalBatch(batch) {
+	const local = storage$1();
+	if (!local) return false;
+	try {
+		local.setItem(STORAGE_KEY$1, JSON.stringify(batch));
+		window.dispatchEvent(new Event(BATCH_EVENT));
+		return true;
+	} catch {
+		return false;
+	}
+}
+function readSignalBatch() {
+	const local = storage$1();
+	if (!local) return null;
+	try {
+		const raw = local.getItem(STORAGE_KEY$1);
+		return raw ? normalizeBatch(JSON.parse(raw)) : null;
+	} catch {
+		return null;
+	}
+}
+function createBatchId() {
+	return `signal-test-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function startSignalBatch(expirySeconds, now = Date.now()) {
+	if (!isValidExpirySeconds(expirySeconds)) return null;
+	const batch = {
+		id: createBatchId(),
+		status: "running",
+		target: 20,
+		completed: 0,
+		expirySeconds,
+		startedAt: now,
+		wins: 0,
+		losses: 0,
+		draws: 0,
+		consecutiveFailures: 0,
+		nextAttemptAt: now
+	};
+	return writeSignalBatch(batch) ? batch : null;
+}
+function completeSignalBatchAttempt(id, position, outcome, now = Date.now()) {
+	const batch = readSignalBatch();
+	if (!batch || batch.id !== id || batch.status !== "running" && batch.status !== "stopping" && batch.status !== "paused" || position !== batch.completed + 1) return batch;
+	const completed = batch.completed + 1;
+	const next = {
+		...batch,
+		status: batch.status === "stopping" ? "stopped" : completed >= batch.target ? "completed" : batch.status === "paused" ? "paused" : "running",
+		completed,
+		wins: batch.wins + Number(outcome === "win"),
+		losses: batch.losses + Number(outcome === "loss"),
+		draws: batch.draws + Number(outcome === "draw"),
+		consecutiveFailures: 0,
+		nextAttemptAt: now,
+		lastError: void 0,
+		...completed >= batch.target || batch.status === "stopping" ? { finishedAt: now } : {}
+	};
+	return writeSignalBatch(next) ? next : batch;
+}
+function recordSignalBatchSearchFailure(id, reason, now = Date.now()) {
+	const batch = readSignalBatch();
+	if (!batch || batch.id !== id || batch.status !== "running") return batch;
+	const consecutiveFailures = batch.consecutiveFailures + 1;
+	const paused = consecutiveFailures >= 3;
+	const next = {
+		...batch,
+		status: paused ? "paused" : "running",
+		consecutiveFailures,
+		nextAttemptAt: paused ? now : now + SIGNAL_BATCH_RETRY_DELAY_MS,
+		lastError: reason.trim().slice(0, 500) || "Не удалось подготовить следующий сигнал."
+	};
+	return writeSignalBatch(next) ? next : batch;
+}
+function resetSignalBatchSearchFailures(id, now = Date.now()) {
+	const batch = readSignalBatch();
+	if (!batch || batch.id !== id || batch.status !== "running" || batch.consecutiveFailures === 0 && !batch.lastError) return batch;
+	const next = {
+		...batch,
+		consecutiveFailures: 0,
+		nextAttemptAt: now,
+		lastError: void 0
+	};
+	return writeSignalBatch(next) ? next : batch;
+}
+function pauseSignalBatch(id, reason) {
+	const batch = readSignalBatch();
+	if (!batch || batch.id !== id || batch.status !== "running" && batch.status !== "stopping") return batch;
+	const next = {
+		...batch,
+		status: "paused",
+		lastError: reason.trim().slice(0, 500) || "Пакетный тест приостановлен."
+	};
+	return writeSignalBatch(next) ? next : batch;
+}
+function resumeSignalBatch(id, now = Date.now()) {
+	const batch = readSignalBatch();
+	if (!batch || batch.id !== id || batch.status !== "paused") return batch;
+	const next = {
+		...batch,
+		status: "running",
+		consecutiveFailures: 0,
+		nextAttemptAt: now,
+		lastError: void 0
+	};
+	return writeSignalBatch(next) ? next : batch;
+}
+function requestSignalBatchStop(hasActiveAttempt, now = Date.now()) {
+	const batch = readSignalBatch();
+	if (!batch || batch.status !== "running" && batch.status !== "paused") return batch;
+	const next = {
+		...batch,
+		status: hasActiveAttempt ? "stopping" : "stopped",
+		...hasActiveAttempt ? {} : { finishedAt: now }
+	};
+	return writeSignalBatch(next) ? next : batch;
+}
+function subscribeToSignalBatch(listener) {
+	if (typeof window === "undefined") return () => {};
+	window.addEventListener(BATCH_EVENT, listener);
+	window.addEventListener("storage", listener);
+	return () => {
+		window.removeEventListener(BATCH_EVENT, listener);
+		window.removeEventListener("storage", listener);
+	};
+}
 var STORAGE_KEY = "vprime_signal_journal_v1";
 var JOURNAL_EVENT = "vprime:signal-journal-updated";
 var MAX_ENTRIES = 500;
@@ -1635,6 +1914,8 @@ function normalizeEntry(value) {
 		step: Math.max(0, Math.min(3, Number(entry.step))),
 		startedAt: Number(entry.startedAt),
 		...Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {},
+		...typeof entry.batchRunId === "string" && entry.batchRunId.length <= 120 ? { batchRunId: entry.batchRunId } : {},
+		...Number.isFinite(entry.batchPosition) ? { batchPosition: Math.max(1, Math.min(20, Math.floor(Number(entry.batchPosition)))) } : {},
 		outcome: entry.outcome,
 		...Number.isFinite(entry.ruleScore) ? { ruleScore: Number(entry.ruleScore) } : {},
 		...Number.isFinite(entry.aiConfidence) ? { aiConfidence: Math.max(0, Math.min(100, Math.round(Number(entry.aiConfidence)))) } : {},
@@ -1712,6 +1993,19 @@ function markExpiredPendingSignals(now = Date.now(), graceMs = 12e4) {
 	});
 	if (changed) writeSignalJournal(next);
 	return changed ? next : entries;
+}
+function markSignalUnverified(id, settledAt = Date.now()) {
+	const entries = readSignalJournal();
+	const index = entries.findIndex((entry) => entry.id === id);
+	if (index < 0) return false;
+	if (entries[index].outcome !== "pending") return entries[index].outcome === "unverified";
+	const next = [...entries];
+	next[index] = {
+		...next[index],
+		outcome: "unverified",
+		settledAt
+	};
+	return writeSignalJournal(next);
 }
 function summarizeSignals(entries) {
 	let wins = 0;
@@ -1799,6 +2093,8 @@ function subscribeToSignalJournal(listener) {
 function signalJournalCsv(entries) {
 	const columns = [
 		["startedAt", (entry) => new Date(entry.startedAt).toISOString()],
+		["batchRunId", (entry) => entry.batchRunId ?? ""],
+		["batchPosition", (entry) => entry.batchPosition ?? ""],
 		["symbol", (entry) => entry.symbol],
 		["name", (entry) => entry.name],
 		["direction", (entry) => entry.direction],
@@ -1848,6 +2144,7 @@ var links = [
 ];
 function Shell({ children }) {
 	const path = useRouterState({ select: (state) => state.location.pathname });
+	const navigate = useNavigate();
 	const { id } = usePocket();
 	const { language, setLanguage, t } = useLanguage();
 	const admin = isAdminId(id);
@@ -1856,6 +2153,10 @@ function Shell({ children }) {
 	(0, import_react.useEffect)(() => {
 		pathRef.current = path;
 	}, [path]);
+	(0, import_react.useEffect)(() => {
+		const batch = readSignalBatch();
+		if (batch?.status === "running" && batch.completed < batch.target && path !== "/" && path !== "/signal") navigate({ to: "/" });
+	}, [navigate, path]);
 	(0, import_react.useEffect)(() => {
 		let stop = false;
 		const pull = () => {
@@ -1882,7 +2183,14 @@ function Shell({ children }) {
 			busy = true;
 			const now = Date.now();
 			try {
+				const previouslyPending = readSignalJournal().filter((entry) => entry.outcome === "pending");
+				for (const entry of previouslyPending) if (entry.batchRunId && now > entry.startedAt + entry.seconds * 1e3 + 1e4) {
+					markSignalUnverified(entry.id, now);
+					pauseSignalBatch(entry.batchRunId, "Котировку не удалось сверить в срок экспирации.");
+				}
 				markExpiredPendingSignals(now, 12e4);
+				const afterExpiry = new Map(readSignalJournal().map((entry) => [entry.id, entry]));
+				for (const entry of previouslyPending) if (entry.batchRunId && afterExpiry.get(entry.id)?.outcome === "unverified") pauseSignalBatch(entry.batchRunId, "Исход сигнала не удалось подтвердить котировкой.");
 				const due = readSignalJournal().filter((entry) => entry.outcome === "pending" && now >= entry.startedAt + entry.seconds * 1e3 + 1500 && now <= entry.startedAt + entry.seconds * 1e3 + 12e4);
 				for (const entry of due) {
 					if (now - (lastAttempt.get(entry.id) ?? 0) < 8e3) continue;
@@ -1893,7 +2201,16 @@ function Shell({ children }) {
 						const start = Number(entry.openPrice.toFixed(digits));
 						const finish = Number(quote.close.toFixed(digits));
 						const move = finish === start ? 0 : finish > start ? 1 : -1;
-						recordSignalOutcome(entry.id, quote.close, classifySignalAttempt(entry.direction, move, entry.step));
+						const outcome = classifySignalAttempt(entry.direction, move, entry.step);
+						const saved = recordSignalOutcome(entry.id, quote.close, outcome);
+						if (entry.batchRunId && entry.batchPosition) {
+							if (outcome === "overlay") {
+								if (!saved) pauseSignalBatch(entry.batchRunId, "Не удалось сохранить исход сигнала в истории.");
+							} else if (saved) {
+								const completed = completeSignalBatchAttempt(entry.batchRunId, entry.batchPosition, outcome);
+								if (!completed || completed.completed < entry.batchPosition) pauseSignalBatch(entry.batchRunId, "Не удалось сохранить завершение серии.");
+							} else pauseSignalBatch(entry.batchRunId, "Не удалось сохранить исход сигнала в истории.");
+						}
 					} catch {}
 				}
 			} finally {
@@ -1987,7 +2304,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-DZSXiB7y.css";
+var styles_default = "/assets/styles-Cf7Yst1W.css";
 var Route$6 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -2042,15 +2359,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-D2FP4tlr.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-Bqm_a2n-.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-Cayf0jL8.mjs");
+var $$splitComponentImporter$3 = () => import("./history-DUjB0lP1.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-C5kn9UBG.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-CjdwYq4H.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-CfZhMkKE.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-zakg76ld.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-DRoM-pEX.mjs");
+var $$splitComponentImporter = () => import("./signal-CASbL9gC.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2096,7 +2413,9 @@ var Route$1 = createFileRoute("/signal")({
 			bars: readBars(search.bars),
 			aiConfidence: Number.isFinite(parsedConfidence) ? Math.min(100, Math.max(0, Math.round(parsedConfidence))) : null,
 			step: Math.min(3, Math.max(0, Number(search.step) || 0)),
-			started: Number(search.started) || Date.now()
+			started: Number(search.started) || Date.now(),
+			...typeof search.batchRunId === "string" && search.batchRunId.length <= 120 ? { batchRunId: search.batchRunId } : {},
+			...Number.isInteger(Number(search.batchPosition)) && Number(search.batchPosition) >= 1 && Number(search.batchPosition) <= 20 ? { batchPosition: Number(search.batchPosition) } : {}
 		};
 	},
 	component: lazyRouteComponent($$splitComponentImporter, "component")
@@ -2186,4 +2505,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { isAdminId as C, useLanguage as E, signalsUsedToday as S, formatExpiryForLanguage as T, readClose as _, readSignalJournal as a, levels as b, recordSignalStarted as c, subscribeToSignalJournal as d, summarizeByMarket as f, loadFeed as g, confirmSignalEntry as h, markExpiredPendingSignals as i, signalJournalCsv as l, chooseSignalPair as m, Route$1 as n, recentlyUsedSignalSymbols as o, summarizeSignals as p, classifySignalAttempt as r, recordSignalOutcome as s, router_exports as t, signalRecordId as u, takeSignal as v, usePocket as w, markSignalUsed as x, levelForBalance as y };
+export { levelForBalance as A, startSignalBatch as C, loadFeed as D, confirmSignalEntry as E, usePocket as F, formatExpiryForLanguage as I, useLanguage as L, markSignalUsed as M, signalsUsedToday as N, readClose as O, isAdminId as P, signalBatchWinRate as S, chooseSignalPair as T, readSignalBatch as _, markSignalUnverified as a, resetSignalBatchSearchFailures as b, recordSignalOutcome as c, signalRecordId as d, subscribeToSignalJournal as f, pauseSignalBatch as g, completeSignalBatchAttempt as h, markExpiredPendingSignals as i, levels as j, takeSignal as k, recordSignalStarted as l, summarizeSignals as m, Route$1 as n, readSignalJournal as o, summarizeByMarket as p, classifySignalAttempt as r, recentlyUsedSignalSymbols as s, router_exports as t, signalJournalCsv as u, recordSignalBatchSearchFailure as v, subscribeToSignalBatch as w, resumeSignalBatch as x, requestSignalBatchStop as y };

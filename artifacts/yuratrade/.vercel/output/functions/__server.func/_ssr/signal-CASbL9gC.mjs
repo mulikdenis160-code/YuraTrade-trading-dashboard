@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-CdwuYFWS.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { E as useLanguage, T as formatExpiryForLanguage, _ as readClose, c as recordSignalStarted, h as confirmSignalEntry, n as Route$1, r as classifySignalAttempt, s as recordSignalOutcome, u as signalRecordId, v as takeSignal } from "./router-Crm-X8Bz.mjs";
+import { E as confirmSignalEntry, I as formatExpiryForLanguage, L as useLanguage, O as readClose, _ as readSignalBatch, a as markSignalUnverified, c as recordSignalOutcome, d as signalRecordId, g as pauseSignalBatch, h as completeSignalBatchAttempt, k as takeSignal, l as recordSignalStarted, n as Route$1, o as readSignalJournal, r as classifySignalAttempt, w as subscribeToSignalBatch, x as resumeSignalBatch, y as requestSignalBatchStop } from "./router-CE8BS0vp.mjs";
 import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-Dl7LWgWw.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-DRoM-pEX.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DEAFqSZK.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-CASbL9gC.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -306,6 +306,53 @@ function BackLink() {
 		}), t("common.back")]
 	});
 }
+function SignalBatchControls({ runId, position }) {
+	const { t } = useLanguage();
+	const [batch, setBatch] = (0, import_react.useState)(null);
+	(0, import_react.useEffect)(() => {
+		const update = () => setBatch(readSignalBatch());
+		update();
+		return subscribeToSignalBatch(update);
+	}, []);
+	if (!runId || !position || !batch || batch.id !== runId || batch.completed >= position) return null;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		className: "panel mt-3 flex items-center justify-between gap-3 p-3",
+		"aria-label": t("batch.title"),
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+			className: "text-xs font-semibold text-muted",
+			children: t("batch.series", {
+				current: position,
+				total: batch.target
+			})
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+			className: "flex shrink-0 gap-2",
+			children: batch.status === "running" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				className: "btn-ghost min-h-9 justify-center px-3 text-xs",
+				onClick: () => pauseSignalBatch(runId, "Пауза по запросу пользователя."),
+				children: t("batch.pause")
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				className: "btn-ghost min-h-9 justify-center px-3 text-xs",
+				onClick: () => requestSignalBatchStop(true),
+				children: t("batch.stop")
+			})] }) : batch.status === "paused" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				className: "btn-prime min-h-9 justify-center px-3 text-xs",
+				onClick: () => resumeSignalBatch(runId),
+				children: t("batch.resume")
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				className: "btn-ghost min-h-9 justify-center px-3 text-xs",
+				onClick: () => requestSignalBatchStop(true),
+				children: t("batch.stop")
+			})] }) : batch.status === "stopping" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-xs text-dim",
+				children: t("batch.stopping")
+			}) : null
+		})]
+	});
+}
 function SignalRoute() {
 	const search = Route$1.useSearch();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SignalCard, { search }, `${search.started}-${search.step}`);
@@ -346,6 +393,29 @@ function SignalCard({ search }) {
 	};
 	(0, import_react.useEffect)(() => {
 		if (!search.symbol || !search.open) return;
+		const existing = readSignalJournal().find((entry) => entry.id === journalId);
+		if (existing) {
+			if (existing.outcome === "pending" && search.batchRunId && Date.now() > existing.startedAt + existing.seconds * 1e3 + 1e4) {
+				markSignalUnverified(existing.id);
+				pauseSignalBatch(search.batchRunId, "Котировку не удалось сверить в срок экспирации.");
+				setPhase("no-signal");
+				setError("Котировку не удалось сверить в срок экспирации; исход не придуман.");
+				return;
+			}
+			if (existing.outcome === "overlay") {
+				setClose(existing.closePrice ?? null);
+				setPhase("preparing-recovery");
+			} else if (existing.outcome === "unverified") {
+				setPhase("no-signal");
+				setError("Исход не удалось подтвердить по котировкам; результат не придуман.");
+				if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Исход не удалось подтвердить котировкой.");
+			} else if (existing.outcome === "win" || existing.outcome === "draw" || existing.outcome === "loss") {
+				setClose(existing.closePrice ?? null);
+				setPhase(existing.outcome === "win" ? "win" : existing.outcome === "draw" ? "draw" : "stop");
+				if (search.batchRunId && search.batchPosition) completeSignalBatchAttempt(search.batchRunId, search.batchPosition, existing.outcome);
+			}
+			return;
+		}
 		const saved = recordSignalStarted({
 			id: journalId,
 			symbol: search.symbol,
@@ -358,16 +428,23 @@ function SignalCard({ search }) {
 			analysisSeconds: search.analysisSeconds,
 			step: search.step,
 			startedAt: search.started,
+			...search.batchRunId && search.batchPosition ? {
+				batchRunId: search.batchRunId,
+				batchPosition: search.batchPosition
+			} : {},
 			aiConfidence: search.aiConfidence ?? void 0,
 			strategyVersion: "direct-ai-v3-adaptive-timeframe",
 			note: search.note,
 			bars: search.bars
 		});
 		setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
+		if (!saved && search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось сохранить сигнал в локальной истории.");
 	}, [
 		journalId,
 		search.aiConfidence,
 		search.analysisSeconds,
+		search.batchPosition,
+		search.batchRunId,
 		search.bars,
 		search.direction,
 		search.group,
@@ -437,7 +514,16 @@ function SignalCard({ search }) {
 			const finish = Number(quote.close.toFixed(digits));
 			const move = finish === entry ? 0 : finish > entry ? 1 : -1;
 			const outcome = classifySignalAttempt(search.direction, move, search.step);
-			if (!recordSignalOutcome(journalId, quote.close, outcome)) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
+			const saved = recordSignalOutcome(journalId, quote.close, outcome);
+			if (!saved) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
+			if (search.batchRunId && search.batchPosition) {
+				if (outcome === "overlay") {
+					if (!saved) pauseSignalBatch(search.batchRunId, "Не удалось сохранить исход серии в истории.");
+				} else if (saved) {
+					const completed = completeSignalBatchAttempt(search.batchRunId, search.batchPosition, outcome);
+					if (!completed || completed.completed < search.batchPosition) pauseSignalBatch(search.batchRunId, "Не удалось сохранить завершение серии.");
+				} else pauseSignalBatch(search.batchRunId, "Не удалось сохранить исход серии в истории.");
+			}
 			if (outcome === "draw") {
 				setPhase("draw");
 				return;
@@ -452,16 +538,29 @@ function SignalCard({ search }) {
 				setPhase("preparing-recovery");
 			}
 		}).catch((cause) => {
-			setPhase("run");
-			settled.current = false;
+			if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось сверить котировку; результат не придуман.");
 			setError(cause instanceof Error ? cause.message : "Не удалось сверить цену.");
+			if (search.batchRunId && Date.now() > until + 1e4) {
+				markSignalUnverified(journalId);
+				setPhase("no-signal");
+				setError("Котировку не удалось сверить в срок экспирации; исход не придуман.");
+				return;
+			}
+			window.setTimeout(() => {
+				settled.current = false;
+				setPhase("run");
+			}, 8e3);
 		});
 	}, [
+		journalId,
 		left,
 		phase,
+		search.batchPosition,
+		search.batchRunId,
 		search.open,
 		search.step,
 		search.symbol,
+		until,
 		up
 	]);
 	(0, import_react.useEffect)(() => {
@@ -475,6 +574,7 @@ function SignalCard({ search }) {
 				if (stop) return;
 				setPhase("no-signal");
 				setError(result.reason);
+				if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось подтвердить сигнал для следующей попытки.");
 				return;
 			}
 			if (stop) return;
@@ -486,6 +586,7 @@ function SignalCard({ search }) {
 			if (stop) return;
 			setPhase("no-signal");
 			setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
+			if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось подготовить подтверждённое перекрытие.");
 		});
 		return () => {
 			stop = true;
@@ -517,13 +618,18 @@ function SignalCard({ search }) {
 					bars: preparedRecovery.bars,
 					aiConfidence: preparedRecovery.aiConfidence,
 					step: search.step + 1,
-					started: Date.now()
+					started: Date.now(),
+					...search.batchRunId && search.batchPosition ? {
+						batchRunId: search.batchRunId,
+						batchPosition: search.batchPosition
+					} : {}
 				}
 			});
 		}).catch((cause) => {
 			if (stop) return;
 			setPhase("no-signal");
 			setError(cause instanceof Error ? cause.message : "Не удалось подтвердить вход перекрытия.");
+			if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось подтвердить цену входа для перекрытия.");
 		});
 		return () => {
 			stop = true;
@@ -536,6 +642,17 @@ function SignalCard({ search }) {
 		search.seconds,
 		search.step,
 		search.symbol
+	]);
+	(0, import_react.useEffect)(() => {
+		if (!search.batchRunId || phase !== "win" && phase !== "draw" && phase !== "stop") return;
+		const timer = window.setTimeout(() => {
+			navigate({ to: "/" });
+		}, 2200);
+		return () => window.clearTimeout(timer);
+	}, [
+		navigate,
+		phase,
+		search.batchRunId
 	]);
 	if (!search.symbol || !search.open) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto max-w-md",
@@ -608,6 +725,10 @@ function SignalCard({ search }) {
 		className: "mx-auto w-full max-w-md",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BackLink, {}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SignalBatchControls, {
+				runId: search.batchRunId,
+				position: search.batchPosition
+			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
 				className: "panel arrive mt-3 p-3 sm:p-5",
 				children: [

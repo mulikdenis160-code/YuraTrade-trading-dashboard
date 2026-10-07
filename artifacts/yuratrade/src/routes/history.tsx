@@ -2,7 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download, History } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StatRow } from "@/components/stats";
-import { readSignalBatch, subscribeToSignalBatch, type SignalBatchRun } from "@/lib/signal-batch";
+import {
+  readSignalBatch,
+  signalBatchWinRate,
+  subscribeToSignalBatch,
+  type SignalBatchRun,
+} from "@/lib/signal-batch";
 import { MAX_SIGNAL_ATTEMPTS } from "@/lib/signal-config";
 import {
   markExpiredPendingSignals,
@@ -151,6 +156,15 @@ function HistoryPage() {
                 <p className="text-[10px] text-dim">{label}</p>
               </div>
             ))}
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-white/4 px-3 py-2">
+            <div>
+              <p className="text-xs font-semibold text-muted">{t("batch.winRate")}</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-dim">{t("batch.winRateHelp")}</p>
+            </div>
+            <p className="shrink-0 font-mono text-lg font-bold text-win">
+              {percent(signalBatchWinRate(batch))}
+            </p>
           </div>
           {batch.lastError ? <p className="mt-3 text-xs leading-relaxed text-muted">{batch.lastError}</p> : null}
         </section>

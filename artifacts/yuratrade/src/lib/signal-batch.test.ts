@@ -9,6 +9,7 @@ import {
   resumeSignalBatch,
   SIGNAL_BATCH_MAX_SEARCH_FAILURES,
   SIGNAL_BATCH_TARGET,
+  signalBatchWinRate,
   startSignalBatch,
 } from "./signal-batch.ts";
 
@@ -50,6 +51,11 @@ test("a signal batch counts only completed series and finishes at twenty", () =>
   assert.equal(current.draws, 3);
   assert.equal(completeSignalBatchAttempt(started.id, 20, "loss")?.completed, 20);
   assert.equal(readSignalBatch()?.losses, 5);
+});
+
+test("batch win rate uses only verified wins and losses and is empty without decisive outcomes", () => {
+  assert.equal(signalBatchWinRate({ wins: 3, losses: 1 }), 75);
+  assert.equal(signalBatchWinRate({ wins: 0, losses: 0 }), null);
 });
 
 test("search errors retry and then pause until resumed", () => {

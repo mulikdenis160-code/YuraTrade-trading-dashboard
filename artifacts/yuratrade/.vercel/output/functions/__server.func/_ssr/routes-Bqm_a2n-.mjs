@@ -2,11 +2,11 @@ import { o as __toESM } from "../_runtime.mjs";
 import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-CdwuYFWS.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { C as isAdminId, E as useLanguage, S as signalsUsedToday, T as formatExpiryForLanguage, a as readSignalJournal, g as loadFeed, h as confirmSignalEntry, m as chooseSignalPair, o as recentlyUsedSignalSymbols, v as takeSignal, w as usePocket, x as markSignalUsed, y as levelForBalance } from "./router-Crm-X8Bz.mjs";
-import { t as StatRow } from "./stats-BHTscD1v.mjs";
+import { A as levelForBalance, C as startSignalBatch, D as loadFeed, E as confirmSignalEntry, F as usePocket, I as formatExpiryForLanguage, L as useLanguage, M as markSignalUsed, N as signalsUsedToday, P as isAdminId, S as signalBatchWinRate, T as chooseSignalPair, _ as readSignalBatch, a as markSignalUnverified, b as resetSignalBatchSearchFailures, g as pauseSignalBatch, h as completeSignalBatchAttempt, k as takeSignal, o as readSignalJournal, s as recentlyUsedSignalSymbols, v as recordSignalBatchSearchFailure, w as subscribeToSignalBatch, x as resumeSignalBatch, y as requestSignalBatchStop } from "./router-CE8BS0vp.mjs";
+import { t as StatRow } from "./stats-Nz11muEM.mjs";
 import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-Dl7LWgWw.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-D2FP4tlr.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DEAFqSZK.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-Bqm_a2n-.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -26,7 +26,13 @@ function SignalDesk() {
 	const [balance, setBalance] = (0, import_react.useState)(null);
 	const [used, setUsed] = (0, import_react.useState)(0);
 	const [expiryMinutes, setExpiryMinutes] = (0, import_react.useState)(2);
+	const [batch, setBatch] = (0, import_react.useState)(null);
+	const [batchLoaded, setBatchLoaded] = (0, import_react.useState)(false);
+	const [batchNow, setBatchNow] = (0, import_react.useState)(Date.now());
+	const [batchMessage, setBatchMessage] = (0, import_react.useState)("");
 	const attemptRef = (0, import_react.useRef)(0);
+	const autoBatchKeyRef = (0, import_react.useRef)("");
+	const askRef = (0, import_react.useRef)(null);
 	(0, import_react.useEffect)(() => () => {
 		attemptRef.current += 1;
 	}, []);
@@ -64,6 +70,14 @@ function SignalDesk() {
 			window.clearInterval(timer);
 		};
 	}, []);
+	(0, import_react.useEffect)(() => {
+		const update = () => {
+			setBatch(readSignalBatch());
+			setBatchLoaded(true);
+		};
+		update();
+		return subscribeToSignalBatch(update);
+	}, []);
 	const level = levelForBalance(balance);
 	const expirySeconds = expiryMinutes * 60;
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
@@ -71,9 +85,18 @@ function SignalDesk() {
 	const left = cap === null ? null : Math.max(0, cap - used);
 	const blocked = admin ? "" : balance === null ? t("signal.block.deposit") : !level ? t("signal.block.minimum") : left === 0 ? t("signal.block.limit") : "";
 	const expiryLabel = (seconds) => formatExpiryForLanguage(seconds, language);
-	const openSignal = async (candidate, attempt) => {
+	const hasActiveBatchSeries = (run) => readSignalJournal().some((entry) => entry.batchRunId === run.id && entry.batchPosition === run.completed + 1 && (entry.outcome === "pending" || entry.outcome === "overlay"));
+	const openSignal = async (candidate, attempt, batchRun, batchPosition) => {
 		if (attemptRef.current !== attempt) return;
+		if (batchRun) {
+			const current = readSignalBatch();
+			if (!current || current.id !== batchRun.id || current.status !== "running" || current.completed + 1 !== batchPosition) {
+				setPhase("idle");
+				return;
+			}
+		}
 		if (cap !== null) setUsed(markSignalUsed());
+		if (batchRun) resetSignalBatchSearchFailures(batchRun.id);
 		await navigate({
 			to: "/signal",
 			search: {
@@ -89,15 +112,24 @@ function SignalDesk() {
 				bars: candidate.bars,
 				aiConfidence: candidate.aiConfidence,
 				step: 0,
-				started: Date.now()
+				started: Date.now(),
+				...batchRun && batchPosition !== null ? {
+					batchRunId: batchRun.id,
+					batchPosition
+				} : {}
 			}
 		});
 	};
-	const showSearchError = (cause, attempt) => {
+	const showSearchError = (cause, attempt, batchRun) => {
 		if (attemptRef.current !== attempt) return;
 		setPhase("idle");
 		setPendingPair(null);
-		setSearchError(cause instanceof Error ? cause.message : t("signal.none"));
+		const message = cause instanceof Error ? cause.message : t("signal.none");
+		setSearchError(message);
+		if (batchRun) {
+			const updated = recordSignalBatchSearchFailure(batchRun.id, message);
+			setBatch(updated);
+		}
 	};
 	const copySelectedPair = async () => {
 		if (!pendingPair) return;
@@ -108,8 +140,11 @@ function SignalDesk() {
 			setCopiedPair(false);
 		}
 	};
-	const ask = async () => {
+	const ask = async (requestedBatch = null) => {
 		if (phase !== "idle" || blocked || !ready) return;
+		const batchRun = requestedBatch?.status === "running" ? requestedBatch : null;
+		const batchPosition = batchRun ? batchRun.completed + 1 : null;
+		const requestedExpiry = batchRun?.expirySeconds ?? expirySeconds;
 		const attempt = ++attemptRef.current;
 		const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 		setPhase("choosing");
@@ -133,7 +168,7 @@ function SignalDesk() {
 				if (signalBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
 				const result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
 					symbol: candidate.symbol,
-					expirySeconds
+					expirySeconds: requestedExpiry
 				} })), signalBudgetMs, t("signal.analysisTimeout"));
 				if (attemptRef.current !== attempt) return;
 				if (result.decision === "pass") {
@@ -144,7 +179,7 @@ function SignalDesk() {
 				selected = {
 					...candidate,
 					attempt,
-					seconds: expirySeconds,
+					seconds: requestedExpiry,
 					copyUntil: result.releaseAtMs
 				};
 				break;
@@ -152,6 +187,7 @@ function SignalDesk() {
 			if (!selected || !prepared) {
 				setNotice(lastReason || t("signal.none"));
 				setPhase("idle");
+				if (batchRun) setBatch(recordSignalBatchSearchFailure(batchRun.id, lastReason || t("signal.none")));
 				return;
 			}
 			const readyPair = selected;
@@ -172,11 +208,114 @@ function SignalDesk() {
 				symbol: readyPair.symbol,
 				group: readyPair.group,
 				seconds: readyPair.seconds
-			}, attempt);
+			}, attempt, batchRun, batchPosition);
 		} catch (cause) {
-			showSearchError(cause, attempt);
+			showSearchError(cause, attempt, batchRun);
 		}
 	};
+	askRef.current = ask;
+	(0, import_react.useEffect)(() => {
+		if (!batchLoaded || !batch || batch.status !== "running" || phase !== "idle" || !ready || Boolean(blocked)) return;
+		const position = batch.completed + 1;
+		const initialEntries = readSignalJournal().filter((entry) => entry.batchRunId === batch.id && entry.batchPosition === position);
+		for (const entry of initialEntries) if (entry.outcome === "pending" && Date.now() > entry.startedAt + entry.seconds * 1e3 + 1e4) {
+			markSignalUnverified(entry.id);
+			pauseSignalBatch(batch.id, "Котировку не удалось сверить в срок экспирации.");
+		}
+		const last = readSignalJournal().filter((entry) => entry.batchRunId === batch.id && entry.batchPosition === position).sort((a, b) => a.step - b.step || a.startedAt - b.startedAt).at(-1);
+		if (last && (last.outcome === "win" || last.outcome === "draw" || last.outcome === "loss")) {
+			const reconciled = completeSignalBatchAttempt(batch.id, position, last.outcome);
+			setBatch(reconciled);
+			if (!reconciled || reconciled.completed < position) setBatch(pauseSignalBatch(batch.id, "Не удалось сохранить завершение серии."));
+			return;
+		}
+		if (last?.outcome === "unverified") {
+			setBatch(pauseSignalBatch(batch.id, "Исход не удалось подтвердить котировкой."));
+			return;
+		}
+		if (last && (last.outcome === "pending" || last.outcome === "overlay")) {
+			const resumeKey = `resume:${batch.id}:${position}:${last.id}:${last.outcome}`;
+			if (autoBatchKeyRef.current === resumeKey) return;
+			autoBatchKeyRef.current = resumeKey;
+			navigate({
+				to: "/signal",
+				search: {
+					symbol: last.symbol,
+					name: last.name,
+					group: "fx",
+					direction: last.direction,
+					open: last.openPrice,
+					payout: last.payout,
+					seconds: last.seconds,
+					analysisSeconds: last.analysisSeconds,
+					note: last.note,
+					bars: last.bars,
+					aiConfidence: last.aiConfidence ?? null,
+					step: last.step,
+					started: last.startedAt,
+					batchRunId: batch.id,
+					batchPosition: position
+				}
+			}).catch(() => {
+				autoBatchKeyRef.current = "";
+			});
+			return;
+		}
+		if (batch.nextAttemptAt > Date.now()) {
+			const timer = window.setTimeout(() => setBatchNow(Date.now()), Math.min(1e3, batch.nextAttemptAt - Date.now()));
+			return () => window.clearTimeout(timer);
+		}
+		const searchKey = `search:${batch.id}:${position}:${batch.nextAttemptAt}`;
+		if (autoBatchKeyRef.current === searchKey) return;
+		const timer = window.setTimeout(() => {
+			if (autoBatchKeyRef.current === searchKey) return;
+			autoBatchKeyRef.current = searchKey;
+			askRef.current?.(batch);
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [
+		batch,
+		batchLoaded,
+		batchNow,
+		blocked,
+		navigate,
+		phase,
+		ready
+	]);
+	const startBatch = () => {
+		const started = startSignalBatch(expirySeconds);
+		setBatch(started ?? readSignalBatch());
+		setBatchMessage(started ? "" : t("batch.startFailed"));
+		autoBatchKeyRef.current = "";
+	};
+	const pauseBatch = () => {
+		if (!batch) return;
+		const activeSeries = hasActiveBatchSeries(batch);
+		if (phase !== "idle" && !activeSeries) {
+			attemptRef.current += 1;
+			setPhase("idle");
+			setPendingPair(null);
+		}
+		setBatch(pauseSignalBatch(batch.id, "Пауза по запросу пользователя."));
+	};
+	const resumeBatch = () => {
+		if (!batch) return;
+		setBatch(resumeSignalBatch(batch.id));
+		autoBatchKeyRef.current = "";
+	};
+	const stopBatch = () => {
+		if (!batch) return;
+		const activeSeries = hasActiveBatchSeries(batch);
+		if (phase !== "idle" && !activeSeries) {
+			attemptRef.current += 1;
+			setPhase("idle");
+			setPendingPair(null);
+		}
+		setBatch(requestSignalBatchStop(activeSeries));
+	};
+	const batchLocked = batch?.status === "running" || batch?.status === "paused" || batch?.status === "stopping";
+	const batchWinRate = batch ? signalBatchWinRate(batch) : null;
+	const batchStatusLabel = batch ? batch.status === "running" ? t("batch.running") : batch.status === "paused" ? t("batch.paused") : batch.status === "stopping" ? t("batch.stopping") : batch.status === "completed" ? t("batch.completed") : t("batch.stopped") : "";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "mx-auto w-full max-w-md space-y-4",
 		children: [
@@ -204,6 +343,152 @@ function SignalDesk() {
 						children: t("signal.experimental")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-3.5",
+						"aria-label": t("batch.title"),
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-start gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "grid size-9 shrink-0 place-items-center rounded-xl border border-blue/20 bg-blue/10 text-xs font-bold text-blue-soft",
+									children: "20"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0 flex-1",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-sm font-bold text-fg",
+										children: t("batch.title")
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1 text-xs leading-relaxed text-muted",
+										children: t("batch.description")
+									})]
+								})]
+							}),
+							batch ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "mt-3 flex items-center justify-between gap-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-xs font-semibold text-blue-soft",
+										children: batchStatusLabel
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-xs text-dim",
+										children: expiryLabel(batch.expirySeconds)
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "mt-2 h-2 overflow-hidden rounded-full bg-white/8",
+									role: "progressbar",
+									"aria-valuemin": 0,
+									"aria-valuemax": batch.target,
+									"aria-valuenow": batch.completed,
+									"aria-label": t("batch.progress"),
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "h-full rounded-full bg-blue-soft transition-[width]",
+										style: { width: `${batch.completed / batch.target * 100}%` }
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									className: "mt-1.5 text-xs text-muted",
+									children: [
+										t("batch.progress"),
+										": ",
+										batch.completed,
+										"/",
+										batch.target
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "mt-3 grid grid-cols-3 gap-2 text-center",
+									children: [
+										[
+											t("batch.wins"),
+											batch.wins,
+											"text-win"
+										],
+										[
+											t("batch.losses"),
+											batch.losses,
+											"text-loss"
+										],
+										[
+											t("batch.draws"),
+											batch.draws,
+											"text-blue-soft"
+										]
+									].map(([label, value, color]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "rounded-xl bg-black/20 px-2 py-2",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: `font-mono text-lg font-bold ${color}`,
+											children: value
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-[10px] text-dim",
+											children: label
+										})]
+									}, label))
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "mt-2 flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-xs font-semibold text-muted",
+										children: t("batch.winRate")
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-0.5 text-[10px] leading-relaxed text-dim",
+										children: t("batch.winRateHelp")
+									})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "shrink-0 font-mono text-lg font-bold text-win",
+										children: batchWinRate === null ? "—" : `${batchWinRate.toFixed(1)}%`
+									})]
+								}),
+								batch.status === "paused" && batch.lastError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-3 text-xs leading-relaxed text-loss",
+									role: "status",
+									children: t("batch.error", { reason: batch.lastError })
+								}) : batch.status === "running" && batch.lastError ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+									className: "mt-3 text-xs leading-relaxed text-dim",
+									role: "status",
+									children: [batch.lastError, batch.nextAttemptAt > batchNow ? ` · ${t("batch.retry", { seconds: Math.ceil((batch.nextAttemptAt - batchNow) / 1e3) })}` : ""]
+								}) : null
+							] }) : null,
+							batchMessage ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-3 text-xs text-loss",
+								role: "alert",
+								children: batchMessage
+							}) : null,
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-3 grid grid-cols-2 gap-2",
+								children: [
+									!batchLocked ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: "btn-prime min-h-10 w-full justify-center text-xs",
+										disabled: !batchLoaded || !ready || Boolean(blocked) || phase !== "idle",
+										onClick: startBatch,
+										children: t("batch.start")
+									}) : null,
+									batch?.status === "running" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: "btn-ghost min-h-10 w-full justify-center text-xs",
+										onClick: pauseBatch,
+										children: t("batch.pause")
+									}) : null,
+									batch?.status === "paused" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: "btn-prime min-h-10 w-full justify-center text-xs",
+										onClick: resumeBatch,
+										children: t("batch.resume")
+									}) : null,
+									batch && (batch.status === "running" || batch.status === "paused") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: "btn-ghost min-h-10 w-full justify-center text-xs",
+										onClick: stopBatch,
+										children: t("batch.stop")
+									}) : null,
+									batch?.status === "stopping" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "col-span-2 rounded-xl bg-black/20 px-3 py-2 text-center text-xs text-muted",
+										children: t("batch.stopping")
+									}) : null
+								]
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 						className: "mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3",
 						"aria-label": t("signal.expiry"),
 						children: [
@@ -224,7 +509,7 @@ function SignalDesk() {
 									const label = expiryLabel(minutes * 60);
 									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "button",
-										disabled: phase !== "idle",
+										disabled: phase !== "idle" || batchLocked,
 										"aria-pressed": selected,
 										title: expiryLabel(minutes * 60),
 										onClick: () => setExpiryMinutes(minutes),
@@ -243,8 +528,8 @@ function SignalDesk() {
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
 						className: "btn-prime mt-4 min-h-12 w-full",
-						disabled: !ready || phase !== "idle" || Boolean(blocked),
-						onClick: () => void ask(),
+						disabled: !ready || phase !== "idle" || Boolean(blocked) || batchLocked && batch?.status !== "running",
+						onClick: () => void ask(batch?.status === "running" ? batch : null),
 						children: phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {

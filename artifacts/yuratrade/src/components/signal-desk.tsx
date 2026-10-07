@@ -16,6 +16,7 @@ import {
   requestSignalBatchStop,
   resetSignalBatchSearchFailures,
   resumeSignalBatch,
+  signalBatchWinRate,
   startSignalBatch,
   subscribeToSignalBatch,
   type SignalBatchRun,
@@ -431,6 +432,7 @@ export function SignalDesk() {
 
   const batchLocked =
     batch?.status === "running" || batch?.status === "paused" || batch?.status === "stopping";
+  const batchWinRate = batch ? signalBatchWinRate(batch) : null;
   const batchStatusLabel = batch
     ? batch.status === "running"
       ? t("batch.running")
@@ -504,6 +506,15 @@ export function SignalDesk() {
                     <p className="text-[10px] text-dim">{label}</p>
                   </div>
                 ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+                <div>
+                  <p className="text-xs font-semibold text-muted">{t("batch.winRate")}</p>
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-dim">{t("batch.winRateHelp")}</p>
+                </div>
+                <p className="shrink-0 font-mono text-lg font-bold text-win">
+                  {batchWinRate === null ? "—" : `${batchWinRate.toFixed(1)}%`}
+                </p>
               </div>
               {batch.status === "paused" && batch.lastError ? (
                 <p className="mt-3 text-xs leading-relaxed text-loss" role="status">

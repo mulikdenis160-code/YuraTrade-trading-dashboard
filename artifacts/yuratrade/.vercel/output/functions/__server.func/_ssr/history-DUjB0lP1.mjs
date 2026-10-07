@@ -1,9 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { c as Download, o as History } from "../_libs/lucide-react.mjs";
-import { E as useLanguage, T as formatExpiryForLanguage, a as readSignalJournal, d as subscribeToSignalJournal, f as summarizeByMarket, i as markExpiredPendingSignals, l as signalJournalCsv, p as summarizeSignals } from "./router-Crm-X8Bz.mjs";
-import { t as StatRow } from "./stats-BHTscD1v.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/history-Cayf0jL8.js
+import { I as formatExpiryForLanguage, L as useLanguage, S as signalBatchWinRate, _ as readSignalBatch, f as subscribeToSignalJournal, i as markExpiredPendingSignals, m as summarizeSignals, o as readSignalJournal, p as summarizeByMarket, u as signalJournalCsv, w as subscribeToSignalBatch } from "./router-CE8BS0vp.mjs";
+import { t as StatRow } from "./stats-Nz11muEM.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/history-DUjB0lP1.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var outcomeStyles = {
@@ -43,15 +43,23 @@ function exportCsv(entries) {
 function HistoryPage() {
 	const { language, t } = useLanguage();
 	const [entries, setEntries] = (0, import_react.useState)([]);
+	const [batch, setBatch] = (0, import_react.useState)(null);
 	const [loaded, setLoaded] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
-		const update = () => {
+		const updateEntries = () => {
 			markExpiredPendingSignals();
 			setEntries(readSignalJournal().filter((entry) => entry.group === "fx"));
 			setLoaded(true);
 		};
-		update();
-		return subscribeToSignalJournal(update);
+		const updateBatch = () => setBatch(readSignalBatch());
+		updateEntries();
+		updateBatch();
+		const unsubscribeJournal = subscribeToSignalJournal(updateEntries);
+		const unsubscribeBatch = subscribeToSignalBatch(updateBatch);
+		return () => {
+			unsubscribeJournal();
+			unsubscribeBatch();
+		};
 	}, []);
 	const summary = summarizeSignals(entries);
 	const markets = summarizeByMarket(entries);
@@ -65,6 +73,7 @@ function HistoryPage() {
 		loss: t("outcome.loss"),
 		draw: t("outcome.draw")
 	};
+	const batchStatusLabel = batch ? batch.status === "running" ? t("batch.running") : batch.status === "paused" ? t("batch.paused") : batch.status === "stopping" ? t("batch.stopping") : batch.status === "completed" ? t("batch.completed") : t("batch.stopped") : "";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "space-y-4 sm:space-y-5",
 		children: [
@@ -98,6 +107,79 @@ function HistoryPage() {
 				className: "rise rise-2",
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatRow, {})
 			}),
+			batch ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "panel rise rise-2 p-4 sm:p-5",
+				"aria-label": t("batch.title"),
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-start justify-between gap-3",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "text-xs font-semibold tracking-wide text-blue-soft uppercase",
+							children: t("batch.title")
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "mt-1 text-sm text-fg",
+							children: [
+								batchStatusLabel,
+								" · ",
+								expiryLabel(batch.expirySeconds)
+							]
+						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "shrink-0 font-mono text-sm font-bold text-fg",
+							children: [
+								batch.completed,
+								"/",
+								batch.target
+							]
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mt-3 grid grid-cols-3 gap-2 text-center",
+						children: [
+							[
+								t("batch.wins"),
+								batch.wins,
+								"text-win"
+							],
+							[
+								t("batch.losses"),
+								batch.losses,
+								"text-loss"
+							],
+							[
+								t("batch.draws"),
+								batch.draws,
+								"text-blue-soft"
+							]
+						].map(([label, value, color]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-xl bg-white/4 px-2 py-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: `font-mono text-lg font-bold ${color}`,
+								children: value
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-[10px] text-dim",
+								children: label
+							})]
+						}, label))
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-2 flex items-center justify-between gap-3 rounded-xl bg-white/4 px-3 py-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "text-xs font-semibold text-muted",
+							children: t("batch.winRate")
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-0.5 text-[10px] leading-relaxed text-dim",
+							children: t("batch.winRateHelp")
+						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "shrink-0 font-mono text-lg font-bold text-win",
+							children: percent(signalBatchWinRate(batch))
+						})]
+					}),
+					batch.lastError ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-3 text-xs leading-relaxed text-muted",
+						children: batch.lastError
+					}) : null
+				]
+			}) : null,
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 				className: "panel rise rise-3 p-4 sm:p-5",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -257,7 +339,8 @@ function HistoryPage() {
 									" · ",
 									t("history.candles"),
 									" ",
-									expiryLabel(entry.analysisSeconds)
+									expiryLabel(entry.analysisSeconds),
+									entry.batchPosition ? ` · ${t("history.batchSeries", { current: entry.batchPosition })}` : ""
 								]
 							})]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {

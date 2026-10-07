@@ -23,6 +23,11 @@ export type SignalBatchRun = {
   lastError?: string;
 };
 
+export function signalBatchWinRate(batch: Pick<SignalBatchRun, "wins" | "losses">) {
+  const decisiveOutcomes = batch.wins + batch.losses;
+  return decisiveOutcomes === 0 ? null : (batch.wins / decisiveOutcomes) * 100;
+}
+
 const STORAGE_KEY = "prime_signal_batch_v1";
 const BATCH_EVENT = "prime:signal-batch-updated";
 const statuses = new Set<SignalBatchStatus>(["running", "stopping", "paused", "completed", "stopped"]);

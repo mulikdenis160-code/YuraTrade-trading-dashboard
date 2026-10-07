@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-RTxGEEXy.js
+//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-BBtripdW.js
 var tsrStartManifest = () => ({ routes: {
 	__root__: {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/__root.tsx",
@@ -11,47 +11,47 @@ var tsrStartManifest = () => ({ routes: {
 			"/api/ticks"
 		],
 		preloads: [
-			"/assets/index-DgGiPuba.js",
-			"/assets/language-C8hLQX3V.js",
-			"/assets/pocket-live-BG1G5yDI.js",
-			"/assets/link-dfGnpRV3.js",
-			"/assets/signal-journal-GR2lTHWz.js",
-			"/assets/createLucideIcon-C4XCgDE5.js"
+			"/assets/index-yEISeT5Q.js",
+			"/assets/language-Ce8k_XZb.js",
+			"/assets/pocket-live-CBCkTPN5.js",
+			"/assets/link-4dU6Ki9n.js",
+			"/assets/signal-journal-DLO8Ffoy.js",
+			"/assets/createLucideIcon-C_vKju6r.js"
 		],
 		scripts: [{ attrs: {
 			type: "module",
 			async: !0,
-			src: "/assets/index-DgGiPuba.js"
+			src: "/assets/index-yEISeT5Q.js"
 		} }]
 	},
 	"/": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/index.tsx",
 		children: void 0,
 		preloads: [
-			"/assets/routes-YYG0MXmx.js",
-			"/assets/stats-Drr8hwuk.js",
-			"/assets/signal-request-DuXPcLsv.js"
+			"/assets/routes-CqtfvS4H.js",
+			"/assets/stats-ADQoMLcL.js",
+			"/assets/signal-request-DqEdDIli.js"
 		]
 	},
 	"/history": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/history.tsx",
 		children: void 0,
-		preloads: ["/assets/history-BcxYsNnh.js", "/assets/stats-Drr8hwuk.js"]
+		preloads: ["/assets/history-F1DqcWtN.js", "/assets/stats-ADQoMLcL.js"]
 	},
 	"/learn": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/learn.tsx",
 		children: void 0,
-		preloads: ["/assets/learn-B4yEF0z-.js"]
+		preloads: ["/assets/learn-D0U8UIoY.js"]
 	},
 	"/profile": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/profile.tsx",
 		children: void 0,
-		preloads: ["/assets/profile-BhECGp8H.js"]
+		preloads: ["/assets/profile-nU1_kZ9f.js"]
 	},
 	"/signal": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/signal.tsx",
 		children: void 0,
-		preloads: ["/assets/signal-CdJ0RG16.js", "/assets/signal-request-DuXPcLsv.js"]
+		preloads: ["/assets/signal-Cp-qCPXl.js", "/assets/signal-request-DqEdDIli.js"]
 	}
 } });
 //#endregion
