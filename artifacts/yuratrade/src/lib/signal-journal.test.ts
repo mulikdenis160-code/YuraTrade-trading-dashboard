@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifySignalAttempt,
   readSignalJournal,
   markExpiredPendingSignals,
   recordSignalOutcome,
@@ -99,6 +100,73 @@ test("journal statistics use payout-aware break-even and one-unit returns", () =
   assert.equal(summary.hitRate, 50);
   assert.ok(Math.abs(summary.netUnits + 0.08) < 1e-10);
   assert.ok(summary.breakEvenRate !== null && summary.breakEvenRate > 53 && summary.breakEvenRate < 55);
+});
+
+test("intermediate losses are overlays and only the exhausted series counts as a loss", () => {
+  const attempts = [0, 1, 2, 3].map((step) => ({
+    id: `loss-step-${step}`,
+    symbol: "EURUSD_otc",
+    name: "EUR/USD OTC",
+    group: "fx" as const,
+    direction: "call" as const,
+    openPrice: 1.08,
+    payout: 92,
+    seconds: 60,
+    analysisSeconds: 60,
+    step,
+    startedAt: step + 1,
+    outcome: classifySignalAttempt("call", -1, step),
+    strategyVersion: "test",
+    note: "",
+    bars: [],
+  }));
+  const summary = summarizeSignals(attempts);
+
+  assert.deepEqual(attempts.map((attempt) => attempt.outcome), [
+    "overlay",
+    "overlay",
+    "overlay",
+    "loss",
+  ]);
+  assert.equal(summary.losses, 1);
+  assert.equal(summary.settled, 1);
+  assert.equal(summary.netUnits, -1);
+});
+
+test("a win after one or more overlays is counted once and draws end the series", () => {
+  const outcomes = [
+    classifySignalAttempt("put", 1, 0),
+    classifySignalAttempt("put", 1, 1),
+    classifySignalAttempt("put", -1, 2),
+    classifySignalAttempt("call", 0, 0),
+  ];
+
+  assert.deepEqual(outcomes, ["overlay", "overlay", "win", "draw"]);
+  const base: Omit<SignalJournalEntry, "id" | "outcome"> = {
+    symbol: "EURUSD_otc",
+    name: "EUR/USD OTC",
+    group: "fx",
+    direction: "call",
+    openPrice: 1.08,
+    payout: 92,
+    seconds: 60,
+    analysisSeconds: 60,
+    step: 0,
+    startedAt: 1,
+    strategyVersion: "test",
+    note: "",
+    bars: [],
+  };
+  const summary = summarizeSignals([
+    { ...base, id: "overlay-1", outcome: outcomes[0] },
+    { ...base, id: "overlay-2", outcome: outcomes[1] },
+    { ...base, id: "win", outcome: outcomes[2] },
+    { ...base, id: "draw", outcome: outcomes[3] },
+  ]);
+  assert.equal(summary.wins, 1);
+  assert.equal(summary.losses, 0);
+  assert.equal(summary.draws, 1);
+  assert.equal(summary.settled, 2);
 });
 
 test("recently used FX pairs are excluded while pending and cooldown outcomes are recent", () => {

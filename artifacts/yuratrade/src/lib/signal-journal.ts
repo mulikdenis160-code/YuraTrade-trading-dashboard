@@ -1,7 +1,8 @@
 import { analysisPeriodForExpiry, ANALYSIS_PERIODS_SECONDS } from "./expiry.ts";
+import { MAX_OVERLAYS } from "./signal-config.ts";
 
 export type JournalGroup = "fx" | "crypto" | "stock" | "commodity";
-export type JournalOutcome = "pending" | "unverified" | "win" | "loss" | "draw";
+export type JournalOutcome = "pending" | "unverified" | "win" | "loss" | "draw" | "overlay";
 
 export type SignalJournalEntry = {
   id: string;
@@ -52,7 +53,18 @@ const STORAGE_KEY = "vprime_signal_journal_v1";
 const JOURNAL_EVENT = "vprime:signal-journal-updated";
 const MAX_ENTRIES = 500;
 const groups = new Set<JournalGroup>(["fx", "crypto", "stock", "commodity"]);
-const outcomes = new Set<JournalOutcome>(["pending", "unverified", "win", "loss", "draw"]);
+const outcomes = new Set<JournalOutcome>(["pending", "unverified", "win", "loss", "draw", "overlay"]);
+
+export function classifySignalAttempt(
+  direction: "call" | "put",
+  move: -1 | 0 | 1,
+  step: number,
+): Exclude<JournalOutcome, "pending" | "unverified"> {
+  if (move === 0) return "draw";
+  const won = direction === "call" ? move > 0 : move < 0;
+  if (won) return "win";
+  return step < MAX_OVERLAYS ? "overlay" : "loss";
+}
 
 export function signalRecordId(signal: Pick<StartedSignal, "symbol" | "startedAt" | "step">) {
   return `${signal.startedAt}:${signal.step}:${signal.symbol}`;
@@ -185,7 +197,8 @@ export function recordSignalOutcome(
   if (!Number.isFinite(closePrice)) return false;
   const entries = readSignalJournal();
   const index = entries.findIndex((entry) => entry.id === id);
-  if (index < 0 || entries[index].outcome !== "pending") return false;
+  if (index < 0) return false;
+  if (entries[index].outcome !== "pending") return entries[index].outcome === outcome;
   const next = [...entries];
   next[index] = { ...next[index], closePrice, outcome, settledAt: Date.now() };
   return writeSignalJournal(next);
@@ -220,6 +233,7 @@ export function summarizeSignals(entries: SignalJournalEntry[]): SignalSummary {
       pending += 1;
       continue;
     }
+    if (entry.outcome === "overlay") continue;
     if (entry.outcome === "unverified") {
       unverified += 1;
       continue;

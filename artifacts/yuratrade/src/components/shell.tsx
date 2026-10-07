@@ -7,9 +7,10 @@ import { loadFeed, readClose } from "@/lib/pocket-live";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { useLanguage } from "@/lib/language";
 import {
+  classifySignalAttempt,
+  recordSignalOutcome,
   markExpiredPendingSignals,
   readSignalJournal,
-  recordSignalOutcome,
 } from "@/lib/signal-journal";
 
 const links = [
@@ -80,8 +81,7 @@ export function Shell({ children }: { children: ReactNode }) {
             const start = Number(entry.openPrice.toFixed(digits));
             const finish = Number(quote.close.toFixed(digits));
             const move = finish === start ? 0 : finish > start ? 1 : -1;
-            const won = entry.direction === "call" ? move > 0 : move < 0;
-            recordSignalOutcome(entry.id, quote.close, move === 0 ? "draw" : won ? "win" : "loss");
+            recordSignalOutcome(entry.id, quote.close, classifySignalAttempt(entry.direction, move, entry.step));
           } catch {
             // The entry stays pending briefly, then is marked unverified rather than guessed.
           }

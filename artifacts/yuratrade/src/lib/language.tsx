@@ -199,6 +199,7 @@ const copy = {
   "history.candles": ["свечи", "свічки", "candles"],
   "outcome.pending": ["В ожидании", "Очікується", "Pending"],
   "outcome.unverified": ["Не проверен", "Не перевірено", "Unverified"],
+  "outcome.overlay": ["Перекрытие", "Перекриття", "Recovery"],
   "outcome.win": ["Победа", "Перемога", "Win"],
   "outcome.loss": ["Поражение", "Поразка", "Loss"],
   "outcome.draw": ["Ничья", "Нічия", "Draw"],

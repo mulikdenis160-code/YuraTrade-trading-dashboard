@@ -4,6 +4,7 @@ import { AnalysisModal } from "@/components/analysis-modal";
 import { PairMark } from "@/components/pair-mark";
 import { confirmSignalEntry, readClose, takeSignal } from "@/lib/pocket-live";
 import {
+  classifySignalAttempt,
   recordSignalOutcome,
   recordSignalStarted,
   signalRecordId,
@@ -286,16 +287,16 @@ function SignalCard({ search }: { search: Search }) {
         const entry = Number(search.open.toFixed(digits));
         const finish = Number(quote.close.toFixed(digits));
         const move = finish === entry ? 0 : finish > entry ? 1 : -1;
-        const won = up ? move > 0 : move < 0;
-        const saved = recordSignalOutcome(journalId, quote.close, move === 0 ? "draw" : won ? "win" : "loss");
+        const outcome = classifySignalAttempt(search.direction, move, search.step);
+        const saved = recordSignalOutcome(journalId, quote.close, outcome);
         if (!saved) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
-        if (move === 0) {
+        if (outcome === "draw") {
           setPhase("draw");
           return;
         }
-        if (won) {
+        if (outcome === "win") {
           setPhase("win");
-        } else if (search.step >= MAX_OVERLAYS) {
+        } else if (outcome === "loss") {
           setPhase("stop");
         } else {
           setCopied(false);

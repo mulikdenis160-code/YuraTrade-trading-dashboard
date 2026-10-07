@@ -20,6 +20,7 @@ export const Route = createFileRoute("/history")({ component: HistoryPage });
 const outcomeStyles: Record<JournalOutcome, string> = {
   pending: "border-white/10 bg-white/5 text-dim",
   unverified: "border-white/10 bg-white/5 text-muted",
+  overlay: "border-blue/20 bg-blue/5 text-blue-soft",
   win: "border-win/20 bg-win/10 text-win",
   loss: "border-loss/20 bg-loss/10 text-loss",
   draw: "border-blue/20 bg-blue/10 text-blue-soft",
@@ -79,6 +80,7 @@ function HistoryPage() {
   const outcomeLabels: Record<JournalOutcome, string> = {
     pending: t("outcome.pending"),
     unverified: t("outcome.unverified"),
+    overlay: t("outcome.overlay"),
     win: t("outcome.win"),
     loss: t("outcome.loss"),
     draw: t("outcome.draw"),
