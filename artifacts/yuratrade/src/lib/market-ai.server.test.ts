@@ -4,12 +4,16 @@ import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
   GEMINI_MAX_OUTPUT_TOKENS,
+  GEMINI_THINKING_BUDGET,
   DIRECT_AI_HISTORY_CANDLES,
   DIRECT_AI_MODEL,
   DIRECT_AI_SYSTEM_PROMPT,
+  geminiGenerationConfig,
+  isMarketAiTimeout,
   marketAiApiErrorMessage,
   MIN_DIRECT_AI_CANDLES,
   parseMarketAiReview,
+  PROXY_AI_MODEL,
   requestMarketAiReviewOnce,
 } from "./market-ai.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
@@ -17,6 +21,24 @@ import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
 test("direct market analysis uses Gemini 3.6 Flash when no proxy is configured", () => {
   assert.equal(DIRECT_AI_MODEL, "gemini-3.6-flash");
+});
+
+test("proxy Gemini uses bounded reasoning and keeps the required output token limit", () => {
+  const proxyConfig = geminiGenerationConfig("system", PROXY_AI_MODEL);
+  const directConfig = geminiGenerationConfig("system", DIRECT_AI_MODEL);
+  assert.equal(GEMINI_THINKING_BUDGET, 2_048);
+  assert.equal(proxyConfig.thinkingConfig?.thinkingBudget, GEMINI_THINKING_BUDGET);
+  assert.equal(proxyConfig.maxOutputTokens, GEMINI_MAX_OUTPUT_TOKENS);
+  assert.equal(directConfig.thinkingConfig, undefined);
+});
+
+test("Gemini gateway deadline responses are recognized as timeouts", () => {
+  assert.equal(isMarketAiTimeout({ status: 408 }), true);
+  assert.equal(isMarketAiTimeout({ status: 504 }), true);
+  assert.equal(isMarketAiTimeout({ status: 503 }), false);
+  const timeout = new Error("request deadline");
+  timeout.name = "TimeoutError";
+  assert.equal(isMarketAiTimeout(timeout), true);
 });
 
 const validReview = JSON.stringify({
@@ -481,6 +503,7 @@ test("Gemini request failures produce actionable messages without exposing raw e
   assert.equal(GEMINI_MAX_OUTPUT_TOKENS, 8_192);
   assert.match(marketAiApiErrorMessage({ status: 429 }), /ограничил запросы/);
   assert.match(marketAiApiErrorMessage({ status: 401 }), /отклонил подключение/);
+  assert.match(marketAiApiErrorMessage({ status: 504 }), /занял слишком много времени/);
   assert.match(marketAiApiErrorMessage({ status: 503 }), /временно недоступен/);
 });
 
@@ -532,8 +555,8 @@ test("an unparseable Gemini response fails after exactly one model request", asy
   assert.equal(calls, 1);
 });
 
-test("a Gemini analysis request is stopped at the eighteen-second budget", async () => {
-  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 18_000);
+test("a Gemini analysis request is stopped at the nineteen-second budget", async () => {
+  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 19_000);
   const request = async () => new Promise<{ choices: never[] }>(() => {});
   await assert.rejects(
     requestMarketAiReviewOnce(request, [], ["EURUSD_otc"], 10),

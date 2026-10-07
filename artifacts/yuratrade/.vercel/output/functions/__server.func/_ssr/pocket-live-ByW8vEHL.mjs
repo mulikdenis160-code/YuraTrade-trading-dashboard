@@ -1,6 +1,6 @@
-import { d as isValidExpirySeconds } from "./expiry-YYPo0RXo.mjs";
+import { d as isValidExpirySeconds } from "./expiry-CdwuYFWS.mjs";
 import { n as TSS_SERVER_FUNCTION, t as createServerFn } from "./ssr.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-CYwNsh9d.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-ByW8vEHL.js
 var createServerRpc = (serverFnMeta, splitImportFn) => {
 	const url = "/_serverFn/" + serverFnMeta.id;
 	return Object.assign(splitImportFn, {
@@ -15,7 +15,7 @@ var loadFeed_createServerFn_handler = createServerRpc({
 	filename: "src/lib/pocket-live.ts"
 }, (opts) => loadFeed.__executeServer(opts));
 var loadFeed = createServerFn({ method: "GET" }).handler(loadFeed_createServerFn_handler, async () => {
-	const { feedSnapshot } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { feedSnapshot } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	return feedSnapshot();
 });
 var readClose_createServerFn_handler = createServerRpc({
@@ -28,7 +28,7 @@ var readClose = createServerFn({ method: "POST" }).validator((input) => {
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
 	return { symbol };
 }).handler(readClose_createServerFn_handler, async ({ data }) => {
-	const { feedClose } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { feedClose } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	return { close: await feedClose(data.symbol) };
 });
 var takeSignal_createServerFn_handler = createServerRpc({
@@ -45,7 +45,7 @@ var takeSignal = createServerFn({ method: "POST" }).validator((input) => {
 		expirySeconds
 	};
 }).handler(takeSignal_createServerFn_handler, async ({ data }) => {
-	const { feedSignal } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { feedSignal } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	return feedSignal(data.symbol, data.expirySeconds);
 });
 var confirmSignalEntry_createServerFn_handler = createServerRpc({
@@ -58,7 +58,7 @@ var confirmSignalEntry = createServerFn({ method: "POST" }).validator((input) =>
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
 	return { symbol };
 }).handler(confirmSignalEntry_createServerFn_handler, async ({ data }) => {
-	const { feedConfirmSignalEntry } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { feedConfirmSignalEntry } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	return feedConfirmSignalEntry(data.symbol);
 });
 var chooseSignalPair_createServerFn_handler = createServerRpc({
@@ -69,7 +69,7 @@ var chooseSignalPair_createServerFn_handler = createServerRpc({
 var chooseSignalPair = createServerFn({ method: "POST" }).validator((input) => {
 	return { excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : [] };
 }).handler(chooseSignalPair_createServerFn_handler, async ({ data }) => {
-	const { feedNextPair } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { feedNextPair } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	return feedNextPair(data.excludedSymbols);
 });
 var takeBest_createServerFn_handler = createServerRpc({
@@ -85,7 +85,7 @@ var takeBest = createServerFn({ method: "POST" }).validator((input) => {
 		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
 	};
 }).handler(takeBest_createServerFn_handler, async ({ data }) => {
-	const { feedBest } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { feedBest } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	return feedBest(data.expirySeconds, data.excludedSymbols);
 });
 //#endregion

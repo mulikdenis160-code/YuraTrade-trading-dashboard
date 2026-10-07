@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { d as isValidExpirySeconds, l as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-YYPo0RXo.mjs";
+import { d as isValidExpirySeconds, l as analysisPeriodForExpiry, t as ANALYSIS_PERIODS_SECONDS } from "./expiry-CdwuYFWS.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-CrFQ7M6l.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-BxxN_FKJ.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -2030,15 +2030,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-BS6sUUpF.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-Dfh-E2F6.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-BR8Bt-JU.mjs");
+var $$splitComponentImporter$3 = () => import("./history-HRwjRUZi.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-D9QJKSrA.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-EG71KfvL.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-CcRpGIQM.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-BisvjFTr.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-4BN1BU6l.mjs");
+var $$splitComponentImporter = () => import("./signal-CAVsGo_g.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2092,7 +2092,7 @@ var Route$1 = createFileRoute("/signal")({
 var Route = createFileRoute("/api/ticks")({ server: { handlers: { GET: async ({ request }) => {
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-DGC6LeLt.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-DXgZD7YJ.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {

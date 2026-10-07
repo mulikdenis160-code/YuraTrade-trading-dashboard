@@ -8,3 +8,9 @@ The current PRIME BOT uses the provisioned Replit Gemini AI Integrations proxy; 
 **Why:** the user said they do not have a direct Gemini key and explicitly asked to use Replit's proxy instead. A hard ADX cutoff had prevented Gemini from assessing otherwise eligible setups; the confidence score remains the model's subjective estimate, not a measured win rate.
 
 **How to apply:** use the configured proxy and do not ask the user for a personal Google API key while it remains available. Preserve independent safeguards for valid closed history (at least 15 candles), fresh quotes (at most 20 seconds old), and a separate one-minute entry-window check (at least 15 seconds remaining). Keep the feed read-only and never open trades automatically. Do not treat live OHLC/cadence checks as proof that prices match the chart.
+
+Live proxy logs showed unbounded Gemini analysis frequently taking 10–16.5 seconds. Keep proxy reasoning bounded so normal analysis remains responsive under the user's 20-second total deadline, without changing providers or weakening signal safeguards.
+
+**Why:** upstream analysis latency was close enough to the user's hard deadline to produce visible timeouts.
+
+**How to apply:** evaluate latency and signal quality together before changing the reasoning limit or model configuration.

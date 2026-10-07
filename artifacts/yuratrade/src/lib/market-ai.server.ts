@@ -11,8 +11,20 @@ export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 15;
 export const GEMINI_MAX_OUTPUT_TOKENS = 8_192;
+export const GEMINI_THINKING_BUDGET = 2_048;
 const DIRECT_AI_VISIBLE_CANDLES = 30;
 const HIGHER_TIMEFRAME_VISIBLE_CANDLES = 24;
+
+export function geminiGenerationConfig(systemInstruction: string, model: string) {
+  return {
+    systemInstruction,
+    responseMimeType: "application/json" as const,
+    maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+    ...(model === PROXY_AI_MODEL
+      ? { thinkingConfig: { thinkingBudget: GEMINI_THINKING_BUDGET } }
+      : {}),
+  };
+}
 
 export type MarketAiCandidate = {
   symbol: string;
@@ -114,6 +126,19 @@ function getGeminiClient() {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function errorStatusCode(error: unknown): number | null {
+  const status = isRecord(error)
+    ? Number(error.status ?? error.statusCode)
+    : Number.NaN;
+  return Number.isFinite(status) ? status : null;
+}
+
+export function isMarketAiTimeout(error: unknown) {
+  const status = errorStatusCode(error);
+  const name = error instanceof Error ? error.name.toLowerCase() : "";
+  return status === 408 || status === 504 || name.includes("timeout") || name.includes("abort");
 }
 
 function firstString(source: Record<string, unknown>, keys: string[]) {
@@ -266,9 +291,7 @@ export function marketAiApiErrorMessage(error: unknown) {
   ) {
     return error.message;
   }
-  const status = isRecord(error)
-    ? Number(error.status ?? error.statusCode)
-    : Number.NaN;
+  const status = errorStatusCode(error) ?? Number.NaN;
   const name = error instanceof Error ? error.name.toLowerCase() : "";
   if (status === 401 || status === 403) {
     return "Gemini отклонил подключение. Проверьте API key или настройки proxy; сигнал не выдан.";
@@ -276,7 +299,7 @@ export function marketAiApiErrorMessage(error: unknown) {
   if (status === 429) {
     return "Gemini временно ограничил запросы. Подождите немного и попробуйте ещё раз.";
   }
-  if (status === 408 || status === 504 || name.includes("timeout") || name.includes("abort")) {
+  if (isMarketAiTimeout(error)) {
     return "Анализ Gemini занял слишком много времени. Попробуйте ещё раз; сигнал не выдан.";
   }
   if (status === 400) {
@@ -318,11 +341,7 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
   return gemini.models.generateContent({
     model: model.model,
     contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    config: {
-      systemInstruction: system,
-      responseMimeType: "application/json",
-      maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-    },
+    config: geminiGenerationConfig(system, model.model),
   }).then((response) => ({
     choices: [{
       message: { content: response.text || null },
@@ -354,16 +373,22 @@ export async function requestMarketAiReviewOnce(
   let choice: ReviewChoice | undefined;
   const startedAt = performance.now();
   let timedOut = false;
+  let errorStatus: number | null = null;
+  let errorName: string | null = null;
   try {
     choice = (await withTimeout(request(baseMessages), timeoutMs)).choices[0];
   } catch (error) {
-    timedOut = error instanceof Error && error.name.toLowerCase().includes("timeout");
+    timedOut = isMarketAiTimeout(error);
+    errorStatus = errorStatusCode(error);
+    errorName = error instanceof Error ? error.name : null;
     throw new Error(marketAiApiErrorMessage(error));
   } finally {
     console.info("[signal-ai-duration]", JSON.stringify({
       durationMs: Math.round(performance.now() - startedAt),
       timeoutMs,
       timedOut,
+      errorStatus,
+      errorName,
     }));
   }
 
