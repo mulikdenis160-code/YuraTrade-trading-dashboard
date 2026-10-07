@@ -124,7 +124,7 @@ export function completeSignalBatchAttempt(
   if (
     !batch ||
     batch.id !== id ||
-    (batch.status !== "running" && batch.status !== "stopping") ||
+    (batch.status !== "running" && batch.status !== "stopping" && batch.status !== "paused") ||
     position !== batch.completed + 1
   ) {
     return batch;
@@ -136,7 +136,9 @@ export function completeSignalBatchAttempt(
       ? "stopped"
       : completed >= batch.target
         ? "completed"
-        : "running",
+        : batch.status === "paused"
+          ? "paused"
+          : "running",
     completed,
     wins: batch.wins + Number(outcome === "win"),
     losses: batch.losses + Number(outcome === "loss"),

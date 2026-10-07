@@ -5,10 +5,16 @@ import { PairMark } from "@/components/pair-mark";
 import { confirmSignalEntry, readClose, takeSignal } from "@/lib/pocket-live";
 import {
   classifySignalAttempt,
+  markSignalUnverified,
   recordSignalOutcome,
   recordSignalStarted,
+  readSignalJournal,
   signalRecordId,
 } from "@/lib/signal-journal";
+import {
+  completeSignalBatchAttempt,
+  pauseSignalBatch,
+} from "@/lib/signal-batch";
 import {
   analysisPeriodForExpiry,
   isValidExpirySeconds,
@@ -38,6 +44,8 @@ type Search = {
   aiConfidence: number | null;
   step: number;
   started: number;
+  batchRunId?: string;
+  batchPosition?: number;
 };
 
 const groups = new Set<Group>(["fx"]);
@@ -125,6 +133,14 @@ export const Route = createFileRoute("/signal")({
         : null,
       step: Math.min(MAX_OVERLAYS, Math.max(0, Number(search.step) || 0)),
       started: Number(search.started) || Date.now(),
+      ...(typeof search.batchRunId === "string" && search.batchRunId.length <= 120
+        ? { batchRunId: search.batchRunId }
+        : {}),
+      ...(Number.isInteger(Number(search.batchPosition)) &&
+      Number(search.batchPosition) >= 1 &&
+      Number(search.batchPosition) <= 20
+        ? { batchPosition: Number(search.batchPosition) }
+        : {}),
     };
   },
   component: SignalRoute,
@@ -204,6 +220,37 @@ function SignalCard({ search }: { search: Search }) {
 
   useEffect(() => {
     if (!search.symbol || !search.open) return;
+    const existing = readSignalJournal().find((entry) => entry.id === journalId);
+    if (existing) {
+      if (
+        existing.outcome === "pending" &&
+        search.batchRunId &&
+        Date.now() > existing.startedAt + existing.seconds * 1000 + 10_000
+      ) {
+        markSignalUnverified(existing.id);
+        pauseSignalBatch(search.batchRunId, "Котировку не удалось сверить в срок экспирации.");
+        setPhase("no-signal");
+        setError("Котировку не удалось сверить в срок экспирации; исход не придуман.");
+        return;
+      }
+      if (existing.outcome === "overlay") {
+        setClose(existing.closePrice ?? null);
+        setPhase("preparing-recovery");
+      } else if (existing.outcome === "unverified") {
+        setPhase("no-signal");
+        setError("Исход не удалось подтвердить по котировкам; результат не придуман.");
+        if (search.batchRunId) {
+          pauseSignalBatch(search.batchRunId, "Исход не удалось подтвердить котировкой.");
+        }
+      } else if (existing.outcome === "win" || existing.outcome === "draw" || existing.outcome === "loss") {
+        setClose(existing.closePrice ?? null);
+        setPhase(existing.outcome === "win" ? "win" : existing.outcome === "draw" ? "draw" : "stop");
+        if (search.batchRunId && search.batchPosition) {
+          completeSignalBatchAttempt(search.batchRunId, search.batchPosition, existing.outcome);
+        }
+      }
+      return;
+    }
     const saved = recordSignalStarted({
       id: journalId,
       symbol: search.symbol,
@@ -216,13 +263,19 @@ function SignalCard({ search }: { search: Search }) {
       analysisSeconds: search.analysisSeconds,
       step: search.step,
       startedAt: search.started,
+      ...(search.batchRunId && search.batchPosition
+        ? { batchRunId: search.batchRunId, batchPosition: search.batchPosition }
+        : {}),
       aiConfidence: search.aiConfidence ?? undefined,
       strategyVersion: "direct-ai-v3-adaptive-timeframe",
       note: search.note,
       bars: search.bars,
     });
     setJournalWarning(saved ? "" : "Не удалось сохранить сигнал в локальный журнал браузера.");
-  }, [journalId, search.aiConfidence, search.analysisSeconds, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.seconds, search.started, search.step, search.symbol]);
+    if (!saved && search.batchRunId) {
+      pauseSignalBatch(search.batchRunId, "Не удалось сохранить сигнал в локальной истории.");
+    }
+  }, [journalId, search.aiConfidence, search.analysisSeconds, search.batchPosition, search.batchRunId, search.bars, search.direction, search.group, search.name, search.note, search.open, search.payout, search.seconds, search.started, search.step, search.symbol]);
 
   useEffect(() => {
     if (phase !== "run") return;
@@ -290,6 +343,18 @@ function SignalCard({ search }: { search: Search }) {
         const outcome = classifySignalAttempt(search.direction, move, search.step);
         const saved = recordSignalOutcome(journalId, quote.close, outcome);
         if (!saved) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
+        if (search.batchRunId && search.batchPosition) {
+          if (outcome === "overlay") {
+            if (!saved) pauseSignalBatch(search.batchRunId, "Не удалось сохранить исход серии в истории.");
+          } else if (saved) {
+            const completed = completeSignalBatchAttempt(search.batchRunId, search.batchPosition, outcome);
+            if (!completed || completed.completed < search.batchPosition) {
+              pauseSignalBatch(search.batchRunId, "Не удалось сохранить завершение серии.");
+            }
+          } else {
+            pauseSignalBatch(search.batchRunId, "Не удалось сохранить исход серии в истории.");
+          }
+        }
         if (outcome === "draw") {
           setPhase("draw");
           return;
@@ -307,11 +372,22 @@ function SignalCard({ search }: { search: Search }) {
         }
       })
       .catch((cause: unknown) => {
-        setPhase("run");
-        settled.current = false;
+        if (search.batchRunId) {
+          pauseSignalBatch(search.batchRunId, "Не удалось сверить котировку; результат не придуман.");
+        }
         setError(cause instanceof Error ? cause.message : "Не удалось сверить цену.");
+        if (search.batchRunId && Date.now() > until + 10_000) {
+          markSignalUnverified(journalId);
+          setPhase("no-signal");
+          setError("Котировку не удалось сверить в срок экспирации; исход не придуман.");
+          return;
+        }
+        window.setTimeout(() => {
+          settled.current = false;
+          setPhase("run");
+        }, 8000);
       });
-  }, [left, phase, search.open, search.step, search.symbol, up]);
+  }, [journalId, left, phase, search.batchPosition, search.batchRunId, search.open, search.step, search.symbol, until, up]);
 
   useEffect(() => {
     if (phase !== "preparing-recovery") return;
@@ -328,6 +404,9 @@ function SignalCard({ search }: { search: Search }) {
           if (stop) return;
           setPhase("no-signal");
           setError(result.reason);
+          if (search.batchRunId) {
+            pauseSignalBatch(search.batchRunId, "Не удалось подтвердить сигнал для следующей попытки.");
+          }
           return;
         }
         if (stop) return;
@@ -340,6 +419,9 @@ function SignalCard({ search }: { search: Search }) {
         if (stop) return;
         setPhase("no-signal");
         setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
+        if (search.batchRunId) {
+          pauseSignalBatch(search.batchRunId, "Не удалось подготовить подтверждённое перекрытие.");
+        }
       });
     return () => {
       stop = true;
@@ -369,6 +451,9 @@ function SignalCard({ search }: { search: Search }) {
             aiConfidence: preparedRecovery.aiConfidence,
             step: search.step + 1,
             started: Date.now(),
+            ...(search.batchRunId && search.batchPosition
+              ? { batchRunId: search.batchRunId, batchPosition: search.batchPosition }
+              : {}),
           },
         });
       })
@@ -376,11 +461,22 @@ function SignalCard({ search }: { search: Search }) {
         if (stop) return;
         setPhase("no-signal");
         setError(cause instanceof Error ? cause.message : "Не удалось подтвердить вход перекрытия.");
+        if (search.batchRunId) {
+          pauseSignalBatch(search.batchRunId, "Не удалось подтвердить цену входа для перекрытия.");
+        }
       });
     return () => {
       stop = true;
     };
   }, [navigate, phase, preparedRecovery, search.group, search.seconds, search.step, search.symbol]);
+
+  useEffect(() => {
+    if (!search.batchRunId || (phase !== "win" && phase !== "draw" && phase !== "stop")) return;
+    const timer = window.setTimeout(() => {
+      void navigate({ to: "/" });
+    }, 2200);
+    return () => window.clearTimeout(timer);
+  }, [navigate, phase, search.batchRunId]);
 
   if (!search.symbol || !search.open) {
     return (

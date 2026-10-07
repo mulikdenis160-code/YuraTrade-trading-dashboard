@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifySignalAttempt,
+  markSignalUnverified,
   readSignalJournal,
   markExpiredPendingSignals,
   recordSignalOutcome,
@@ -245,6 +246,39 @@ test("expired pending signals become unverified and stay out of hit-rate totals"
   assert.equal(summary.unverified, 1);
   assert.equal(summary.settled, 0);
   assert.equal(summary.hitRate, null);
+});
+
+test("batch tags persist and an unverifiable batch result is never given a made-up close price", () => {
+  values.clear();
+  const signal: StartedSignal = {
+    id: "",
+    symbol: "EURUSD_otc",
+    name: "EUR/USD OTC",
+    group: "fx",
+    direction: "call",
+    openPrice: 1.08,
+    payout: 92,
+    seconds: 120,
+    analysisSeconds: 120,
+    step: 0,
+    startedAt: 1_760_000_000_000,
+    batchRunId: "signal-test-local",
+    batchPosition: 7,
+    strategyVersion: "batch-test",
+    note: "",
+    bars: [],
+  };
+  signal.id = signalRecordId(signal);
+  assert.equal(recordSignalStarted(signal), true);
+  assert.equal(readSignalJournal()[0].batchRunId, "signal-test-local");
+  assert.equal(readSignalJournal()[0].batchPosition, 7);
+
+  assert.equal(markSignalUnverified(signal.id, signal.startedAt + 130_000), true);
+  const saved = readSignalJournal()[0];
+  assert.equal(saved.outcome, "unverified");
+  assert.equal(saved.closePrice, undefined);
+  assert.equal(saved.settledAt, signal.startedAt + 130_000);
+  assert.match(signalJournalCsv([saved]), /"batchPosition"/);
 });
 
 test.after(() => {

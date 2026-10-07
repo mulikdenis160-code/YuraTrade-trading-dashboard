@@ -81,6 +81,19 @@ test("stop requests finish the active signal series before stopping", () => {
   assert.equal(requestSignalBatchStop(false, 51_000)?.status, "stopped");
 });
 
+test("pausing during a live series records its real outcome but does not start the next one", () => {
+  values.clear();
+  const started = startSignalBatch(120, 60_000)!;
+  assert.equal(pauseSignalBatch(started.id, "Paused by user")?.status, "paused");
+
+  const paused = completeSignalBatchAttempt(started.id, 1, "draw", 70_000);
+  assert.equal(paused?.status, "paused");
+  assert.equal(paused?.completed, 1);
+  assert.equal(paused?.draws, 1);
+  assert.equal(resumeSignalBatch(started.id, 80_000)?.status, "running");
+  assert.equal(readSignalBatch()?.completed, 1);
+});
+
 test("invalid expiry values cannot start a batch", () => {
   values.clear();
   assert.equal(startSignalBatch(61), null);

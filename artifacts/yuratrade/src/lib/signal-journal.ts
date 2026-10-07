@@ -232,6 +232,16 @@ export function markExpiredPendingSignals(now = Date.now(), graceMs = 120_000) {
   return changed ? next : entries;
 }
 
+export function markSignalUnverified(id: string, settledAt = Date.now()) {
+  const entries = readSignalJournal();
+  const index = entries.findIndex((entry) => entry.id === id);
+  if (index < 0) return false;
+  if (entries[index].outcome !== "pending") return entries[index].outcome === "unverified";
+  const next = [...entries];
+  next[index] = { ...next[index], outcome: "unverified", settledAt };
+  return writeSignalJournal(next);
+}
+
 export function summarizeSignals(entries: SignalJournalEntry[]): SignalSummary {
   let wins = 0;
   let losses = 0;

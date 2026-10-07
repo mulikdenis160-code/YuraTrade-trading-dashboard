@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download, History } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StatRow } from "@/components/stats";
+import { readSignalBatch, subscribeToSignalBatch, type SignalBatchRun } from "@/lib/signal-batch";
 import { MAX_SIGNAL_ATTEMPTS } from "@/lib/signal-config";
 import {
   markExpiredPendingSignals,
@@ -61,16 +62,24 @@ function exportCsv(entries: SignalJournalEntry[]) {
 function HistoryPage() {
   const { language, t } = useLanguage();
   const [entries, setEntries] = useState<SignalJournalEntry[]>([]);
+  const [batch, setBatch] = useState<SignalBatchRun | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const update = () => {
+    const updateEntries = () => {
       markExpiredPendingSignals();
       setEntries(readSignalJournal().filter((entry) => entry.group === "fx"));
       setLoaded(true);
     };
-    update();
-    return subscribeToSignalJournal(update);
+    const updateBatch = () => setBatch(readSignalBatch());
+    updateEntries();
+    updateBatch();
+    const unsubscribeJournal = subscribeToSignalJournal(updateEntries);
+    const unsubscribeBatch = subscribeToSignalBatch(updateBatch);
+    return () => {
+      unsubscribeJournal();
+      unsubscribeBatch();
+    };
   }, []);
 
   const summary = summarizeSignals(entries);
@@ -85,6 +94,17 @@ function HistoryPage() {
     loss: t("outcome.loss"),
     draw: t("outcome.draw"),
   };
+  const batchStatusLabel = batch
+    ? batch.status === "running"
+      ? t("batch.running")
+      : batch.status === "paused"
+        ? t("batch.paused")
+        : batch.status === "stopping"
+          ? t("batch.stopping")
+          : batch.status === "completed"
+            ? t("batch.completed")
+            : t("batch.stopped")
+    : "";
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -110,6 +130,31 @@ function HistoryPage() {
       <div className="rise rise-2">
         <StatRow />
       </div>
+
+      {batch ? (
+        <section className="panel rise rise-2 p-4 sm:p-5" aria-label={t("batch.title")}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-blue-soft uppercase">{t("batch.title")}</p>
+              <p className="mt-1 text-sm text-fg">{batchStatusLabel} · {expiryLabel(batch.expirySeconds)}</p>
+            </div>
+            <p className="shrink-0 font-mono text-sm font-bold text-fg">{batch.completed}/{batch.target}</p>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            {[
+              [t("batch.wins"), batch.wins, "text-win"],
+              [t("batch.losses"), batch.losses, "text-loss"],
+              [t("batch.draws"), batch.draws, "text-blue-soft"],
+            ].map(([label, value, color]) => (
+              <div key={label} className="rounded-xl bg-white/4 px-2 py-2">
+                <p className={`font-mono text-lg font-bold ${color}`}>{value}</p>
+                <p className="text-[10px] text-dim">{label}</p>
+              </div>
+            ))}
+          </div>
+          {batch.lastError ? <p className="mt-3 text-xs leading-relaxed text-muted">{batch.lastError}</p> : null}
+        </section>
+      ) : null}
 
       <section className="panel rise rise-3 p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-4">
@@ -199,6 +244,7 @@ function HistoryPage() {
                   <h3 className="truncate font-semibold text-fg">{entry.name}</h3>
                   <p className="mt-1 text-xs text-dim">
                     {formatDate(entry.startedAt, language)} · {t("history.expiry")} {expiryLabel(entry.seconds)} · {t("history.candles")} {expiryLabel(entry.analysisSeconds)}
+                    {entry.batchPosition ? ` · ${t("history.batchSeries", { current: entry.batchPosition })}` : ""}
                   </p>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${outcomeStyles[entry.outcome]}`}>

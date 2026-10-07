@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { GraduationCap, History, LayoutDashboard, UserRound } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandName } from "@/components/brand";
@@ -8,10 +8,16 @@ import { isAdminId, usePocket } from "@/lib/pocket";
 import { useLanguage } from "@/lib/language";
 import {
   classifySignalAttempt,
+  markSignalUnverified,
   recordSignalOutcome,
   markExpiredPendingSignals,
   readSignalJournal,
 } from "@/lib/signal-journal";
+import {
+  completeSignalBatchAttempt,
+  pauseSignalBatch,
+  readSignalBatch,
+} from "@/lib/signal-batch";
 
 const links = [
   { to: "/", label: "nav.signals", icon: LayoutDashboard },
@@ -22,6 +28,7 @@ const links = [
 
 export function Shell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (state) => state.location.pathname });
+  const navigate = useNavigate();
   const { id } = usePocket();
   const { language, setLanguage, t } = useLanguage();
   const admin = isAdminId(id);
@@ -31,6 +38,18 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     pathRef.current = path;
   }, [path]);
+
+  useEffect(() => {
+    const batch = readSignalBatch();
+    if (
+      batch?.status === "running" &&
+      batch.completed < batch.target &&
+      path !== "/" &&
+      path !== "/signal"
+    ) {
+      void navigate({ to: "/" });
+    }
+  }, [navigate, path]);
 
   useEffect(() => {
     let stop = false;
@@ -61,7 +80,26 @@ export function Shell({ children }: { children: ReactNode }) {
       busy = true;
       const now = Date.now();
       try {
+        const previouslyPending = readSignalJournal().filter((entry) => entry.outcome === "pending");
+        for (const entry of previouslyPending) {
+          if (
+            entry.batchRunId &&
+            now > entry.startedAt + entry.seconds * 1000 + 10_000
+          ) {
+            markSignalUnverified(entry.id, now);
+            pauseSignalBatch(entry.batchRunId, "Котировку не удалось сверить в срок экспирации.");
+          }
+        }
         markExpiredPendingSignals(now, 120_000);
+        const afterExpiry = new Map(readSignalJournal().map((entry) => [entry.id, entry]));
+        for (const entry of previouslyPending) {
+          if (
+            entry.batchRunId &&
+            afterExpiry.get(entry.id)?.outcome === "unverified"
+          ) {
+            pauseSignalBatch(entry.batchRunId, "Исход сигнала не удалось подтвердить котировкой.");
+          }
+        }
         const due = readSignalJournal().filter(
           (entry) =>
             entry.outcome === "pending" &&
@@ -81,7 +119,20 @@ export function Shell({ children }: { children: ReactNode }) {
             const start = Number(entry.openPrice.toFixed(digits));
             const finish = Number(quote.close.toFixed(digits));
             const move = finish === start ? 0 : finish > start ? 1 : -1;
-            recordSignalOutcome(entry.id, quote.close, classifySignalAttempt(entry.direction, move, entry.step));
+            const outcome = classifySignalAttempt(entry.direction, move, entry.step);
+            const saved = recordSignalOutcome(entry.id, quote.close, outcome);
+            if (entry.batchRunId && entry.batchPosition) {
+              if (outcome === "overlay") {
+                if (!saved) pauseSignalBatch(entry.batchRunId, "Не удалось сохранить исход сигнала в истории.");
+              } else if (saved) {
+                const completed = completeSignalBatchAttempt(entry.batchRunId, entry.batchPosition, outcome);
+                if (!completed || completed.completed < entry.batchPosition) {
+                  pauseSignalBatch(entry.batchRunId, "Не удалось сохранить завершение серии.");
+                }
+              } else {
+                pauseSignalBatch(entry.batchRunId, "Не удалось сохранить исход сигнала в истории.");
+              }
+            }
           } catch {
             // The entry stays pending briefly, then is marked unverified rather than guessed.
           }
