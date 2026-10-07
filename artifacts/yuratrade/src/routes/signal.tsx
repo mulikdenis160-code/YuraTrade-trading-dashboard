@@ -14,6 +14,11 @@ import {
 import {
   completeSignalBatchAttempt,
   pauseSignalBatch,
+  readSignalBatch,
+  requestSignalBatchStop,
+  resumeSignalBatch,
+  subscribeToSignalBatch,
+  type SignalBatchRun,
 } from "@/lib/signal-batch";
 import {
   analysisPeriodForExpiry,
@@ -175,6 +180,68 @@ function BackLink() {
       </svg>
       {t("common.back")}
     </Link>
+  );
+}
+
+function SignalBatchControls({ runId, position }: { runId?: string; position?: number }) {
+  const { t } = useLanguage();
+  const [batch, setBatch] = useState<SignalBatchRun | null>(null);
+
+  useEffect(() => {
+    const update = () => setBatch(readSignalBatch());
+    update();
+    return subscribeToSignalBatch(update);
+  }, []);
+
+  if (!runId || !position || !batch || batch.id !== runId || batch.completed >= position) {
+    return null;
+  }
+
+  return (
+    <section className="panel mt-3 flex items-center justify-between gap-3 p-3" aria-label={t("batch.title")}>
+      <p className="text-xs font-semibold text-muted">
+        {t("batch.series", { current: position, total: batch.target })}
+      </p>
+      <div className="flex shrink-0 gap-2">
+        {batch.status === "running" ? (
+          <>
+            <button
+              type="button"
+              className="btn-ghost min-h-9 justify-center px-3 text-xs"
+              onClick={() => pauseSignalBatch(runId, "Пауза по запросу пользователя.")}
+            >
+              {t("batch.pause")}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost min-h-9 justify-center px-3 text-xs"
+              onClick={() => requestSignalBatchStop(true)}
+            >
+              {t("batch.stop")}
+            </button>
+          </>
+        ) : batch.status === "paused" ? (
+          <>
+            <button
+              type="button"
+              className="btn-prime min-h-9 justify-center px-3 text-xs"
+              onClick={() => resumeSignalBatch(runId)}
+            >
+              {t("batch.resume")}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost min-h-9 justify-center px-3 text-xs"
+              onClick={() => requestSignalBatchStop(true)}
+            >
+              {t("batch.stop")}
+            </button>
+          </>
+        ) : batch.status === "stopping" ? (
+          <p className="text-xs text-dim">{t("batch.stopping")}</p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -519,6 +586,7 @@ function SignalCard({ search }: { search: Search }) {
   return (
     <div className="mx-auto w-full max-w-md">
       <BackLink />
+      <SignalBatchControls runId={search.batchRunId} position={search.batchPosition} />
       <article className="panel arrive mt-3 p-3 sm:p-5">
         <div className="flex items-center gap-3">
           <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-[#10151f]">
