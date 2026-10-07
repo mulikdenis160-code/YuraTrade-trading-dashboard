@@ -1,4 +1,5 @@
 import { analysisPeriodForExpiry, ANALYSIS_PERIODS_SECONDS } from "./expiry.ts";
+import { SIGNAL_BATCH_TARGET } from "./signal-batch.ts";
 import { MAX_OVERLAYS } from "./signal-config.ts";
 
 export type JournalGroup = "fx" | "crypto" | "stock" | "commodity";
@@ -18,6 +19,8 @@ export type SignalJournalEntry = {
   step: number;
   startedAt: number;
   settledAt?: number;
+  batchRunId?: string;
+  batchPosition?: number;
   outcome: JournalOutcome;
   ruleScore?: number;
   aiConfidence?: number;
@@ -129,6 +132,17 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
     step: Math.max(0, Math.min(3, Number(entry.step))),
     startedAt: Number(entry.startedAt),
     ...(Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {}),
+    ...(typeof entry.batchRunId === "string" && entry.batchRunId.length <= 120
+      ? { batchRunId: entry.batchRunId }
+      : {}),
+    ...(Number.isFinite(entry.batchPosition)
+      ? {
+          batchPosition: Math.max(
+            1,
+            Math.min(SIGNAL_BATCH_TARGET, Math.floor(Number(entry.batchPosition))),
+          ),
+        }
+      : {}),
     outcome: entry.outcome as JournalOutcome,
     ...(Number.isFinite(entry.ruleScore) ? { ruleScore: Number(entry.ruleScore) } : {}),
     ...(Number.isFinite(entry.aiConfidence)
@@ -329,6 +343,8 @@ export function subscribeToSignalJournal(listener: () => void) {
 export function signalJournalCsv(entries: SignalJournalEntry[]) {
   const columns: Array<[string, (entry: SignalJournalEntry) => string | number]> = [
     ["startedAt", (entry) => new Date(entry.startedAt).toISOString()],
+    ["batchRunId", (entry) => entry.batchRunId ?? ""],
+    ["batchPosition", (entry) => entry.batchPosition ?? ""],
     ["symbol", (entry) => entry.symbol],
     ["name", (entry) => entry.name],
     ["direction", (entry) => entry.direction],
