@@ -4,7 +4,7 @@ import { _ as require_react, a as HeadContent, c as createRouter, d as createFil
 import { n as TSS_SERVER_FUNCTION, r as getServerFnById, t as createServerFn } from "./ssr.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, r as ShieldCheck, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-BxxN_FKJ.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-Crm-X8Bz.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -788,6 +788,11 @@ var copy = {
 		"Не проверен",
 		"Не перевірено",
 		"Unverified"
+	],
+	"outcome.overlay": [
+		"Перекрытие",
+		"Перекриття",
+		"Recovery"
 	],
 	"outcome.win": [
 		"Победа",
@@ -1582,8 +1587,14 @@ var outcomes = /* @__PURE__ */ new Set([
 	"unverified",
 	"win",
 	"loss",
-	"draw"
+	"draw",
+	"overlay"
 ]);
+function classifySignalAttempt(direction, move, step) {
+	if (move === 0) return "draw";
+	if (direction === "call" ? move > 0 : move < 0) return "win";
+	return step < 3 ? "overlay" : "loss";
+}
 function signalRecordId(signal) {
 	return `${signal.startedAt}:${signal.step}:${signal.symbol}`;
 }
@@ -1677,7 +1688,8 @@ function recordSignalOutcome(id, closePrice, outcome) {
 	if (!Number.isFinite(closePrice)) return false;
 	const entries = readSignalJournal();
 	const index = entries.findIndex((entry) => entry.id === id);
-	if (index < 0 || entries[index].outcome !== "pending") return false;
+	if (index < 0) return false;
+	if (entries[index].outcome !== "pending") return entries[index].outcome === outcome;
 	const next = [...entries];
 	next[index] = {
 		...next[index],
@@ -1715,6 +1727,7 @@ function summarizeSignals(entries) {
 			pending += 1;
 			continue;
 		}
+		if (entry.outcome === "overlay") continue;
 		if (entry.outcome === "unverified") {
 			unverified += 1;
 			continue;
@@ -1880,8 +1893,7 @@ function Shell({ children }) {
 						const start = Number(entry.openPrice.toFixed(digits));
 						const finish = Number(quote.close.toFixed(digits));
 						const move = finish === start ? 0 : finish > start ? 1 : -1;
-						const won = entry.direction === "call" ? move > 0 : move < 0;
-						recordSignalOutcome(entry.id, quote.close, move === 0 ? "draw" : won ? "win" : "loss");
+						recordSignalOutcome(entry.id, quote.close, classifySignalAttempt(entry.direction, move, entry.step));
 					} catch {}
 				}
 			} finally {
@@ -2030,15 +2042,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-Dfh-E2F6.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-D2FP4tlr.mjs");
 var Route$5 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-HRwjRUZi.mjs");
+var $$splitComponentImporter$3 = () => import("./history-Cayf0jL8.mjs");
 var Route$4 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-EG71KfvL.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-C5kn9UBG.mjs");
 var Route$3 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-BisvjFTr.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-CfZhMkKE.mjs");
 var Route$2 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-CAVsGo_g.mjs");
+var $$splitComponentImporter = () => import("./signal-DRoM-pEX.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2174,4 +2186,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { usePocket as C, isAdminId as S, useLanguage as T, takeSignal as _, recentlyUsedSignalSymbols as a, markSignalUsed as b, signalJournalCsv as c, summarizeByMarket as d, summarizeSignals as f, readClose as g, loadFeed as h, readSignalJournal as i, signalRecordId as l, confirmSignalEntry as m, Route$1 as n, recordSignalOutcome as o, chooseSignalPair as p, markExpiredPendingSignals as r, recordSignalStarted as s, router_exports as t, subscribeToSignalJournal as u, levelForBalance as v, formatExpiryForLanguage as w, signalsUsedToday as x, levels as y };
+export { isAdminId as C, useLanguage as E, signalsUsedToday as S, formatExpiryForLanguage as T, readClose as _, readSignalJournal as a, levels as b, recordSignalStarted as c, subscribeToSignalJournal as d, summarizeByMarket as f, loadFeed as g, confirmSignalEntry as h, markExpiredPendingSignals as i, signalJournalCsv as l, chooseSignalPair as m, Route$1 as n, recentlyUsedSignalSymbols as o, summarizeSignals as p, classifySignalAttempt as r, recordSignalOutcome as s, router_exports as t, signalRecordId as u, takeSignal as v, usePocket as w, markSignalUsed as x, levelForBalance as y };

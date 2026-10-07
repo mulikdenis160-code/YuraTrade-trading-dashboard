@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./expiry-CdwuYFWS.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { T as useLanguage, _ as takeSignal, g as readClose, l as signalRecordId, m as confirmSignalEntry, n as Route$1, o as recordSignalOutcome, s as recordSignalStarted, w as formatExpiryForLanguage } from "./router-BxxN_FKJ.mjs";
+import { E as useLanguage, T as formatExpiryForLanguage, _ as readClose, c as recordSignalStarted, h as confirmSignalEntry, n as Route$1, r as classifySignalAttempt, s as recordSignalOutcome, u as signalRecordId, v as takeSignal } from "./router-Crm-X8Bz.mjs";
 import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-Dw1MpQgV.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-CAVsGo_g.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-Dl7LWgWw.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-DRoM-pEX.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -436,14 +436,14 @@ function SignalCard({ search }) {
 			const entry = Number(search.open.toFixed(digits));
 			const finish = Number(quote.close.toFixed(digits));
 			const move = finish === entry ? 0 : finish > entry ? 1 : -1;
-			const won = up ? move > 0 : move < 0;
-			if (!recordSignalOutcome(journalId, quote.close, move === 0 ? "draw" : won ? "win" : "loss")) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
-			if (move === 0) {
+			const outcome = classifySignalAttempt(search.direction, move, search.step);
+			if (!recordSignalOutcome(journalId, quote.close, outcome)) setJournalWarning("Результат не удалось сохранить в локальный журнал.");
+			if (outcome === "draw") {
 				setPhase("draw");
 				return;
 			}
-			if (won) setPhase("win");
-			else if (search.step >= 3) setPhase("stop");
+			if (outcome === "win") setPhase("win");
+			else if (outcome === "loss") setPhase("stop");
 			else {
 				setCopied(false);
 				setCopyRemaining(10);

@@ -1,14 +1,15 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { c as Download, o as History } from "../_libs/lucide-react.mjs";
-import { T as useLanguage, c as signalJournalCsv, d as summarizeByMarket, f as summarizeSignals, i as readSignalJournal, r as markExpiredPendingSignals, u as subscribeToSignalJournal, w as formatExpiryForLanguage } from "./router-BxxN_FKJ.mjs";
-import { t as StatRow } from "./stats-BiTbfA6W.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/history-HRwjRUZi.js
+import { E as useLanguage, T as formatExpiryForLanguage, a as readSignalJournal, d as subscribeToSignalJournal, f as summarizeByMarket, i as markExpiredPendingSignals, l as signalJournalCsv, p as summarizeSignals } from "./router-Crm-X8Bz.mjs";
+import { t as StatRow } from "./stats-BHTscD1v.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/history-Cayf0jL8.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var outcomeStyles = {
 	pending: "border-white/10 bg-white/5 text-dim",
 	unverified: "border-white/10 bg-white/5 text-muted",
+	overlay: "border-blue/20 bg-blue/5 text-blue-soft",
 	win: "border-win/20 bg-win/10 text-win",
 	loss: "border-loss/20 bg-loss/10 text-loss",
 	draw: "border-blue/20 bg-blue/10 text-blue-soft"
@@ -59,6 +60,7 @@ function HistoryPage() {
 	const outcomeLabels = {
 		pending: t("outcome.pending"),
 		unverified: t("outcome.unverified"),
+		overlay: t("outcome.overlay"),
 		win: t("outcome.win"),
 		loss: t("outcome.loss"),
 		draw: t("outcome.draw")
