@@ -415,6 +415,9 @@ importers:
       '@google/genai':
         specifier: ^2.27.0
         version: 2.27.0
+      '@replit/connectors-sdk':
+        specifier: ^0.4.3
+        version: 0.4.3
     devDependencies:
       '@electric-sql/pglite':
         specifier: ^0.5.4

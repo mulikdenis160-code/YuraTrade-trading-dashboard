@@ -15,6 +15,7 @@ import { Route as LearnRouteImport } from './routes/learn'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as SignalRouteImport } from './routes/signal'
 import { Route as ApiTicksRouteImport } from './routes/api.ticks'
+import { Route as TelegramWebhookRouteImport } from './routes/telegram.webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const ApiTicksRoute = ApiTicksRouteImport.update({
   path: '/api/ticks',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TelegramWebhookRoute = TelegramWebhookRouteImport.update({
+  id: '/telegram/webhook',
+  path: '/telegram/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/signal': typeof SignalRoute
   '/api/ticks': typeof ApiTicksRoute
+  '/telegram/webhook': typeof TelegramWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/signal': typeof SignalRoute
   '/api/ticks': typeof ApiTicksRoute
+  '/telegram/webhook': typeof TelegramWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,12 +79,27 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/signal': typeof SignalRoute
   '/api/ticks': typeof ApiTicksRoute
+  '/telegram/webhook': typeof TelegramWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/learn' | '/profile' | '/signal' | '/api/ticks'
+  fullPaths:
+    | '/'
+    | '/history'
+    | '/learn'
+    | '/profile'
+    | '/signal'
+    | '/api/ticks'
+    | '/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/learn' | '/profile' | '/signal' | '/api/ticks'
+  to:
+    | '/'
+    | '/history'
+    | '/learn'
+    | '/profile'
+    | '/signal'
+    | '/api/ticks'
+    | '/telegram/webhook'
   id:
     | '__root__'
     | '/'
@@ -85,6 +108,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signal'
     | '/api/ticks'
+    | '/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,6 +118,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   SignalRoute: typeof SignalRoute
   ApiTicksRoute: typeof ApiTicksRoute
+  TelegramWebhookRoute: typeof TelegramWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -140,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTicksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/telegram/webhook': {
+      id: '/telegram/webhook'
+      path: '/telegram/webhook'
+      fullPath: '/telegram/webhook'
+      preLoaderRoute: typeof TelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -150,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   SignalRoute: SignalRoute,
   ApiTicksRoute: ApiTicksRoute,
+  TelegramWebhookRoute: TelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -6,15 +6,11 @@ import {
 } from "./pocket-gate";
 import { getTelegramInitData, initializeTelegramWebApp } from "./telegram-webapp";
 
-export const ADMIN_IDS = ["113510708", "92535291"] as const;
+export { ADMIN_IDS, isAdminId } from "./pocket-admin";
 const GATE_REQUEST_TIMEOUT_MS = 12_000;
 
 export function isPocketId(value: string) {
   return /^\d{9}$/.test(value);
-}
-
-export function isAdminId(value: string | null) {
-  return value !== null && (ADMIN_IDS as readonly string[]).includes(value);
 }
 
 function settleWithin<T>(promise: Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
@@ -35,7 +31,6 @@ type PocketState = {
   ready: boolean;
   id: string | null;
   depositAmount: number | null;
-  telegramAvailable: boolean;
   accept: (id: string, depositAmount: number) => void;
   verifyAccount: (id: string) => Promise<PocketGateVerification>;
 };
@@ -46,7 +41,6 @@ export function PocketProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [id, setId] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState<number | null>(null);
-  const [telegramAvailable, setTelegramAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +51,6 @@ export function PocketProvider({ children }: { children: ReactNode }) {
     }
     const inTelegram = initializeTelegramWebApp();
     const initData = getTelegramInitData();
-    setTelegramAvailable(inTelegram);
 
     if (!inTelegram || !initData) {
       setReady(true);
@@ -107,7 +100,6 @@ export function PocketProvider({ children }: { children: ReactNode }) {
     if (!isPocketId(trimmed)) return { status: "invalid_id" };
     const initData = getTelegramInitData();
     if (!initData) {
-      setTelegramAvailable(false);
       return { status: "telegram_required" };
     }
     try {
@@ -127,7 +119,7 @@ export function PocketProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <PocketContext.Provider value={{ ready, id, depositAmount, telegramAvailable, accept, verifyAccount }}>
+    <PocketContext.Provider value={{ ready, id, depositAmount, accept, verifyAccount }}>
       {children}
     </PocketContext.Provider>
   );

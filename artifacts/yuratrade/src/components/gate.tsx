@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useLanguage } from "@/lib/language";
-import { ArrowRight, ExternalLink, KeyRound, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound } from "lucide-react";
 import { BrandName } from "@/components/brand";
 import { isPocketId, usePocket } from "@/lib/pocket";
-import { POCKET_OPTION_REFERRAL_URL } from "@/lib/pocket-gate-config";
 
-const noteKeys = ["gate.note1", "gate.note2", "gate.note3"] as const;
 const resultKeys = {
   invalid_id: "gate.result.invalidId",
   not_registered: "gate.result.notRegistered",
@@ -19,7 +17,7 @@ type ResultKey = (typeof resultKeys)[keyof typeof resultKeys] | "gate.error" | "
 
 export function Gate() {
   const { language, setLanguage, t } = useLanguage();
-  const { accept, verifyAccount, telegramAvailable } = usePocket();
+  const { accept, verifyAccount } = usePocket();
   const [value, setValue] = useState("");
   const [result, setResult] = useState<ResultKey>("");
   const [checking, setChecking] = useState(false);
@@ -73,44 +71,8 @@ export function Gate() {
           </p>
         </div>
 
-        {!telegramAvailable ? (
-          <a
-            href="https://t.me/Signalradikai_bot"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="link-gate-open-telegram"
-            className="btn-ghost mt-5 flex w-full items-center justify-center gap-2"
-          >
-            {t("gate.openTelegram")}
-            <ExternalLink className="size-4" />
-          </a>
-        ) : null}
-
-        <ol className="panel rise rise-1 mt-6 space-y-3 p-4">
-          {noteKeys.map((note, index) => (
-            <li key={note} className="flex items-start gap-3 text-sm leading-relaxed text-muted">
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue/15 font-mono text-xs font-bold text-blue-soft">
-                {index + 1}
-              </span>
-              <span data-testid={`text-gate-step-${index + 1}`}>{t(note)}</span>
-            </li>
-          ))}
-          <li className="pt-1">
-            <a
-              href={POCKET_OPTION_REFERRAL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="link-gate-affiliate-registration"
-              className="btn-prime flex w-full items-center justify-center gap-2"
-            >
-              {t("gate.register")}
-              <ExternalLink className="size-4" />
-            </a>
-          </li>
-        </ol>
-
         <form
-          className="panel rise rise-2 mt-4 space-y-4 p-5"
+          className="panel rise rise-1 mt-6 space-y-4 p-5"
           onSubmit={(event) => {
             event.preventDefault();
             submit();
@@ -167,13 +129,6 @@ export function Gate() {
             {checking ? t("gate.checking") : ready ? t("gate.check") : t("gate.enterDigits")}
             <ArrowRight className="size-4" />
           </button>
-          <div
-            className="flex items-start gap-2 rounded-xl bg-blue/10 px-3 py-3 text-sm leading-relaxed text-muted"
-            data-testid="notice-gate-verification-limit"
-          >
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-blue-soft" />
-            {t("gate.limitation")}
-          </div>
         </form>
 
       </div>

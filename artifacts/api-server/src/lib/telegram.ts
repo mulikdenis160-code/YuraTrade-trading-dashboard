@@ -1,11 +1,10 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
-import {
-  buildTelegramStartReply,
-  TELEGRAM_WEBHOOK_URL,
-  type TelegramStartReply,
-} from "./telegram-start";
+
+const APP_ORIGIN = "https://vlados-trade-trading-dashboard.replit.app";
+const TELEGRAM_WEBHOOK_URL = `${APP_ORIGIN}/telegram/webhook`;
+const PREVIOUS_TELEGRAM_WEBHOOK_URL = `${APP_ORIGIN}/api/telegram/webhook`;
 
 type TelegramApiEnvelope<T> = {
   ok: boolean;
@@ -24,15 +23,6 @@ function webhookSecret(): string | null {
     .update("prime-bot:telegram-webhook:v1:")
     .update(sessionSecret)
     .digest("hex");
-}
-
-export function isValidTelegramWebhookSecret(received: string | undefined): boolean {
-  const expected = webhookSecret();
-  if (!expected || !received) return false;
-  const receivedBytes = Buffer.from(received, "utf8");
-  const expectedBytes = Buffer.from(expected, "utf8");
-  return receivedBytes.length === expectedBytes.length &&
-    timingSafeEqual(receivedBytes, expectedBytes);
 }
 
 async function telegramRequest<T>(
@@ -58,17 +48,6 @@ async function telegramRequest<T>(
   return payload.result as T;
 }
 
-export async function sendTelegramStartReply(
-  chatId: number | string,
-  languageCode?: string,
-): Promise<void> {
-  const reply: TelegramStartReply = buildTelegramStartReply(languageCode);
-  await telegramRequest("sendMessage", {
-    chat_id: chatId,
-    ...reply,
-  });
-}
-
 function webhookOrigin(url: string): string {
   try {
     return new URL(url).origin;
@@ -87,7 +66,11 @@ export async function ensureTelegramWebhook(): Promise<void> {
 
   try {
     const current = await telegramRequest<WebhookInfo>("getWebhookInfo");
-    if (current.url && current.url !== TELEGRAM_WEBHOOK_URL) {
+    if (
+      current.url &&
+      current.url !== TELEGRAM_WEBHOOK_URL &&
+      current.url !== PREVIOUS_TELEGRAM_WEBHOOK_URL
+    ) {
       logger.error(
         { existingWebhookOrigin: webhookOrigin(current.url) },
         "Telegram webhook already points elsewhere; refusing to replace it",
@@ -98,12 +81,12 @@ export async function ensureTelegramWebhook(): Promise<void> {
     await telegramRequest("setWebhook", {
       url: TELEGRAM_WEBHOOK_URL,
       secret_token: secret,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
       drop_pending_updates: false,
     });
     logger.info(
       { webhookUrl: TELEGRAM_WEBHOOK_URL },
-      "Telegram /start webhook registered",
+      "Telegram bot webhook registered",
     );
   } catch (err) {
     logger.error({ err }, "Telegram webhook registration failed");

@@ -407,21 +407,15 @@ const copy = {
     "Checking Telegram access…",
   ],
   "gate.intro": [
-    "Чтобы открыть FX-сигналы, зарегистрируйтесь по партнёрской ссылке, внесите депозит и подтвердите Pocket Option ID.",
-    "Щоб відкрити FX-сигнали, зареєструйтеся за партнерським посиланням, внесіть депозит і підтвердьте Pocket Option ID.",
-    "To access FX signals, register through the partner link, make a deposit, then verify your Pocket Option ID.",
-  ],
-  "gate.register": ["Регистрация в Pocket Option", "Реєстрація в Pocket Option", "Register with Pocket Option"],
-  "gate.openTelegram": [
-    "Открыть PRIME BOT в Telegram",
-    "Відкрити PRIME BOT у Telegram",
-    "Open PRIME BOT in Telegram",
+    "Введите Pocket Option ID, чтобы проверить доступ к сигналам.",
+    "Введіть Pocket Option ID, щоб перевірити доступ до сигналів.",
+    "Enter your Pocket Option ID to check signal access.",
   ],
   "gate.id": ["Идентификатор Pocket Option", "Ідентифікатор Pocket Option", "Pocket Option identifier"],
   "gate.idHelp": [
-    "Введите 9 цифр из профиля Pocket Option. ID будет проверен по статусу регистрации и депозита.",
-    "Введіть 9 цифр із профілю Pocket Option. ID буде перевірено за статусом реєстрації та депозиту.",
-    "Enter the 9-digit ID from your Pocket Option profile. Registration and deposit status will be checked.",
+    "Введите 9 цифр из профиля Pocket Option. Регистрация и депозит проверяются автоматически; партнёрская проверка не подтверждает владение счётом.",
+    "Введіть 9 цифр із профілю Pocket Option. Реєстрація та депозит перевіряються автоматично; партнерська перевірка не підтверджує володіння рахунком.",
+    "Enter the 9-digit ID from your Pocket Option profile. Registration and deposit are checked automatically; the partner API does not prove account ownership.",
   ],
   "gate.error": [
     "Идентификатор должен состоять ровно из 9 цифр",
@@ -431,26 +425,6 @@ const copy = {
   "gate.check": ["Проверить ID", "Перевірити ID", "Verify ID"],
   "gate.enterDigits": ["Введите 9 цифр", "Введіть 9 цифр", "Enter 9 digits"],
   "gate.checking": ["Проверяем…", "Перевіряємо…", "Checking…"],
-  "gate.limitation": [
-    "Партнёрский API подтверждает регистрацию по ссылке владельца и наличие депозита, но не подтверждает, что этот счёт принадлежит вам. Один Telegram-аккаунт можно связать только с одним Pocket ID, и один Pocket ID — только с одним Telegram-аккаунтом.",
-    "Партнерський API підтверджує реєстрацію за посиланням власника та наявність депозиту, але не підтверджує, що цей рахунок належить вам. Один Telegram-акаунт можна зв’язати лише з одним Pocket ID, а один Pocket ID — лише з одним Telegram-акаунтом.",
-    "The partner API confirms registration through the owner’s referral link and a deposit, but cannot prove that you own the account. Each Telegram account can link to only one Pocket ID, and each Pocket ID can link to only one Telegram account.",
-  ],
-  "gate.note1": [
-    "Создайте аккаунт Pocket Option именно по партнёрской ссылке владельца PRIME BOT.",
-    "Створіть акаунт Pocket Option саме за партнерським посиланням власника PRIME BOT.",
-    "Create your Pocket Option account through the PRIME BOT owner’s referral link.",
-  ],
-  "gate.note2": [
-    "Внесите депозит любого размера и дождитесь подтверждения Pocket Option.",
-    "Внесіть депозит будь-якого розміру й дочекайтеся підтвердження Pocket Option.",
-    "Make a deposit of any amount and wait for Pocket Option to confirm it.",
-  ],
-  "gate.note3": [
-    "PRIME BOT только показывает FX-сигналы — сделки не открывает.",
-    "PRIME BOT лише показує FX-сигнали — угод не відкриває.",
-    "PRIME BOT displays FX signals only; it never places trades.",
-  ],
   "gate.result.invalidId": ["Проверьте ID: нужны ровно 9 цифр.", "Перевірте ID: потрібно рівно 9 цифр.", "Check the ID: exactly 9 digits are required."],
   "gate.result.notRegistered": [
     "Регистрация по партнёрской ссылке не подтверждена. Убедитесь, что аккаунт создан по ссылке владельца PRIME BOT.",
@@ -468,9 +442,9 @@ const copy = {
     "This Telegram account or Pocket ID is already linked. One Telegram account per Pocket ID, and one Pocket ID per Telegram account.",
   ],
   "gate.result.telegramRequired": [
-    "Откройте PRIME BOT через Telegram, чтобы связать аккаунт.",
-    "Відкрийте PRIME BOT через Telegram, щоб зв’язати акаунт.",
-    "Open PRIME BOT in Telegram to link your account.",
+    "Откройте PRIME BOT внутри Telegram, чтобы подтвердить ID.",
+    "Відкрийте PRIME BOT у Telegram, щоб підтвердити ID.",
+    "Open PRIME BOT inside Telegram to verify your ID.",
   ],
   "gate.result.rateLimited": [
     "Слишком много проверок. Попробуйте снова примерно через час.",

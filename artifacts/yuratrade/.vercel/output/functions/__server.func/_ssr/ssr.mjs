@@ -4,11 +4,13 @@ import { PassThrough, Readable } from "node:stream";
 import { AsyncLocalStorage } from "node:async_hooks";
 //#region node_modules/.nitro/vite/services/ssr/index.js
 var ssr_exports = /* @__PURE__ */ __exportAll({
+	a: () => getRequest,
 	createServerEntry: () => createServerEntry,
 	default: () => server_default,
-	n: () => TSS_SERVER_FUNCTION,
-	r: () => getServerFnById,
-	t: () => createServerFn
+	i: () => getServerFnById,
+	n: () => createServerFn,
+	r: () => TSS_SERVER_FUNCTION,
+	t: () => createMiddleware
 });
 require_react();
 var import_jsx_runtime = require_jsx_runtime();
@@ -613,6 +615,9 @@ function getH3Event() {
 	const event = eventStorage.getStore();
 	if (!event) throw new Error(`No StartEvent found in AsyncLocalStorage. Make sure you are using the function within the server runtime.`);
 	return event.h3Event;
+}
+function getRequest() {
+	return getH3Event().req;
 }
 function getResponse() {
 	return getH3Event().res;
@@ -3844,7 +3849,7 @@ var RawStream = class {
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-BBtripdW.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-DRgvZ8en.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -3866,27 +3871,35 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e": {
 		functionName: "chooseSignalPair_createServerFn_handler",
-		importer: () => import("./pocket-live-ByW8vEHL.mjs")
+		importer: () => import("./pocket-live-B6bsFYj2.mjs")
 	},
 	"65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab": {
 		functionName: "takeBest_createServerFn_handler",
-		importer: () => import("./pocket-live-ByW8vEHL.mjs")
+		importer: () => import("./pocket-live-B6bsFYj2.mjs")
 	},
 	"8d16ab25d49de3ba563bd027483e243a7e3dc42cde9f9a502b86bdc62ed38062": {
 		functionName: "confirmSignalEntry_createServerFn_handler",
-		importer: () => import("./pocket-live-ByW8vEHL.mjs")
+		importer: () => import("./pocket-live-B6bsFYj2.mjs")
+	},
+	"aac57122ce5b3a8923821121771eb8cb948eb3f0ce20a93ea73c801a87060f96": {
+		functionName: "verifyPocketAccount_createServerFn_handler",
+		importer: () => import("./pocket-gate-CZELm9U-.mjs")
+	},
+	"b900180c993554286d82dd224bf57a5fc610cd2c0e205fb2e89f79e8fa4a3641": {
+		functionName: "getPocketGateState_createServerFn_handler",
+		importer: () => import("./pocket-gate-CZELm9U-.mjs")
 	},
 	"c3bf91de64f793a1fdff73992de93db6878fb230b41776a1663843f0dd5e02d1": {
 		functionName: "readClose_createServerFn_handler",
-		importer: () => import("./pocket-live-ByW8vEHL.mjs")
+		importer: () => import("./pocket-live-B6bsFYj2.mjs")
 	},
 	"e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857": {
 		functionName: "takeSignal_createServerFn_handler",
-		importer: () => import("./pocket-live-ByW8vEHL.mjs")
+		importer: () => import("./pocket-live-B6bsFYj2.mjs")
 	},
 	"fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043": {
 		functionName: "loadFeed_createServerFn_handler",
-		importer: () => import("./pocket-live-ByW8vEHL.mjs")
+		importer: () => import("./pocket-live-B6bsFYj2.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -6524,7 +6537,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-CE8BS0vp.mjs").then((n) => n.t),
+		import("./router-CWkNhyQD.mjs").then((n) => n.t),
 		import("./start-D337KBoP.mjs"),
 		import("./empty-plugin-adapters-CInA4tz9.mjs")
 	]);
@@ -6989,4 +7002,4 @@ function createServerEntry(entry) {
 }
 var server_default = createServerEntry({ fetch: fetch$1 });
 //#endregion
-export { createServerEntry, server_default as default, ssr_exports as i, TSS_SERVER_FUNCTION as n, getServerFnById as r, createServerFn as t };
+export { getRequest as a, createServerEntry, server_default as default, getServerFnById as i, createServerFn as n, ssr_exports as o, TSS_SERVER_FUNCTION as r, createMiddleware as t };

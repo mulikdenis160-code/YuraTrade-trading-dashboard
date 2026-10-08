@@ -103,15 +103,11 @@ async function readPartnerStatus(pocketOptionId: string) {
   }
 }
 
-export async function verifyPocketAccountForTelegram(
+async function verifyPocketAccountForTelegramIdentity(
   pocketOptionId: string,
-  initData: string,
+  telegramUserId: string,
 ): Promise<PocketGateVerification> {
   if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
-
-  assertSameSiteRequest();
-  const telegramUserId = validateTelegramInitData(initData);
-  if (!telegramUserId) return { status: "telegram_required" };
 
   try {
     const sql = await getSql();
@@ -180,6 +176,29 @@ export async function verifyPocketAccountForTelegram(
   } catch {
     return { status: "check_unavailable" };
   }
+}
+
+export async function verifyPocketAccountForTelegram(
+  pocketOptionId: string,
+  initData: string,
+): Promise<PocketGateVerification> {
+  if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+
+  assertSameSiteRequest();
+  const telegramUserId = validateTelegramInitData(initData);
+  if (!telegramUserId) return { status: "telegram_required" };
+
+  return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
+}
+
+export async function verifyPocketAccountForTelegramUser(
+  pocketOptionId: string,
+  telegramUserId: string,
+): Promise<PocketGateVerification> {
+  if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+  if (!/^\d{1,20}$/.test(telegramUserId)) return { status: "telegram_required" };
+
+  return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
 }
 
 export async function requireVerifiedPocketAccess(

@@ -8,7 +8,7 @@ function lazyService(loader) {
 		return promise.then((mod) => mod.fetch(req));
 	} };
 }
-var viteServices = { ["ssr"]: lazyService(() => import("../_ssr/ssr.mjs").then((n) => n.i)) };
+var viteServices = { ["ssr"]: lazyService(() => import("../_ssr/ssr.mjs").then((n) => n.o)) };
 //#endregion
 //#region ../../node_modules/.pnpm/nitro@3.0.260610-beta_@electric-sql+pglite@0.5.8_chokidar@5.0.0_drizzle-orm@0.45.2_@ele_c982e29cd729efaa8639d62ee9123a5b/node_modules/nitro/dist/runtime/vite.mjs
 function fetchViteEnv(viteEnvName, input, init) {
