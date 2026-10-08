@@ -114,6 +114,16 @@ const copy = {
   "market.learnMore": ["Все уроки", "Усі уроки", "Full lessons"],
   "signal.connected": ["Поток Pocket Option подключён", "Потік Pocket Option підключено", "Pocket Option feed connected"],
   "signal.disconnected": ["Нет подключения к Pocket Option", "Немає підключення до Pocket Option", "Pocket Option is disconnected"],
+  "signal.telegramExpired": [
+    "Сеанс Telegram истёк. Закройте и снова откройте Mini App из бота.",
+    "Сеанс Telegram завершився. Закрийте й знову відкрийте Mini App із бота.",
+    "The Telegram session expired. Close and reopen the Mini App from the bot.",
+  ],
+  "signal.streamInterrupted": [
+    "Соединение с потоком котировок прервано. Переподключаемся…",
+    "З’єднання з потоком котирувань перервано. Перепідключаємося…",
+    "The quote stream was interrupted. Reconnecting…",
+  ],
   "signal.connecting": ["Подключаемся к Pocket Option…", "Підключаємося до Pocket Option…", "Connecting to Pocket Option…"],
   "signal.description": [
     "Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; ИИ напрямую анализирует свечи и выбирает направление.",
@@ -365,7 +375,11 @@ const copy = {
   "learn.correct": ["Верно {score} из {total}.", "Правильно {score} із {total}.", "{score} of {total} correct."],
   "profile.admin": ["Админ", "Адмін", "Admin"],
   "profile.title": ["Профиль", "Профіль", "Profile"],
-  "profile.signOut": ["Выйти", "Вийти", "Sign out"],
+  "profile.linkedTelegram": [
+    "Этот Pocket ID закреплён за Telegram-аккаунтом, из которого открыт PRIME BOT. Изменить привязку с этого экрана нельзя.",
+    "Цей Pocket ID закріплено за Telegram-акаунтом, з якого відкрито PRIME BOT. Змінити прив’язку на цьому екрані не можна.",
+    "This Pocket ID is linked to the Telegram account used to open PRIME BOT. The link cannot be changed from this screen.",
+  ],
   "profile.adminInfo": ["Админский ID. Лимита сигналов нет, депозит для входа не нужен.", "ID адміністратора. Ліміту сигналів немає, депозит для доступу не потрібен.", "Admin ID. No signal limit or minimum deposit is required."],
   "profile.userInfo": [
     "Уровень зависит от депозита. Искра от $60 — 5 сигналов в день, Вектор от $200 — 20, Апекс от $500 — без лимита.",
@@ -377,12 +391,22 @@ const copy = {
   "modal.step2": ["Сверяем последние свечи", "Зіставляємо останні свічки", "Checking recent candles"],
   "modal.step3": ["Оставляем подтверждённый вход", "Залишаємо підтверджений вхід", "Keeping a confirmed entry"],
   "gate.brand": ["PRIME BOT", "PRIME BOT", "PRIME BOT"],
+  "gate.loadingAccess": [
+    "Проверяем доступ через Telegram…",
+    "Перевіряємо доступ через Telegram…",
+    "Checking Telegram access…",
+  ],
   "gate.intro": [
     "Чтобы открыть FX-сигналы, зарегистрируйтесь по партнёрской ссылке, внесите депозит и подтвердите Pocket Option ID.",
     "Щоб відкрити FX-сигнали, зареєструйтеся за партнерським посиланням, внесіть депозит і підтвердьте Pocket Option ID.",
     "To access FX signals, register through the partner link, make a deposit, then verify your Pocket Option ID.",
   ],
   "gate.register": ["Регистрация в Pocket Option", "Реєстрація в Pocket Option", "Register with Pocket Option"],
+  "gate.openTelegram": [
+    "Открыть PRIME BOT в Telegram",
+    "Відкрити PRIME BOT у Telegram",
+    "Open PRIME BOT in Telegram",
+  ],
   "gate.id": ["Идентификатор Pocket Option", "Ідентифікатор Pocket Option", "Pocket Option identifier"],
   "gate.idHelp": [
     "Введите 9 цифр из профиля Pocket Option. ID будет проверен по статусу регистрации и депозита.",
@@ -439,9 +463,9 @@ const copy = {
     "Open PRIME BOT in Telegram to link your account.",
   ],
   "gate.result.rateLimited": [
-    "Слишком много проверок подряд. Подождите немного и попробуйте снова.",
-    "Забагато перевірок поспіль. Зачекайте трохи й спробуйте ще раз.",
-    "Too many checks in a row. Wait a moment, then try again.",
+    "Слишком много проверок. Попробуйте снова примерно через час.",
+    "Забагато перевірок. Спробуйте ще раз приблизно за годину.",
+    "Too many checks. Try again in about an hour.",
   ],
   "gate.result.unavailable": [
     "Не удалось проверить данные сейчас. Попробуйте позже.",

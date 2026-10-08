@@ -4,6 +4,14 @@ export const Route = createFileRoute("/api/ticks")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const initData = request.headers.get("x-telegram-init-data");
+        try {
+          const { requireVerifiedPocketAccess } = await import("@/lib/pocket-gate.server");
+          await requireVerifiedPocketAccess(initData);
+        } catch {
+          return new Response("unauthorized", { status: 401 });
+        }
+
         const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
         if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) {
           return new Response("bad symbol", { status: 400 });

@@ -7,7 +7,7 @@ export const Route = createFileRoute("/profile")({ component: ProfilePage });
 
 function ProfilePage() {
   const { t } = useLanguage();
-  const { id, leave } = usePocket();
+  const { id } = usePocket();
   const admin = isAdminId(id);
 
   return (
@@ -18,14 +18,14 @@ function ProfilePage() {
             <p className="text-xs font-semibold tracking-[0.14em] text-dim uppercase">{admin ? t("profile.admin") : t("profile.title")}</p>
             <p className="mt-2 truncate font-mono text-2xl font-bold text-fg">{id}</p>
           </div>
-          <button type="button" className="btn-ghost shrink-0 text-sm" onClick={leave}>
-            {t("profile.signOut")}
-          </button>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           {admin
             ? t("profile.adminInfo")
             : t("profile.userInfo")}
+        </p>
+        <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-dim">
+          {t("profile.linkedTelegram")}
         </p>
       </section>
       {levels.map((level) => (

@@ -1,12 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { isValidExpirySeconds } from "./expiry";
+import { pocketGateMiddleware } from "./pocket-gate.middleware";
 
-export const loadFeed = createServerFn({ method: "GET" }).handler(async () => {
-  const { feedSnapshot } = await import("./pocket-live.server");
-  return feedSnapshot();
-});
+export const loadFeed = createServerFn({ method: "GET" })
+  .middleware([pocketGateMiddleware])
+  .handler(async () => {
+    const { feedSnapshot } = await import("./pocket-live.server");
+    return feedSnapshot();
+  });
 
 export const readClose = createServerFn({ method: "POST" })
+  .middleware([pocketGateMiddleware])
   .validator((input: { symbol: string }) => {
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
@@ -18,6 +22,7 @@ export const readClose = createServerFn({ method: "POST" })
   });
 
 export const takeSignal = createServerFn({ method: "POST" })
+  .middleware([pocketGateMiddleware])
   .validator((input: {
     symbol: string;
     expirySeconds: number;
@@ -38,6 +43,7 @@ export const takeSignal = createServerFn({ method: "POST" })
   });
 
 export const confirmSignalEntry = createServerFn({ method: "POST" })
+  .middleware([pocketGateMiddleware])
   .validator((input: { symbol: string }) => {
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
@@ -49,6 +55,7 @@ export const confirmSignalEntry = createServerFn({ method: "POST" })
   });
 
 export const chooseSignalPair = createServerFn({ method: "POST" })
+  .middleware([pocketGateMiddleware])
   .validator((input: { excludedSymbols?: unknown }) => {
     const excludedSymbols = Array.isArray(input?.excludedSymbols)
       ? [...new Set(
@@ -68,6 +75,7 @@ export const chooseSignalPair = createServerFn({ method: "POST" })
   });
 
 export const takeBest = createServerFn({ method: "POST" })
+  .middleware([pocketGateMiddleware])
   .validator((input: { expirySeconds: number; excludedSymbols?: unknown }) => {
     const expirySeconds = Number(input?.expirySeconds);
     if (!isValidExpirySeconds(expirySeconds)) {

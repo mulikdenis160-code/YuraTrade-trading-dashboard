@@ -27,6 +27,7 @@ import {
 import { copyPairName } from "@/lib/pair-clipboard";
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
+import { getTelegramInitData } from "@/lib/telegram-webapp";
 
 type Group = "fx";
 
@@ -297,37 +298,82 @@ function SignalCard({ search }: { search: Search }) {
 
   useEffect(() => {
     if (phase !== "run" || !search.symbol) return;
-    const source = new EventSource(`/api/ticks?symbol=${encodeURIComponent(search.symbol)}`);
-    source.onopen = () => setLiveStatus("connecting");
-    source.addEventListener("feed-status", (event) => {
-      try {
-        const status = JSON.parse((event as MessageEvent<string>).data) as {
-          status?: string;
-          message?: string;
-        };
-        if (status.status === "connected" || status.status === "connecting" || status.status === "error") {
-          setLiveStatus(status.status);
-          setLiveMessage(status.message ?? "");
+    const controller = new AbortController();
+    const consumeStream = async () => {
+      while (!controller.signal.aborted) {
+        try {
+          const response = await fetch(
+            `/api/ticks?symbol=${encodeURIComponent(search.symbol)}`,
+            {
+              headers: { "x-telegram-init-data": getTelegramInitData() },
+              signal: controller.signal,
+            },
+          );
+          if (response.status === 401) {
+            setLiveStatus("error");
+            setLiveMessage(t("signal.telegramExpired"));
+            return;
+          }
+          if (!response.ok || !response.body) {
+            throw new Error("Quote stream unavailable.");
+          }
+
+          setLiveStatus("connecting");
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (!controller.signal.aborted) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let boundary = buffer.indexOf("\n\n");
+            while (boundary >= 0) {
+              const block = buffer.slice(0, boundary).replace(/\r/g, "");
+              buffer = buffer.slice(boundary + 2);
+              let eventName = "message";
+              let data = "";
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventName = line.slice(6).trim();
+                if (line.startsWith("data:")) data += `${data ? "\n" : ""}${line.slice(5).trimStart()}`;
+              }
+              if (eventName === "feed-status") {
+                try {
+                  const status = JSON.parse(data) as { status?: string; message?: string };
+                  if (
+                    status.status === "connected" ||
+                    status.status === "connecting" ||
+                    status.status === "error"
+                  ) {
+                    setLiveStatus(status.status);
+                    setLiveMessage(status.message ?? "");
+                  }
+                } catch {
+                  setLiveStatus("error");
+                  setLiveMessage(t("signal.streamInterrupted"));
+                }
+              } else if (eventName === "message") {
+                const next = Number(data);
+                if (Number.isFinite(next)) {
+                  setLive(next);
+                  setLiveStatus("connected");
+                  setLiveMessage("");
+                }
+              }
+              boundary = buffer.indexOf("\n\n");
+            }
+          }
+          if (!controller.signal.aborted) throw new Error("Quote stream ended.");
+        } catch {
+          if (controller.signal.aborted) return;
+          setLiveStatus("error");
+          setLiveMessage(t("signal.streamInterrupted"));
+          await new Promise((resolve) => window.setTimeout(resolve, 2_000));
         }
-      } catch {
-        setLiveStatus("error");
-        setLiveMessage("Не удалось прочитать состояние потока котировок.");
-      }
-    });
-    source.onmessage = (event) => {
-      const next = Number(event.data);
-      if (Number.isFinite(next)) {
-        setLive(next);
-        setLiveStatus("connected");
-        setLiveMessage("");
       }
     };
-    source.onerror = () => {
-      setLiveStatus("error");
-      setLiveMessage("Соединение с потоком котировок прервано. Переподключаемся…");
-    };
-    return () => source.close();
-  }, [phase, search.symbol]);
+    void consumeStream();
+    return () => controller.abort();
+  }, [phase, search.symbol, t]);
 
   useEffect(() => {
     if (phase !== "run" || left > 0 || settled.current || !search.symbol) return;

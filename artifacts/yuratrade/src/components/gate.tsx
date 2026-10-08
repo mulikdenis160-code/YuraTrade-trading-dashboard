@@ -19,7 +19,7 @@ type ResultKey = (typeof resultKeys)[keyof typeof resultKeys] | "gate.error" | "
 
 export function Gate() {
   const { language, setLanguage, t } = useLanguage();
-  const { accept, verifyAccount } = usePocket();
+  const { accept, verifyAccount, telegramAvailable } = usePocket();
   const [value, setValue] = useState("");
   const [result, setResult] = useState<ResultKey>("");
   const [checking, setChecking] = useState(false);
@@ -72,6 +72,19 @@ export function Gate() {
             {t("gate.intro")}
           </p>
         </div>
+
+        {!telegramAvailable ? (
+          <a
+            href="https://t.me/Signalradikai_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="link-gate-open-telegram"
+            className="btn-ghost mt-5 flex w-full items-center justify-center gap-2"
+          >
+            {t("gate.openTelegram")}
+            <ExternalLink className="size-4" />
+          </a>
+        ) : null}
 
         <ol className="panel rise rise-1 mt-6 space-y-3 p-4">
           {noteKeys.map((note, index) => (

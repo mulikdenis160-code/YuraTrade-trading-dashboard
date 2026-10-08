@@ -4,7 +4,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Gate } from "@/components/gate";
 import { Shell } from "@/components/shell";
 import { PocketProvider, usePocket } from "@/lib/pocket";
-import { LanguageProvider } from "@/lib/language";
+import { LanguageProvider, useLanguage } from "@/lib/language";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -30,6 +30,7 @@ export const Route = createRootRoute({
     <html lang="ru" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
       </head>
       <body>
         <PreviewHostBridge />
@@ -48,7 +49,16 @@ export const Route = createRootRoute({
 
 function Frame() {
   const { ready, id } = usePocket();
-  if (!ready) return <div className="stage min-h-dvh" />;
+  const { t } = useLanguage();
+  if (!ready) {
+    return (
+      <div className="stage grid min-h-dvh place-items-center px-4">
+        <p role="status" className="text-sm font-medium text-muted">
+          {t("gate.loadingAccess")}
+        </p>
+      </div>
+    );
+  }
   if (!id) return <Gate />;
   return (
     <Shell>
