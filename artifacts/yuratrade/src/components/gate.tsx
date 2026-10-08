@@ -34,10 +34,10 @@ export function Gate() {
     setResult("");
     try {
       const verification = await verifyAccount(value);
-      if (verification === "verified") {
-        accept(value);
+      if (verification.status === "verified") {
+        accept(verification.pocketId, verification.depositAmount);
       } else {
-        setResult(resultKeys[verification]);
+        setResult(resultKeys[verification.status]);
       }
     } catch {
       setResult("gate.result.unavailable");

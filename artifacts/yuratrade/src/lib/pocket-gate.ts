@@ -1,18 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export type PocketGateVerification =
-  | "verified"
-  | "invalid_id"
-  | "not_registered"
-  | "deposit_required"
-  | "already_linked"
-  | "telegram_required"
-  | "rate_limited"
-  | "check_unavailable";
+  | { status: "verified"; pocketId: string; depositAmount: number }
+  | {
+      status:
+        | "invalid_id"
+        | "not_registered"
+        | "deposit_required"
+        | "already_linked"
+        | "telegram_required"
+        | "rate_limited"
+        | "check_unavailable";
+    };
 
 export type PocketGateState =
-  | { status: "verified"; pocketId: string }
-  | { status: "unverified" | "telegram_required" | "check_unavailable" };
+  | { status: "verified"; pocketId: string; depositAmount: number }
+  | {
+      status:
+        | "unverified"
+        | "deposit_required"
+        | "telegram_required"
+        | "check_unavailable";
+    };
 
 const readInitData = (input: { initData?: unknown } | undefined) =>
   typeof input?.initData === "string" && input.initData.length <= 10_000

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { levels } from "@/lib/levels";
+import { levelForBalance, levels } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { useLanguage } from "@/lib/language";
 
@@ -7,8 +7,14 @@ export const Route = createFileRoute("/profile")({ component: ProfilePage });
 
 function ProfilePage() {
   const { t } = useLanguage();
-  const { id } = usePocket();
+  const { id, depositAmount } = usePocket();
   const admin = isAdminId(id);
+  const level = levelForBalance(depositAmount);
+  const currentLimit = admin || level?.daily === null
+    ? t("signal.noLimit")
+    : level
+      ? t("profile.dailyCount", { count: level.daily })
+      : t("signal.block.minimum");
 
   return (
     <div className="mx-auto w-full max-w-lg space-y-4">
@@ -24,6 +30,11 @@ function ProfilePage() {
             ? t("profile.adminInfo")
             : t("profile.userInfo")}
         </p>
+        {!admin ? (
+          <p className="mt-3 rounded-xl border border-blue/20 bg-blue/5 px-3 py-2 text-sm font-semibold text-blue-soft">
+            {t("profile.currentLimit", { limit: currentLimit })}
+          </p>
+        ) : null}
         <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-dim">
           {t("profile.linkedTelegram")}
         </p>

@@ -1,6 +1,7 @@
 export type PocketPartnerStatus = {
   registered: boolean;
   hasDeposit: boolean;
+  depositAmount: number | null;
 };
 
 function recordOf(value: unknown): Record<string, unknown> | null {
@@ -14,6 +15,13 @@ function positiveNumber(value: unknown): boolean {
   if (typeof value === "string" && value.trim() === "") return false;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0;
+}
+
+function nonNegativeAmount(value: unknown): number | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 export function parsePocketPartnerStatus(
@@ -30,8 +38,9 @@ export function parsePocketPartnerStatus(
 
   return {
     registered: String(user.uid) === pocketOptionId,
-    // Use the explicit confirmed-deposit count; sum_ftd is not part of the
-    // documented contract available to this app.
     hasDeposit: positiveNumber(user.count_deposits),
+    // sum_ftd is used only to choose a level; count_deposits remains the
+    // separate requirement for granting access.
+    depositAmount: nonNegativeAmount(user.sum_ftd),
   };
 }

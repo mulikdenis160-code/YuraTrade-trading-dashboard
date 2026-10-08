@@ -2,6 +2,7 @@ import { getSql } from "./db";
 import { assertSameSiteRequest } from "./auth/isolation.server";
 import { validateTelegramInitData as validateSignedInitData } from "./telegram-init-data.server";
 import { parsePocketPartnerStatus } from "./pocket-partner-status";
+import type { PocketGateState, PocketGateVerification } from "./pocket-gate";
 
 const PARTNER_ID = "857649";
 const PARTNER_API_URL = "https://pocketpartners.me/api/v1/user-info";
@@ -26,19 +27,21 @@ async function readBindingByTelegram(telegramUserId: string) {
 
 export async function getPocketGateStateForTelegram(
   initData: string,
-): Promise<
-  | { status: "verified"; pocketId: string }
-  | { status: "unverified" | "telegram_required" | "check_unavailable" }
-> {
+): Promise<PocketGateState> {
   assertSameSiteRequest();
   const telegramUserId = validateTelegramInitData(initData);
   if (!telegramUserId) return { status: "telegram_required" };
 
   try {
     const pocketId = await readBindingByTelegram(telegramUserId);
-    return pocketId
-      ? { status: "verified", pocketId }
-      : { status: "unverified" };
+    if (!pocketId) return { status: "unverified" };
+    const partnerStatus = await readPartnerStatus(pocketId);
+    if (!partnerStatus.registered) return { status: "unverified" };
+    if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
+    if (partnerStatus.depositAmount === null) {
+      return { status: "check_unavailable" };
+    }
+    return { status: "verified", pocketId, depositAmount: partnerStatus.depositAmount };
   } catch {
     return { status: "check_unavailable" };
   }
@@ -88,7 +91,9 @@ async function readPartnerStatus(pocketOptionId: string) {
       },
     );
 
-    if (response.status === 404) return { registered: false, hasDeposit: false };
+    if (response.status === 404) {
+      return { registered: false, hasDeposit: false, depositAmount: null };
+    }
     if (!response.ok) throw new Error("Partner API request failed.");
 
     const payload = await response.json() as unknown;
@@ -101,21 +106,12 @@ async function readPartnerStatus(pocketOptionId: string) {
 export async function verifyPocketAccountForTelegram(
   pocketOptionId: string,
   initData: string,
-): Promise<
-  | "verified"
-  | "invalid_id"
-  | "not_registered"
-  | "deposit_required"
-  | "already_linked"
-  | "telegram_required"
-  | "rate_limited"
-  | "check_unavailable"
-> {
-  if (!/^\d{9}$/.test(pocketOptionId)) return "invalid_id";
+): Promise<PocketGateVerification> {
+  if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
 
   assertSameSiteRequest();
   const telegramUserId = validateTelegramInitData(initData);
-  if (!telegramUserId) return "telegram_required";
+  if (!telegramUserId) return { status: "telegram_required" };
 
   try {
     const sql = await getSql();
@@ -130,19 +126,31 @@ export async function verifyPocketAccountForTelegram(
       [telegramUserId, pocketOptionId],
     );
     if (existing[0]) {
-      return existing[0].telegram_user_id === telegramUserId &&
-        existing[0].pocket_option_id === pocketOptionId
-        ? "verified"
-        : "already_linked";
+      if (
+        existing[0].telegram_user_id !== telegramUserId ||
+        existing[0].pocket_option_id !== pocketOptionId
+      ) {
+        return { status: "already_linked" };
+      }
+      const partnerStatus = await readPartnerStatus(pocketOptionId);
+      if (!partnerStatus.registered) return { status: "not_registered" };
+      if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
+      if (partnerStatus.depositAmount === null) {
+        return { status: "check_unavailable" };
+      }
+      return { status: "verified", pocketId: pocketOptionId, depositAmount: partnerStatus.depositAmount };
     }
 
     if (await incrementAttemptCount(telegramUserId) > MAX_ATTEMPTS_PER_WINDOW) {
-      return "rate_limited";
+      return { status: "rate_limited" };
     }
 
     const partnerStatus = await readPartnerStatus(pocketOptionId);
-    if (!partnerStatus.registered) return "not_registered";
-    if (!partnerStatus.hasDeposit) return "deposit_required";
+    if (!partnerStatus.registered) return { status: "not_registered" };
+    if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
+    if (partnerStatus.depositAmount === null) {
+      return { status: "check_unavailable" };
+    }
 
     const inserted = await sql.query<{ telegram_user_id: string }>(
       `INSERT INTO telegram_pocket_bindings (telegram_user_id, pocket_option_id)
@@ -151,7 +159,9 @@ export async function verifyPocketAccountForTelegram(
        RETURNING telegram_user_id`,
       [telegramUserId, pocketOptionId],
     );
-    if (inserted.length > 0) return "verified";
+    if (inserted.length > 0) {
+      return { status: "verified", pocketId: pocketOptionId, depositAmount: partnerStatus.depositAmount };
+    }
 
     const conflict = await sql.query<{
       telegram_user_id: string;
@@ -165,10 +175,10 @@ export async function verifyPocketAccountForTelegram(
     );
     return conflict[0]?.telegram_user_id === telegramUserId &&
       conflict[0]?.pocket_option_id === pocketOptionId
-      ? "verified"
-      : "already_linked";
+      ? { status: "verified", pocketId: pocketOptionId, depositAmount: partnerStatus.depositAmount }
+      : { status: "already_linked" };
   } catch {
-    return "check_unavailable";
+    return { status: "check_unavailable" };
   }
 }
 

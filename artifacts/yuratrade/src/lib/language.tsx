@@ -382,9 +382,19 @@ const copy = {
   ],
   "profile.adminInfo": ["Админский ID. Лимита сигналов нет, депозит для входа не нужен.", "ID адміністратора. Ліміту сигналів немає, депозит для доступу не потрібен.", "Admin ID. No signal limit or minimum deposit is required."],
   "profile.userInfo": [
-    "Уровень зависит от депозита. Искра от $60 — 5 сигналов в день, Вектор от $200 — 20, Апекс от $500 — без лимита.",
-    "Рівень залежить від депозиту. Іскра від $60 — 5 сигналів на день, Вектор від $200 — 20, Апекс від $500 — без ліміту.",
-    "Your level depends on your deposit. Spark from $60: 5 signals/day; Vector from $200: 20; Apex from $500: unlimited.",
+    "Уровень зависит от первого депозита. Искра от $60 — 10 сигналов в день, Вектор от $200 — 40, Апекс от $500 — без лимита.",
+    "Рівень залежить від першого депозиту. Іскра від $60 — 10 сигналів на день, Вектор від $200 — 40, Апекс від $500 — без ліміту.",
+    "Your level depends on the first deposit. Spark from $60: 10 signals/day; Vector from $200: 40; Apex from $500: unlimited.",
+  ],
+  "profile.currentLimit": [
+    "Ваш персональный дневной лимит: {limit}.",
+    "Ваш персональний денний ліміт: {limit}.",
+    "Your personal daily limit: {limit}.",
+  ],
+  "profile.dailyCount": [
+    "{count} сигналов в день",
+    "{count} сигналів на день",
+    "{count} signals per day",
   ],
   "modal.title": ["Готовим сигнал", "Готуємо сигнал", "Preparing signal"],
   "modal.step1": ["Смотрим валютные пары", "Перевіряємо валютні пари", "Checking currency pairs"],

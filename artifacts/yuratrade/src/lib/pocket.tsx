@@ -34,8 +34,9 @@ function settleWithin<T>(promise: Promise<T>, fallback: T, timeoutMs: number): P
 type PocketState = {
   ready: boolean;
   id: string | null;
+  depositAmount: number | null;
   telegramAvailable: boolean;
-  accept: (id: string) => void;
+  accept: (id: string, depositAmount: number) => void;
   verifyAccount: (id: string) => Promise<PocketGateVerification>;
 };
 
@@ -44,6 +45,7 @@ const PocketContext = createContext<PocketState | null>(null);
 export function PocketProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [id, setId] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState<number | null>(null);
   const [telegramAvailable, setTelegramAvailable] = useState(false);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export function PocketProvider({ children }: { children: ReactNode }) {
         .then((state) => {
           if (!cancelled && state.status === "verified" && isPocketId(state.pocketId)) {
             setId(state.pocketId);
+            setDepositAmount(state.depositAmount);
           }
         })
         .catch(() => {
@@ -92,35 +95,39 @@ export function PocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const accept = (next: string) => {
+  const accept = (next: string, nextDepositAmount: number) => {
     const trimmed = next.trim();
     if (!isPocketId(trimmed)) return;
     setId(trimmed);
+    setDepositAmount(nextDepositAmount);
   };
 
   const verifyAccount = async (next: string): Promise<PocketGateVerification> => {
     const trimmed = next.trim();
-    if (!isPocketId(trimmed)) return "invalid_id";
+    if (!isPocketId(trimmed)) return { status: "invalid_id" };
     const initData = getTelegramInitData();
     if (!initData) {
       setTelegramAvailable(false);
-      return "telegram_required";
+      return { status: "telegram_required" };
     }
     try {
       const result = await settleWithin(
         verifyPocketAccount({ data: { pocketId: trimmed, initData } }),
-        "check_unavailable",
+        { status: "check_unavailable" },
         GATE_REQUEST_TIMEOUT_MS,
       );
-      if (result === "verified") setId(trimmed);
+      if (result.status === "verified") {
+        setId(result.pocketId);
+        setDepositAmount(result.depositAmount);
+      }
       return result;
     } catch {
-      return "check_unavailable";
+      return { status: "check_unavailable" };
     }
   };
 
   return (
-    <PocketContext.Provider value={{ ready, id, telegramAvailable, accept, verifyAccount }}>
+    <PocketContext.Provider value={{ ready, id, depositAmount, telegramAvailable, accept, verifyAccount }}>
       {children}
     </PocketContext.Provider>
   );

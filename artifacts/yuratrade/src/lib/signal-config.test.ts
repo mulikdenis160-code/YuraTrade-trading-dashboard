@@ -11,10 +11,45 @@ import {
   SIGNAL_PREPARATION_TIMEOUT_MS,
 } from "./signal-config.ts";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
+import {
+  levelForBalance,
+  markSignalUsed,
+  signalsUsedToday,
+} from "./levels.ts";
 
 test("all users can receive three additional overlays after the first signal", () => {
   assert.equal(MAX_OVERLAYS, 3);
   assert.equal(MAX_SIGNAL_ATTEMPTS, 4);
+});
+
+test("daily tier limits are doubled while the Apex tier stays unlimited", () => {
+  assert.equal(levelForBalance(60)?.daily, 10);
+  assert.equal(levelForBalance(200)?.daily, 40);
+  assert.equal(levelForBalance(500)?.daily, null);
+});
+
+test("daily signal counts are isolated by Pocket Option ID", () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    },
+  });
+  try {
+    assert.equal(signalsUsedToday("123456789"), 0);
+    assert.equal(markSignalUsed("123456789"), 1);
+    assert.equal(signalsUsedToday("123456789"), 1);
+    assert.equal(signalsUsedToday("987654321"), 0);
+  } finally {
+    if (original) {
+      Object.defineProperty(globalThis, "localStorage", original);
+    } else {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  }
 });
 
 test("the pair-copy window lasts exactly ten seconds", () => {

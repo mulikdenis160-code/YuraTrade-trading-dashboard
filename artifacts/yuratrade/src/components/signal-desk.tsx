@@ -37,7 +37,7 @@ type PendingPair = PairChoice & {
 
 export function SignalDesk() {
   const navigate = useNavigate();
-  const { id } = usePocket();
+  const { id, depositAmount } = usePocket();
   const { language, t } = useLanguage();
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
@@ -49,7 +49,6 @@ export function SignalDesk() {
   const [pendingPair, setPendingPair] = useState<PendingPair | null>(null);
   const [copyRemaining, setCopyRemaining] = useState(SIGNAL_COPY_DELAY_SECONDS);
   const [copiedPair, setCopiedPair] = useState(false);
-  const [balance, setBalance] = useState<number | null>(null);
   const [used, setUsed] = useState(0);
   const [expiryMinutes, setExpiryMinutes] = useState(2);
   const attemptRef = useRef(0);
@@ -77,7 +76,6 @@ export function SignalDesk() {
           if (stop) return;
           setReady(feed.pairs.length > 0);
           setFeedStatus(feed.pairs.length > 0 ? "connected" : "error");
-          setBalance(feed.balance);
           setFeedError("");
         })
         .catch((cause: unknown) => {
@@ -88,13 +86,13 @@ export function SignalDesk() {
         });
     };
     pull();
-    setUsed(signalsUsedToday());
+    setUsed(signalsUsedToday(id));
     const timer = window.setInterval(pull, 8000);
     return () => {
       stop = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     const batch = readSignalBatch();
@@ -109,14 +107,14 @@ export function SignalDesk() {
     requestSignalBatchStop(hasActiveSeries);
   }, []);
 
-  const level = levelForBalance(balance);
+  const level = levelForBalance(depositAmount);
   const expirySeconds = expiryMinutes * 60;
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const cap = admin ? null : level ? level.daily : 0;
   const left = cap === null ? null : Math.max(0, cap - used);
   const blocked = admin
     ? ""
-    : balance === null
+      : depositAmount === null
       ? t("signal.block.deposit")
       : !level
         ? t("signal.block.minimum")
@@ -128,7 +126,7 @@ export function SignalDesk() {
 
   const openSignal = async (candidate: PreparedSignal, attempt: number) => {
     if (attemptRef.current !== attempt) return;
-    if (cap !== null) setUsed(markSignalUsed());
+    if (cap !== null) setUsed(markSignalUsed(id));
     await navigate({
       to: "/signal",
       search: {

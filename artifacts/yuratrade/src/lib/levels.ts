@@ -5,9 +5,9 @@ export const levels = [
     deposit: 60,
     tag: "Базовый",
     lead: "Один срок, направление и короткая карточка. Хватает, чтобы войти по свечам и не перепутать пару.",
-    daily: 5,
+    daily: 10,
     points: [
-      "5 сигналов в день. Перекрытия в этот счёт не входят.",
+      "10 сигналов в день. Перекрытия в этот счёт не входят.",
       "Цена входа и выплата пары на одной карточке.",
       "График последних свечей, по которым выбран вход.",
       "Пунктир цены входа на графике.",
@@ -33,9 +33,9 @@ export const levels = [
     deposit: 200,
     tag: "Профессиональный",
     lead: "Младший срок сверяется со старшим. Слабый и спорный вход отсекается до карточки.",
-    daily: 20,
+    daily: 40,
     points: [
-      "20 сигналов в день. Перекрытия в этот счёт не входят.",
+      "40 сигналов в день. Перекрытия в этот счёт не входят.",
       "Младший график не торгуется против старшего.",
       "SMA 12: цена выше или ниже средней и на сколько процентов.",
       "Наклон окна: восходящий, нисходящий или плоский.",
@@ -97,6 +97,10 @@ export const levels = [
 
 const USED_KEY = "vprime_signals_used";
 
+function usedKey(pocketId: string | null) {
+  return `${USED_KEY}:${pocketId || "unverified"}`;
+}
+
 function todayKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -107,10 +111,10 @@ export function levelForBalance(balance: number | null) {
   return [...levels].reverse().find((level) => balance >= level.deposit) ?? null;
 }
 
-export function signalsUsedToday() {
+export function signalsUsedToday(pocketId: string | null) {
   if (typeof localStorage === "undefined") return 0;
   try {
-    const raw = JSON.parse(localStorage.getItem(USED_KEY) || "null") as { day?: string; count?: number } | null;
+    const raw = JSON.parse(localStorage.getItem(usedKey(pocketId)) || "null") as { day?: string; count?: number } | null;
     if (!raw || raw.day !== todayKey() || !Number.isFinite(raw.count)) return 0;
     return Math.max(0, Number(raw.count));
   } catch {
@@ -118,8 +122,8 @@ export function signalsUsedToday() {
   }
 }
 
-export function markSignalUsed() {
-  const count = signalsUsedToday() + 1;
-  localStorage.setItem(USED_KEY, JSON.stringify({ day: todayKey(), count }));
+export function markSignalUsed(pocketId: string | null) {
+  const count = signalsUsedToday(pocketId) + 1;
+  localStorage.setItem(usedKey(pocketId), JSON.stringify({ day: todayKey(), count }));
   return count;
 }
