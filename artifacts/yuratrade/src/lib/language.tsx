@@ -378,15 +378,16 @@ const copy = {
   "modal.step3": ["Оставляем подтверждённый вход", "Залишаємо підтверджений вхід", "Keeping a confirmed entry"],
   "gate.brand": ["PRIME BOT", "PRIME BOT", "PRIME BOT"],
   "gate.intro": [
-    "Проверка идентификатора. Регистрация не нужна — пароль не запрашиваем.",
-    "Перевірка ідентифікатора. Реєстрація не потрібна — пароль не запитуємо.",
-    "Verify your identifier. No registration or password is required.",
+    "Чтобы открыть FX-сигналы, зарегистрируйтесь по партнёрской ссылке, внесите депозит и подтвердите Pocket Option ID.",
+    "Щоб відкрити FX-сигнали, зареєструйтеся за партнерським посиланням, внесіть депозит і підтвердьте Pocket Option ID.",
+    "To access FX signals, register through the partner link, make a deposit, then verify your Pocket Option ID.",
   ],
+  "gate.register": ["Регистрация в Pocket Option", "Реєстрація в Pocket Option", "Register with Pocket Option"],
   "gate.id": ["Идентификатор Pocket Option", "Ідентифікатор Pocket Option", "Pocket Option identifier"],
   "gate.idHelp": [
-    "Девять цифр из профиля. Это проверка ID, не создание аккаунта.",
-    "Дев’ять цифр із профілю. Це перевірка ID, а не створення облікового запису.",
-    "The nine-digit ID from your profile. This verifies your ID; it does not create an account.",
+    "Введите 9 цифр из профиля Pocket Option. ID будет проверен по статусу регистрации и депозита.",
+    "Введіть 9 цифр із профілю Pocket Option. ID буде перевірено за статусом реєстрації та депозиту.",
+    "Enter the 9-digit ID from your Pocket Option profile. Registration and deposit status will be checked.",
   ],
   "gate.error": [
     "Идентификатор должен состоять ровно из 9 цифр",
@@ -395,15 +396,58 @@ const copy = {
   ],
   "gate.check": ["Проверить ID", "Перевірити ID", "Verify ID"],
   "gate.enterDigits": ["Введите 9 цифр", "Введіть 9 цифр", "Enter 9 digits"],
-  "gate.privacy": [
-    "ID остаётся только в этом браузере. На сервер он не отправляется.",
-    "ID залишається лише в цьому браузері. На сервер його не надсилають.",
-    "Your ID stays in this browser and is not sent to the server.",
+  "gate.checking": ["Проверяем…", "Перевіряємо…", "Checking…"],
+  "gate.limitation": [
+    "Партнёрский API подтверждает регистрацию по ссылке владельца и наличие депозита, но не подтверждает, что этот счёт принадлежит вам. Один Telegram-аккаунт можно связать только с одним Pocket ID, и один Pocket ID — только с одним Telegram-аккаунтом.",
+    "Партнерський API підтверджує реєстрацію за посиланням власника та наявність депозиту, але не підтверджує, що цей рахунок належить вам. Один Telegram-акаунт можна зв’язати лише з одним Pocket ID, а один Pocket ID — лише з одним Telegram-акаунтом.",
+    "The partner API confirms registration through the owner’s referral link and a deposit, but cannot prove that you own the account. Each Telegram account can link to only one Pocket ID, and each Pocket ID can link to only one Telegram account.",
   ],
-  "gate.note1": ["Только 9 цифр из профиля Pocket Option", "Лише 9 цифр із профілю Pocket Option", "Only the 9-digit ID from your Pocket Option profile"],
-  "gate.note2": ["Пароль от кабинета не нужен", "Пароль від кабінету не потрібен", "No account password needed"],
-  "gate.note3": ["Сделки сами не открываются", "Угоди самі не відкриваються", "Trades are never placed automatically"],
-  "gate.note4": ["Сумму считает калькулятор риска", "Суму рахує калькулятор ризику", "Use the risk calculator to size trades"],
+  "gate.note1": [
+    "Создайте аккаунт Pocket Option именно по партнёрской ссылке владельца PRIME BOT.",
+    "Створіть акаунт Pocket Option саме за партнерським посиланням власника PRIME BOT.",
+    "Create your Pocket Option account through the PRIME BOT owner’s referral link.",
+  ],
+  "gate.note2": [
+    "Внесите депозит любого размера и дождитесь подтверждения Pocket Option.",
+    "Внесіть депозит будь-якого розміру й дочекайтеся підтвердження Pocket Option.",
+    "Make a deposit of any amount and wait for Pocket Option to confirm it.",
+  ],
+  "gate.note3": [
+    "PRIME BOT только показывает FX-сигналы — сделки не открывает.",
+    "PRIME BOT лише показує FX-сигнали — угод не відкриває.",
+    "PRIME BOT displays FX signals only; it never places trades.",
+  ],
+  "gate.result.invalidId": ["Проверьте ID: нужны ровно 9 цифр.", "Перевірте ID: потрібно рівно 9 цифр.", "Check the ID: exactly 9 digits are required."],
+  "gate.result.notRegistered": [
+    "Регистрация по партнёрской ссылке не подтверждена. Убедитесь, что аккаунт создан по ссылке владельца PRIME BOT.",
+    "Реєстрацію за партнерським посиланням не підтверджено. Переконайтеся, що акаунт створено за посиланням власника PRIME BOT.",
+    "Registration through the partner link was not confirmed. Make sure the account was created through the PRIME BOT owner’s link.",
+  ],
+  "gate.result.depositRequired": [
+    "Подтверждённый депозит пока не найден. Внесите депозит любого размера и повторите проверку позже.",
+    "Підтверджений депозит поки не знайдено. Внесіть депозит будь-якого розміру й повторіть перевірку пізніше.",
+    "No confirmed deposit was found yet. Make a deposit of any amount and try again later.",
+  ],
+  "gate.result.alreadyLinked": [
+    "Этот Telegram-аккаунт или Pocket ID уже связан. Один Telegram-аккаунт — один Pocket ID, и один Pocket ID — один Telegram-аккаунт.",
+    "Цей Telegram-акаунт або Pocket ID уже пов’язано. Один Telegram-акаунт — один Pocket ID, і один Pocket ID — один Telegram-акаунт.",
+    "This Telegram account or Pocket ID is already linked. One Telegram account per Pocket ID, and one Pocket ID per Telegram account.",
+  ],
+  "gate.result.telegramRequired": [
+    "Откройте PRIME BOT через Telegram, чтобы связать аккаунт.",
+    "Відкрийте PRIME BOT через Telegram, щоб зв’язати акаунт.",
+    "Open PRIME BOT in Telegram to link your account.",
+  ],
+  "gate.result.rateLimited": [
+    "Слишком много проверок подряд. Подождите немного и попробуйте снова.",
+    "Забагато перевірок поспіль. Зачекайте трохи й спробуйте ще раз.",
+    "Too many checks in a row. Wait a moment, then try again.",
+  ],
+  "gate.result.unavailable": [
+    "Не удалось проверить данные сейчас. Попробуйте позже.",
+    "Не вдалося перевірити дані зараз. Спробуйте пізніше.",
+    "We couldn’t verify the details right now. Please try again later.",
+  ],
 } as const;
 
 type MessageKey = keyof typeof copy;
