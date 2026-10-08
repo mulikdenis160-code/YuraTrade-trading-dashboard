@@ -1,10 +1,10 @@
 ---
-name: Referral feature scope
-description: The user's current scope boundary for referral-related work in PRIME BOT.
+name: Pocket Option partner scope
+description: The current partner/referral scope for PRIME BOT.
 ---
 
-Do not add referral functionality while working on PRIME BOT unless the user explicitly asks for it. Keep signal-reliability work focused on signal search and its data flow.
+Pocket Option partner onboarding is in scope: the user wants Telegram Mini App access gated by affiliate registration and a verified deposit. Keep work limited to that flow; do not add unrelated referral rewards or commission features unless requested.
 
-**Why:** the user explicitly said to focus on fixing signals and not add referral features.
+**Why:** the user said Pocket Option partnership features are required and explicitly requested registration/deposit checks before Mini App access.
 
-**How to apply:** do not introduce referral flows, rewards, or related UI as part of signal work; wait for a separate explicit request.
+**How to apply:** use the confirmed partner endpoint for status checks, and do not assume that entering a Pocket Option ID proves account ownership.

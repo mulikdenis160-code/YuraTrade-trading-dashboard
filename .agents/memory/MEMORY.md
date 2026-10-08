@@ -2,6 +2,6 @@
 - [Signal preparation flow](signal-preparation.md) — show the pair countdown only after a signal is ready; recheck the minute-entry window and quote before issuing.
 - [Signal model](signal-model.md) — use expiry-matched candle intervals and treat ADX as context, not an automatic no-signal cutoff.
 - [Rotating signal candidates](signal-candidate-rotation.md) — rotate one pair at a time through the 20 highest-payout eligible OTC currency pairs.
-- [Referral scope](referral-scope.md) — do not add referral features unless explicitly requested; keep signal-reliability work focused.
+- [Referral scope](referral-scope.md) — Pocket Option registration/deposit gating is in scope; avoid unrelated referral rewards or commission features.
 - [Signal statistics integrity](signal-statistics.md) — report verified browser-local outcomes only; never seed synthetic historical performance.
 - [TanStack dev RPC diagnostics](tanstack-dev-rpc.md) — use the current Vite-generated function ID and same-origin `Origin` header for live dev calls.
