@@ -7,6 +7,7 @@ import {
   markExpiredPendingSignals,
   recordSignalOutcome,
   recordSignalStarted,
+  readSignalJournalTotals,
   recentlyUsedSignalSymbols,
   signalJournalCsv,
   signalRecordId,
@@ -68,6 +69,28 @@ test("signal records are local, idempotent, and settle only once", () => {
   assert.equal(readSignalJournal()[0].outcome, "win");
   assert.equal(readSignalJournal()[0].aiProbability, 0.64);
   assert.equal(readSignalJournal()[0].aiConfidence, 84);
+
+  const oldJournal = Array.from({ length: 500 }, (_, index) => ({
+    ...signal,
+    id: `legacy-${index}`,
+    closePrice: signal.openPrice + 0.001,
+    settledAt: signal.startedAt + index + 1,
+    outcome: "win" as const,
+  }));
+  values.set("vprime_signal_journal_v1", JSON.stringify(oldJournal));
+  assert.equal(readSignalJournalTotals().settled, 500);
+
+  const afterLimit = { ...signal, id: "after-limit", startedAt: signal.startedAt + 10_000 };
+  assert.equal(recordSignalStarted(afterLimit), true);
+  assert.equal(recordSignalOutcome(afterLimit.id, afterLimit.openPrice - 0.001, "loss"), true);
+  assert.equal(readSignalJournal().length, 500);
+  assert.deepEqual(readSignalJournalTotals(), {
+    settled: 501,
+    wins: 500,
+    losses: 1,
+    draws: 0,
+    hitRate: (500 / 501) * 100,
+  });
 });
 
 test("journal statistics use payout-aware break-even and one-unit returns", () => {

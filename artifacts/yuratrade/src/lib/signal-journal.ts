@@ -52,6 +52,11 @@ export type SignalSummary = {
   netUnits: number;
 };
 
+export type SignalJournalTotals = Pick<
+  SignalSummary,
+  "settled" | "wins" | "losses" | "draws" | "hitRate"
+>;
+
 const STORAGE_KEY = "vprime_signal_journal_v1";
 const JOURNAL_EVENT = "vprime:signal-journal-updated";
 const MAX_ENTRIES = 500;
@@ -165,21 +170,88 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
   };
 }
 
+type StoredSignalJournal = {
+  entries: SignalJournalEntry[];
+  totals: SignalJournalTotals;
+};
+
+function totalsFromEntries(entries: SignalJournalEntry[]): SignalJournalTotals {
+  const summary = summarizeSignals(entries);
+  return {
+    settled: summary.settled,
+    wins: summary.wins,
+    losses: summary.losses,
+    draws: summary.draws,
+    hitRate: summary.hitRate,
+  };
+}
+
+function normalizeStoredTotals(value: unknown): SignalJournalTotals | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Partial<SignalJournalTotals>;
+  const count = (input: unknown) =>
+    Number.isFinite(input) && Number(input) >= 0
+      ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(input)))
+      : null;
+  const wins = count(candidate.wins);
+  const losses = count(candidate.losses);
+  const draws = count(candidate.draws);
+  if (wins === null || losses === null || draws === null) return null;
+  const decided = wins + losses;
+  return {
+    settled: wins + losses + draws,
+    wins,
+    losses,
+    draws,
+    hitRate: decided > 0 ? (wins / decided) * 100 : null,
+  };
+}
+
+function isCountedOutcome(outcome: JournalOutcome | undefined): outcome is "win" | "loss" | "draw" {
+  return outcome === "win" || outcome === "loss" || outcome === "draw";
+}
+
+function readStoredSignalJournal(local: Storage): StoredSignalJournal | null {
+  const raw = local.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  const decoded: unknown = JSON.parse(raw);
+  const envelope =
+    typeof decoded === "object" &&
+    decoded !== null &&
+    !Array.isArray(decoded) &&
+    (decoded as { version?: unknown }).version === 2
+      ? (decoded as { entries?: unknown; totals?: unknown })
+      : null;
+  const rawEntries = Array.isArray(decoded) ? decoded : envelope?.entries;
+  if (!Array.isArray(rawEntries)) return null;
+  const entries = rawEntries
+    .map(normalizeEntry)
+    .filter((entry): entry is SignalJournalEntry => entry !== null)
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .slice(0, MAX_ENTRIES);
+  return {
+    entries,
+    totals: normalizeStoredTotals(envelope?.totals) ?? totalsFromEntries(entries),
+  };
+}
+
 export function readSignalJournal(): SignalJournalEntry[] {
   const local = storage();
   if (!local) return [];
   try {
-    const raw = local.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const decoded: unknown = JSON.parse(raw);
-    if (!Array.isArray(decoded)) return [];
-    return decoded
-      .map(normalizeEntry)
-      .filter((entry): entry is SignalJournalEntry => entry !== null)
-      .sort((a, b) => b.startedAt - a.startedAt)
-      .slice(0, MAX_ENTRIES);
+    return readStoredSignalJournal(local)?.entries ?? [];
   } catch {
     return [];
+  }
+}
+
+export function readSignalJournalTotals(): SignalJournalTotals {
+  const local = storage();
+  if (!local) return totalsFromEntries([]);
+  try {
+    return readStoredSignalJournal(local)?.totals ?? totalsFromEntries([]);
+  } catch {
+    return totalsFromEntries([]);
   }
 }
 
@@ -187,7 +259,31 @@ function writeSignalJournal(entries: SignalJournalEntry[]) {
   const local = storage();
   if (!local) return false;
   try {
-    local.setItem(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)));
+    const previous = readStoredSignalJournal(local);
+    const nextEntries = entries.slice(0, MAX_ENTRIES);
+    const previousById = new Map((previous?.entries ?? []).map((entry) => [entry.id, entry]));
+    const totals = previous?.totals ?? totalsFromEntries([]);
+    let nextTotals = totals;
+    for (const entry of nextEntries) {
+      const priorOutcome = previousById.get(entry.id)?.outcome;
+      if (!isCountedOutcome(priorOutcome) && isCountedOutcome(entry.outcome)) {
+        const wins = nextTotals.wins + Number(entry.outcome === "win");
+        const losses = nextTotals.losses + Number(entry.outcome === "loss");
+        const draws = nextTotals.draws + Number(entry.outcome === "draw");
+        const decided = wins + losses;
+        nextTotals = {
+          settled: wins + losses + draws,
+          wins,
+          losses,
+          draws,
+          hitRate: decided > 0 ? (wins / decided) * 100 : null,
+        };
+      }
+    }
+    local.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: 2, entries: nextEntries, totals: nextTotals }),
+    );
     if (typeof window !== "undefined") window.dispatchEvent(new Event(JOURNAL_EVENT));
     return true;
   } catch {
