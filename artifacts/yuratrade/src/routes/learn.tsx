@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { MarketLearning } from "@/components/market-learning";
 import { lessons, quiz } from "@/lib/lessons";
 import { useLanguage } from "@/lib/language";
 
@@ -48,6 +49,10 @@ function LearnPage() {
           {t("learn.intro", { done: done.length, total: lessons.length })}
         </p>
       </header>
+
+      <div className="rise rise-2">
+        <MarketLearning />
+      </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-[16rem_1fr]">
         <nav className="rise rise-2 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">

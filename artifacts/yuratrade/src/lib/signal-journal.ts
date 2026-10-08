@@ -56,6 +56,7 @@ export type SignalJournalTotals = Pick<
   SignalSummary,
   "settled" | "wins" | "losses" | "draws" | "hitRate"
 >;
+type SignalJournalTotalsByGroup = Record<JournalGroup, SignalJournalTotals>;
 
 const STORAGE_KEY = "vprime_signal_journal_v1";
 const JOURNAL_EVENT = "vprime:signal-journal-updated";
@@ -172,11 +173,20 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
 
 type StoredSignalJournal = {
   entries: SignalJournalEntry[];
-  totals: SignalJournalTotals;
+  totals: SignalJournalTotalsByGroup;
 };
 
-function totalsFromEntries(entries: SignalJournalEntry[]): SignalJournalTotals {
-  const summary = summarizeSignals(entries);
+function totalsFromEntries(entries: SignalJournalEntry[]): SignalJournalTotalsByGroup {
+  return {
+    fx: totalsForGroup(entries, "fx"),
+    crypto: totalsForGroup(entries, "crypto"),
+    stock: totalsForGroup(entries, "stock"),
+    commodity: totalsForGroup(entries, "commodity"),
+  };
+}
+
+function totalsForGroup(entries: SignalJournalEntry[], group: JournalGroup): SignalJournalTotals {
+  const summary = summarizeSignals(entries.filter((entry) => entry.group === group));
   return {
     settled: summary.settled,
     wins: summary.wins,
@@ -186,25 +196,43 @@ function totalsFromEntries(entries: SignalJournalEntry[]): SignalJournalTotals {
   };
 }
 
-function normalizeStoredTotals(value: unknown): SignalJournalTotals | null {
+function normalizeStoredTotals(value: unknown): SignalJournalTotalsByGroup | null {
   if (typeof value !== "object" || value === null) return null;
-  const candidate = value as Partial<SignalJournalTotals>;
+  const candidate = value as Partial<Record<JournalGroup, unknown>>;
   const count = (input: unknown) =>
     Number.isFinite(input) && Number(input) >= 0
       ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(input)))
       : null;
-  const wins = count(candidate.wins);
-  const losses = count(candidate.losses);
-  const draws = count(candidate.draws);
-  if (wins === null || losses === null || draws === null) return null;
-  const decided = wins + losses;
-  return {
-    settled: wins + losses + draws,
-    wins,
-    losses,
-    draws,
-    hitRate: decided > 0 ? (wins / decided) * 100 : null,
+  const normalized = {} as SignalJournalTotalsByGroup;
+  for (const group of groups) {
+    const rawGroup = candidate[group];
+    if (typeof rawGroup !== "object" || rawGroup === null) return null;
+    const groupTotals = rawGroup as Partial<SignalJournalTotals>;
+    const wins = count(groupTotals.wins);
+    const losses = count(groupTotals.losses);
+    const draws = count(groupTotals.draws);
+    if (wins === null || losses === null || draws === null) return null;
+    const decided = wins + losses;
+    normalized[group] = {
+      settled: wins + losses + draws,
+      wins,
+      losses,
+      draws,
+      hitRate: decided > 0 ? (wins / decided) * 100 : null,
+    };
+  }
+  return normalized;
+}
+
+function emptyStoredTotals(): SignalJournalTotalsByGroup {
+  const empty: SignalJournalTotals = {
+    settled: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    hitRate: null,
   };
+  return { fx: { ...empty }, crypto: { ...empty }, stock: { ...empty }, commodity: { ...empty } };
 }
 
 function isCountedOutcome(outcome: JournalOutcome | undefined): outcome is "win" | "loss" | "draw" {
@@ -245,13 +273,13 @@ export function readSignalJournal(): SignalJournalEntry[] {
   }
 }
 
-export function readSignalJournalTotals(): SignalJournalTotals {
+export function readSignalJournalTotals(group: JournalGroup = "fx"): SignalJournalTotals {
   const local = storage();
-  if (!local) return totalsFromEntries([]);
+  if (!local) return emptyStoredTotals()[group];
   try {
-    return readStoredSignalJournal(local)?.totals ?? totalsFromEntries([]);
+    return readStoredSignalJournal(local)?.totals[group] ?? emptyStoredTotals()[group];
   } catch {
-    return totalsFromEntries([]);
+    return emptyStoredTotals()[group];
   }
 }
 
@@ -262,16 +290,17 @@ function writeSignalJournal(entries: SignalJournalEntry[]) {
     const previous = readStoredSignalJournal(local);
     const nextEntries = entries.slice(0, MAX_ENTRIES);
     const previousById = new Map((previous?.entries ?? []).map((entry) => [entry.id, entry]));
-    const totals = previous?.totals ?? totalsFromEntries([]);
-    let nextTotals = totals;
+    const totals = previous?.totals ?? emptyStoredTotals();
+    const nextTotals = { ...totals };
     for (const entry of nextEntries) {
       const priorOutcome = previousById.get(entry.id)?.outcome;
       if (!isCountedOutcome(priorOutcome) && isCountedOutcome(entry.outcome)) {
-        const wins = nextTotals.wins + Number(entry.outcome === "win");
-        const losses = nextTotals.losses + Number(entry.outcome === "loss");
-        const draws = nextTotals.draws + Number(entry.outcome === "draw");
+        const groupTotals = nextTotals[entry.group];
+        const wins = groupTotals.wins + Number(entry.outcome === "win");
+        const losses = groupTotals.losses + Number(entry.outcome === "loss");
+        const draws = groupTotals.draws + Number(entry.outcome === "draw");
         const decided = wins + losses;
-        nextTotals = {
+        nextTotals[entry.group] = {
           settled: wins + losses + draws,
           wins,
           losses,

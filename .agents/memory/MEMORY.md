@@ -3,4 +3,5 @@
 - [Signal model](signal-model.md) — use expiry-matched candle intervals and treat ADX as context, not an automatic no-signal cutoff.
 - [Rotating signal candidates](signal-candidate-rotation.md) — rotate one pair at a time through the 20 highest-payout eligible OTC currency pairs.
 - [Referral scope](referral-scope.md) — do not add referral features unless explicitly requested; keep signal-reliability work focused.
+- [Signal statistics integrity](signal-statistics.md) — report verified browser-local outcomes only; never seed synthetic historical performance.
 - [TanStack dev RPC diagnostics](tanstack-dev-rpc.md) — use the current Vite-generated function ID and same-origin `Origin` header for live dev calls.
