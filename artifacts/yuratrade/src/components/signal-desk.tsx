@@ -4,22 +4,12 @@ import { chooseSignalPair, confirmSignalEntry, loadFeed, takeSignal } from "@/li
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import {
-  markSignalUnverified,
   readSignalJournal,
   recentlyUsedSignalSymbols,
 } from "@/lib/signal-journal";
 import {
-  completeSignalBatchAttempt,
-  pauseSignalBatch,
   readSignalBatch,
-  recordSignalBatchSearchFailure,
   requestSignalBatchStop,
-  resetSignalBatchSearchFailures,
-  resumeSignalBatch,
-  signalBatchWinRate,
-  startSignalBatch,
-  subscribeToSignalBatch,
-  type SignalBatchRun,
 } from "@/lib/signal-batch";
 import { AnalysisModal } from "@/components/analysis-modal";
 import { copyPairName } from "@/lib/pair-clipboard";
@@ -62,13 +52,7 @@ export function SignalDesk() {
   const [balance, setBalance] = useState<number | null>(null);
   const [used, setUsed] = useState(0);
   const [expiryMinutes, setExpiryMinutes] = useState(2);
-  const [batch, setBatch] = useState<SignalBatchRun | null>(null);
-  const [batchLoaded, setBatchLoaded] = useState(false);
-  const [batchNow, setBatchNow] = useState(Date.now());
-  const [batchMessage, setBatchMessage] = useState("");
   const attemptRef = useRef(0);
-  const autoBatchKeyRef = useRef("");
-  const askRef = useRef<((batchRun: SignalBatchRun | null) => Promise<void>) | null>(null);
 
   useEffect(() => () => {
     attemptRef.current += 1;
@@ -113,12 +97,16 @@ export function SignalDesk() {
   }, []);
 
   useEffect(() => {
-    const update = () => {
-      setBatch(readSignalBatch());
-      setBatchLoaded(true);
-    };
-    update();
-    return subscribeToSignalBatch(update);
+    const batch = readSignalBatch();
+    if (!batch || (batch.status !== "running" && batch.status !== "paused")) return;
+    const activePosition = batch.completed + 1;
+    const hasActiveSeries = readSignalJournal().some(
+      (entry) =>
+        entry.batchRunId === batch.id &&
+        entry.batchPosition === activePosition &&
+        (entry.outcome === "pending" || entry.outcome === "overlay"),
+    );
+    requestSignalBatchStop(hasActiveSeries);
   }, []);
 
   const level = levelForBalance(balance);
@@ -138,34 +126,9 @@ export function SignalDesk() {
 
   const expiryLabel = (seconds: number) => formatExpiryForLanguage(seconds, language);
 
-  const hasActiveBatchSeries = (run: SignalBatchRun) => readSignalJournal().some(
-    (entry) =>
-      entry.batchRunId === run.id &&
-      entry.batchPosition === run.completed + 1 &&
-      (entry.outcome === "pending" || entry.outcome === "overlay"),
-  );
-
-  const openSignal = async (
-    candidate: PreparedSignal,
-    attempt: number,
-    batchRun: SignalBatchRun | null,
-    batchPosition: number | null,
-  ) => {
+  const openSignal = async (candidate: PreparedSignal, attempt: number) => {
     if (attemptRef.current !== attempt) return;
-    if (batchRun) {
-      const current = readSignalBatch();
-      if (
-        !current ||
-        current.id !== batchRun.id ||
-        current.status !== "running" ||
-        current.completed + 1 !== batchPosition
-      ) {
-        setPhase("idle");
-        return;
-      }
-    }
     if (cap !== null) setUsed(markSignalUsed());
-    if (batchRun) resetSignalBatchSearchFailures(batchRun.id);
     await navigate({
       to: "/signal",
       search: {
@@ -182,27 +145,16 @@ export function SignalDesk() {
         aiConfidence: candidate.aiConfidence,
         step: 0,
         started: Date.now(),
-        ...(batchRun && batchPosition !== null
-          ? { batchRunId: batchRun.id, batchPosition }
-          : {}),
       },
     });
   };
 
-  const showSearchError = (
-    cause: unknown,
-    attempt: number,
-    batchRun: SignalBatchRun | null,
-  ) => {
+  const showSearchError = (cause: unknown, attempt: number) => {
     if (attemptRef.current !== attempt) return;
     setPhase("idle");
     setPendingPair(null);
     const message = cause instanceof Error ? cause.message : t("signal.none");
     setSearchError(message);
-    if (batchRun) {
-      const updated = recordSignalBatchSearchFailure(batchRun.id, message);
-      setBatch(updated);
-    }
   };
 
   const copySelectedPair = async () => {
@@ -215,11 +167,9 @@ export function SignalDesk() {
     }
   };
 
-  const ask = async (requestedBatch: SignalBatchRun | null = null) => {
+  const ask = async () => {
     if (phase !== "idle" || blocked || !ready) return;
-    const batchRun = requestedBatch?.status === "running" ? requestedBatch : null;
-    const batchPosition = batchRun ? batchRun.completed + 1 : null;
-    const requestedExpiry = batchRun?.expirySeconds ?? expirySeconds;
+    const requestedExpiry = expirySeconds;
     const attempt = ++attemptRef.current;
     const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
     setPhase("choosing");
@@ -274,9 +224,6 @@ export function SignalDesk() {
       if (!selected || !prepared) {
         setNotice(lastReason || t("signal.none"));
         setPhase("idle");
-        if (batchRun) {
-          setBatch(recordSignalBatchSearchFailure(batchRun.id, lastReason || t("signal.none")));
-        }
         return;
       }
 
@@ -295,155 +242,11 @@ export function SignalDesk() {
       await openSignal(
         { ...prepared, openPrice: entry.openPrice, symbol: readyPair.symbol, group: readyPair.group, seconds: readyPair.seconds },
         attempt,
-        batchRun,
-        batchPosition,
       );
     } catch (cause) {
-      showSearchError(cause, attempt, batchRun);
+      showSearchError(cause, attempt);
     }
   };
-
-  askRef.current = ask;
-
-  useEffect(() => {
-    if (
-      !batchLoaded ||
-      !batch ||
-      batch.status !== "running" ||
-      phase !== "idle" ||
-      !ready ||
-      Boolean(blocked)
-    ) {
-      return;
-    }
-
-    const position = batch.completed + 1;
-    const initialEntries = readSignalJournal().filter(
-      (entry) => entry.batchRunId === batch.id && entry.batchPosition === position,
-    );
-    for (const entry of initialEntries) {
-      if (
-        entry.outcome === "pending" &&
-        Date.now() > entry.startedAt + entry.seconds * 1000 + 10_000
-      ) {
-        markSignalUnverified(entry.id);
-        pauseSignalBatch(batch.id, "Котировку не удалось сверить в срок экспирации.");
-      }
-    }
-    const entries = readSignalJournal()
-      .filter((entry) => entry.batchRunId === batch.id && entry.batchPosition === position)
-      .sort((a, b) => a.step - b.step || a.startedAt - b.startedAt);
-    const last = entries.at(-1);
-
-    if (last && (last.outcome === "win" || last.outcome === "draw" || last.outcome === "loss")) {
-      const reconciled = completeSignalBatchAttempt(batch.id, position, last.outcome);
-      setBatch(reconciled);
-      if (!reconciled || reconciled.completed < position) {
-        setBatch(pauseSignalBatch(batch.id, "Не удалось сохранить завершение серии."));
-      }
-      return;
-    }
-    if (last?.outcome === "unverified") {
-      setBatch(pauseSignalBatch(batch.id, "Исход не удалось подтвердить котировкой."));
-      return;
-    }
-
-    if (last && (last.outcome === "pending" || last.outcome === "overlay")) {
-      const resumeKey = `resume:${batch.id}:${position}:${last.id}:${last.outcome}`;
-      if (autoBatchKeyRef.current === resumeKey) return;
-      autoBatchKeyRef.current = resumeKey;
-      void navigate({
-        to: "/signal",
-        search: {
-          symbol: last.symbol,
-          name: last.name,
-          group: "fx",
-          direction: last.direction,
-          open: last.openPrice,
-          payout: last.payout,
-          seconds: last.seconds,
-          analysisSeconds: last.analysisSeconds,
-          note: last.note,
-          bars: last.bars,
-          aiConfidence: last.aiConfidence ?? null,
-          step: last.step,
-          started: last.startedAt,
-          batchRunId: batch.id,
-          batchPosition: position,
-        },
-      }).catch(() => {
-        autoBatchKeyRef.current = "";
-      });
-      return;
-    }
-
-    if (batch.nextAttemptAt > Date.now()) {
-      const timer = window.setTimeout(
-        () => setBatchNow(Date.now()),
-        Math.min(1000, batch.nextAttemptAt - Date.now()),
-      );
-      return () => window.clearTimeout(timer);
-    }
-
-    const searchKey = `search:${batch.id}:${position}:${batch.nextAttemptAt}`;
-    if (autoBatchKeyRef.current === searchKey) return;
-    const timer = window.setTimeout(() => {
-      if (autoBatchKeyRef.current === searchKey) return;
-      autoBatchKeyRef.current = searchKey;
-      void askRef.current?.(batch);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [batch, batchLoaded, batchNow, blocked, navigate, phase, ready]);
-
-  const startBatch = () => {
-    const started = startSignalBatch(expirySeconds);
-    setBatch(started ?? readSignalBatch());
-    setBatchMessage(started ? "" : t("batch.startFailed"));
-    autoBatchKeyRef.current = "";
-  };
-
-  const pauseBatch = () => {
-    if (!batch) return;
-    const activeSeries = hasActiveBatchSeries(batch);
-    if (phase !== "idle" && !activeSeries) {
-      attemptRef.current += 1;
-      setPhase("idle");
-      setPendingPair(null);
-    }
-    setBatch(pauseSignalBatch(batch.id, "Пауза по запросу пользователя."));
-  };
-
-  const resumeBatch = () => {
-    if (!batch) return;
-    setBatch(resumeSignalBatch(batch.id));
-    autoBatchKeyRef.current = "";
-  };
-
-  const stopBatch = () => {
-    if (!batch) return;
-    const activeSeries = hasActiveBatchSeries(batch);
-    if (phase !== "idle" && !activeSeries) {
-      attemptRef.current += 1;
-      setPhase("idle");
-      setPendingPair(null);
-    }
-    setBatch(requestSignalBatchStop(activeSeries));
-  };
-
-  const batchLocked =
-    batch?.status === "running" || batch?.status === "paused" || batch?.status === "stopping";
-  const batchWinRate = batch ? signalBatchWinRate(batch) : null;
-  const batchStatusLabel = batch
-    ? batch.status === "running"
-      ? t("batch.running")
-      : batch.status === "paused"
-        ? t("batch.paused")
-        : batch.status === "stopping"
-          ? t("batch.stopping")
-          : batch.status === "completed"
-            ? t("batch.completed")
-            : t("batch.stopped")
-    : "";
 
   return (
     <div className="mx-auto w-full max-w-md space-y-4">
@@ -473,95 +276,6 @@ export function SignalDesk() {
         <p className="mt-2 text-xs leading-relaxed text-dim">
           {t("signal.experimental")}
         </p>
-        <section className="mt-4 rounded-2xl border border-blue/20 bg-blue/5 p-3.5" aria-label={t("batch.title")}>
-          <div className="flex items-start gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-blue/20 bg-blue/10 text-xs font-bold text-blue-soft">
-              20
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-fg">{t("batch.title")}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">{t("batch.description")}</p>
-            </div>
-          </div>
-          {batch ? (
-            <>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold text-blue-soft">{batchStatusLabel}</p>
-                <p className="text-xs text-dim">{expiryLabel(batch.expirySeconds)}</p>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8" role="progressbar" aria-valuemin={0} aria-valuemax={batch.target} aria-valuenow={batch.completed} aria-label={t("batch.progress")}>
-                <div className="h-full rounded-full bg-blue-soft transition-[width]" style={{ width: `${(batch.completed / batch.target) * 100}%` }} />
-              </div>
-              <p className="mt-1.5 text-xs text-muted">
-                {t("batch.progress")}: {batch.completed}/{batch.target}
-              </p>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                {[
-                  [t("batch.wins"), batch.wins, "text-win"],
-                  [t("batch.losses"), batch.losses, "text-loss"],
-                  [t("batch.draws"), batch.draws, "text-blue-soft"],
-                ].map(([label, value, color]) => (
-                  <div key={label} className="rounded-xl bg-black/20 px-2 py-2">
-                    <p className={`font-mono text-lg font-bold ${color}`}>{value}</p>
-                    <p className="text-[10px] text-dim">{label}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
-                <div>
-                  <p className="text-xs font-semibold text-muted">{t("batch.winRate")}</p>
-                  <p className="mt-0.5 text-[10px] leading-relaxed text-dim">{t("batch.winRateHelp")}</p>
-                </div>
-                <p className="shrink-0 font-mono text-lg font-bold text-win">
-                  {batchWinRate === null ? "—" : `${batchWinRate.toFixed(1)}%`}
-                </p>
-              </div>
-              {batch.status === "paused" && batch.lastError ? (
-                <p className="mt-3 text-xs leading-relaxed text-loss" role="status">
-                  {t("batch.error", { reason: batch.lastError })}
-                </p>
-              ) : batch.status === "running" && batch.lastError ? (
-                <p className="mt-3 text-xs leading-relaxed text-dim" role="status">
-                  {batch.lastError}
-                  {batch.nextAttemptAt > batchNow
-                    ? ` · ${t("batch.retry", { seconds: Math.ceil((batch.nextAttemptAt - batchNow) / 1000) })}`
-                    : ""}
-                </p>
-              ) : null}
-            </>
-          ) : null}
-          {batchMessage ? <p className="mt-3 text-xs text-loss" role="alert">{batchMessage}</p> : null}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {!batchLocked ? (
-              <button
-                type="button"
-                className="btn-prime min-h-10 w-full justify-center text-xs"
-                disabled={!batchLoaded || !ready || Boolean(blocked) || phase !== "idle"}
-                onClick={startBatch}
-              >
-                {t("batch.start")}
-              </button>
-            ) : null}
-            {batch?.status === "running" ? (
-              <button type="button" className="btn-ghost min-h-10 w-full justify-center text-xs" onClick={pauseBatch}>
-                {t("batch.pause")}
-              </button>
-            ) : null}
-            {batch?.status === "paused" ? (
-              <button type="button" className="btn-prime min-h-10 w-full justify-center text-xs" onClick={resumeBatch}>
-                {t("batch.resume")}
-              </button>
-            ) : null}
-            {batch && (batch.status === "running" || batch.status === "paused") ? (
-              <button type="button" className="btn-ghost min-h-10 w-full justify-center text-xs" onClick={stopBatch}>
-                {t("batch.stop")}
-              </button>
-            ) : null}
-            {batch?.status === "stopping" ? (
-              <p className="col-span-2 rounded-xl bg-black/20 px-3 py-2 text-center text-xs text-muted">{t("batch.stopping")}</p>
-            ) : null}
-          </div>
-        </section>
         <section className="mt-4 rounded-2xl border border-white/8 bg-[#080b12]/70 p-3" aria-label={t("signal.expiry")}>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-fg">{t("signal.expiry")}</p>
@@ -575,7 +289,7 @@ export function SignalDesk() {
                 <button
                   key={minutes}
                   type="button"
-                  disabled={phase !== "idle" || batchLocked}
+                  disabled={phase !== "idle"}
                   aria-pressed={selected}
                   title={expiryLabel(minutes * 60)}
                   onClick={() => setExpiryMinutes(minutes)}
@@ -594,7 +308,7 @@ export function SignalDesk() {
             {t("signal.analyzed", { period: expiryLabel(analysisSeconds) })}
           </p>
         </section>
-        <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked) || (batchLocked && batch?.status !== "running")} onClick={() => void ask(batch?.status === "running" ? batch : null)}>
+        <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked)} onClick={() => void ask()}>
           {phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")}
         </button>
         <p className={`mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`}>
