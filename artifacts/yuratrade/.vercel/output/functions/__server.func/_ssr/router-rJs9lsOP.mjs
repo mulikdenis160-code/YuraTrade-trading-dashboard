@@ -1,7 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, m as useNavigate, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { i as getServerFnById, n as createServerFn, r as TSS_SERVER_FUNCTION } from "./ssr.mjs";
-import { d as getTelegramInitData, f as initializeTelegramWebApp, l as analysisPeriodForExpiry, m as pocketGateMiddleware, p as isValidExpirySeconds, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-4O3BIfQO.mjs";
+import { d as getTelegramInitData, f as initializeTelegramWebApp, l as analysisPeriodForExpiry, m as pocketGateMiddleware, p as isValidExpirySeconds, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-Bvk_Ig-2.mjs";
+import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/createSsrRpc-CU_ZALBq.js
@@ -18,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-CWkNhyQD.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-rJs9lsOP.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -156,10 +157,6 @@ function markSignalUsed(pocketId) {
 		count
 	}));
 	return count;
-}
-var ADMIN_IDS = ["113510708", "92535291"];
-function isAdminId(value) {
-	return value !== null && ADMIN_IDS.includes(value);
 }
 var FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page.";
 function errorMessage(error) {
@@ -1499,9 +1496,9 @@ var copy = {
 		"Pocket Option identifier"
 	],
 	"gate.idHelp": [
-		"Введите 9 цифр из профиля Pocket Option. Регистрация и депозит проверяются автоматически; партнёрская проверка не подтверждает владение счётом.",
-		"Введіть 9 цифр із профілю Pocket Option. Реєстрація та депозит перевіряються автоматично; партнерська перевірка не підтверджує володіння рахунком.",
-		"Enter the 9-digit ID from your Pocket Option profile. Registration and deposit are checked automatically; the partner API does not prove account ownership."
+		"Обычный ID из профиля Pocket Option состоит из 9 цифр; настроенные админ-ID принимаются отдельно. Партнёрская проверка не подтверждает владение счётом.",
+		"Звичайний ID із профілю Pocket Option містить 9 цифр; налаштовані адмін-ID приймаються окремо. Партнерська перевірка не підтверджує володіння рахунком.",
+		"Regular Pocket Option IDs have 9 digits; configured admin IDs are accepted separately. The partner API does not prove account ownership."
 	],
 	"gate.error": [
 		"Идентификатор должен состоять ровно из 9 цифр",
@@ -1629,7 +1626,7 @@ var verifyPocketAccount = createServerFn({ method: "POST" }).validator((input) =
 })).handler(createSsrRpc("aac57122ce5b3a8923821121771eb8cb948eb3f0ce20a93ea73c801a87060f96"));
 var GATE_REQUEST_TIMEOUT_MS = 12e3;
 function isPocketId(value) {
-	return /^\d{9}$/.test(value);
+	return isValidPocketOptionId(value);
 }
 function settleWithin(promise, fallback, timeoutMs) {
 	return new Promise((resolve) => {
@@ -2627,15 +2624,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-B8SuvRdm.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-Cv7e9b7J.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-DN3dWsEg.mjs");
+var $$splitComponentImporter$3 = () => import("./history-avcOUcNh.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-DpGkomQW.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-DLjGvIab.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-D1GZ45iD.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-CKfcCc37.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-Dc4yo_wE.mjs");
+var $$splitComponentImporter = () => import("./signal-Dhowasrn.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2691,14 +2688,14 @@ var Route$2 = createFileRoute("/signal")({
 var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async ({ request }) => {
 	const initData = request.headers.get("x-telegram-init-data");
 	try {
-		const { requireVerifiedPocketAccess } = await import("./pocket-gate.server-CSH3Pyex.mjs");
+		const { requireVerifiedPocketAccess } = await import("./pocket-gate.server-eoJOoUVz.mjs");
 		await requireVerifiedPocketAccess(initData);
 	} catch {
 		return new Response("unauthorized", { status: 401 });
 	}
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-CB3QhRr0.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-cB9Sl0tj.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2740,7 +2737,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-q9JoTnxg.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-BKO-lxu3.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {
@@ -2789,4 +2786,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { isAdminId as A, confirmSignalEntry as C, usePocket as D, takeSignal as E, levels as M, markSignalUsed as N, formatExpiryForLanguage as O, signalsUsedToday as P, chooseSignalPair as S, readClose as T, pauseSignalBatch as _, markSignalUnverified as a, signalBatchWinRate as b, recentlyUsedSignalSymbols as c, signalJournalCsv as d, signalRecordId as f, completeSignalBatchAttempt as g, summarizeSignals as h, markExpiredPendingSignals as i, levelForBalance as j, useLanguage as k, recordSignalOutcome as l, summarizeByMarket as m, Route$2 as n, readSignalJournal as o, subscribeToSignalJournal as p, classifySignalAttempt as r, readSignalJournalTotals as s, router_exports as t, recordSignalStarted as u, readSignalBatch as v, loadFeed as w, subscribeToSignalBatch as x, requestSignalBatchStop as y };
+export { levelForBalance as A, confirmSignalEntry as C, usePocket as D, takeSignal as E, markSignalUsed as M, signalsUsedToday as N, formatExpiryForLanguage as O, chooseSignalPair as S, readClose as T, pauseSignalBatch as _, markSignalUnverified as a, signalBatchWinRate as b, recentlyUsedSignalSymbols as c, signalJournalCsv as d, signalRecordId as f, completeSignalBatchAttempt as g, summarizeSignals as h, markExpiredPendingSignals as i, levels as j, useLanguage as k, recordSignalOutcome as l, summarizeByMarket as m, Route$2 as n, readSignalJournal as o, subscribeToSignalJournal as p, classifySignalAttempt as r, readSignalJournalTotals as s, router_exports as t, recordSignalStarted as u, readSignalBatch as v, loadFeed as w, subscribeToSignalBatch as x, requestSignalBatchStop as y };

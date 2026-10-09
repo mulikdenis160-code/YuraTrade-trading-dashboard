@@ -16,10 +16,9 @@ import {
   TELEGRAM_LANGUAGE_CALLBACK_DATA,
   telegramLocaleCallbackData,
 } from "./telegram-bot.ts";
-import { isAdminId } from "./pocket-admin.ts";
+import { isAdminId, isValidPocketOptionId } from "./pocket-admin.ts";
 import {
-  isTelegramAdminForPocketId,
-  telegramAdminBypassForExactPair,
+  telegramAdminBypassForPocketId,
 } from "./telegram-admin.ts";
 import { POCKET_OPTION_REFERRAL_URL } from "./pocket-gate-config.ts";
 
@@ -83,9 +82,9 @@ test("language picker accepts only supported locales and exposes localized instr
 });
 
 test("the already-registered button asks for the Pocket Option ID in the user's language", () => {
-  assert.match(buildTelegramPocketIdPrompt("ru"), /9-значный/);
-  assert.match(buildTelegramPocketIdPrompt("uk"), /9-значний/);
-  assert.match(buildTelegramPocketIdPrompt("en"), /9-digit/);
+  assert.match(buildTelegramPocketIdPrompt("ru"), /админ-ID/);
+  assert.match(buildTelegramPocketIdPrompt("uk"), /адмін-ID/);
+  assert.match(buildTelegramPocketIdPrompt("en"), /admin IDs/);
   assert.equal(isTelegramPocketIdPromptReply({
     text: buildTelegramPocketIdPrompt("en"),
     from: { is_bot: true },
@@ -119,28 +118,29 @@ test("verification replies report the same tier limits as the website", () => {
   }, "ru").text, /первого уровня/);
 });
 
-test("configured site and Telegram IDs are admins only for their matching Pocket Option account", () => {
+test("configured admin IDs bypass verification when entered in Telegram", () => {
   assert.equal(isAdminId("984367891"), true);
-  assert.equal(isTelegramAdminForPocketId("984367891", "984367891"), true);
-  assert.equal(isTelegramAdminForPocketId("984367891", "123456789"), false);
-  assert.equal(isTelegramAdminForPocketId("123456789", "984367891"), false);
-  assert.deepEqual(
-    telegramAdminBypassForExactPair("984367891", "984367891"),
-    { status: "verified", pocketId: "984367891", depositAmount: 0 },
-  );
-  assert.equal(telegramAdminBypassForExactPair("123456789", "984367891"), null);
+  for (const pocketId of ["113510708", "92535291", "984367891"]) {
+    assert.equal(isValidPocketOptionId(pocketId), true);
+    assert.deepEqual(
+      telegramAdminBypassForPocketId(pocketId),
+      { status: "verified", pocketId, depositAmount: 0 },
+    );
+  }
+  assert.equal(isValidPocketOptionId("12345678"), false);
+  assert.equal(telegramAdminBypassForPocketId("123456789"), null);
 });
 
-test("the exact Telegram admin pair is treated as verified without a partner result", () => {
+test("admin verification is independent of partner registration and deposit results", () => {
   assert.deepEqual(
-    telegramAdminBypassForExactPair("984367891", "984367891"),
+    telegramAdminBypassForPocketId("984367891"),
     { status: "verified", pocketId: "984367891", depositAmount: 0 },
   );
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "984367891",
     depositAmount: 0,
-  }, "ru", "984367891").text, /администратора дневного лимита нет/);
+  }, "ru", "984367891").text, /Админ-доступ включён.*Дневного лимита нет/s);
   assert.match(formatTelegramVerificationReply({
     status: "not_registered",
   }, "ru", "984367891").text, /не найдена регистрация/);

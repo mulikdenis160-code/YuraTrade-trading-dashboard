@@ -1,7 +1,10 @@
 import { a as getRequest } from "./ssr.mjs";
+import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { createHmac, timingSafeEqual } from "node:crypto";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.server-CSH3Pyex.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.server-eoJOoUVz.js
 var _0001_telegram_pocket_gate_default = "CREATE TABLE IF NOT EXISTS telegram_pocket_bindings (\n  telegram_user_id TEXT PRIMARY KEY,\n  pocket_option_id TEXT NOT NULL UNIQUE\n    CHECK (pocket_option_id ~ '^[0-9]{9}$'),\n  verified_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS telegram_pocket_gate_attempts (\n  telegram_user_id TEXT PRIMARY KEY,\n  window_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0)\n);\n";
+var _0002_telegram_locale_default = "ALTER TABLE telegram_pocket_bindings\n  ADD COLUMN locale TEXT\n    CHECK (locale IN ('ru', 'uk', 'en'));\n";
+var _0003_telegram_admin_access_default = "CREATE TABLE IF NOT EXISTS telegram_admin_access (\n  telegram_user_id TEXT PRIMARY KEY\n    CHECK (telegram_user_id ~ '^[0-9]{1,20}$'),\n  pocket_option_id TEXT NOT NULL\n    CHECK (pocket_option_id IN ('113510708', '92535291', '984367891')),\n  locale TEXT CHECK (locale IN ('ru', 'uk', 'en')),\n  granted_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n";
 /**
 * Migration bookkeeping shared by the two appliers — `scripts/migrate.mjs`
 * (deploy, `readdir`) and `src/lib/db.ts` (PGLite preview, `import.meta.glob`).
@@ -119,7 +122,11 @@ async function createPgliteSql() {
 	});
 	const pg = await globalRef.__pgliteInstance__;
 	const migrate = async () => {
-		const migrations = /* #__PURE__ */ Object.assign({ "/migrations/0001_telegram_pocket_gate.sql": _0001_telegram_pocket_gate_default });
+		const migrations = /* #__PURE__ */ Object.assign({
+			"/migrations/0001_telegram_pocket_gate.sql": _0001_telegram_pocket_gate_default,
+			"/migrations/0002_telegram_locale.sql": _0002_telegram_locale_default,
+			"/migrations/0003_telegram_admin_access.sql": _0003_telegram_admin_access_default
+		});
 		const done = (await pg.query("select name from _migrations")).rows.map((r) => r.name);
 		for (const { name, path } of pendingMigrations(Object.keys(migrations), done)) await pg.transaction(async (tx) => {
 			await tx.exec(migrations[path]);
@@ -269,6 +276,26 @@ function parsePocketPartnerStatus(payload, pocketOptionId) {
 		depositAmount: nonNegativeAmount(user.sum_ftd)
 	};
 }
+function evaluatePocketGateStatus(partnerStatus, pocketOptionId, telegramUserId) {
+	if (isAdminId(pocketOptionId)) return {
+		status: "verified",
+		depositAmount: 0
+	};
+	if (!partnerStatus.registered) return { status: "not_registered" };
+	if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
+	if (partnerStatus.depositAmount === null) return { status: "check_unavailable" };
+	return {
+		status: "verified",
+		depositAmount: partnerStatus.depositAmount ?? 0
+	};
+}
+function telegramAdminBypassForPocketId(pocketOptionId) {
+	return isAdminId(pocketOptionId) ? {
+		status: "verified",
+		pocketId: pocketOptionId,
+		depositAmount: 0
+	} : null;
+}
 var PARTNER_ID = "857649";
 var PARTNER_API_URL = "https://pocketpartners.me/api/v1/user-info";
 var MAX_ATTEMPTS_PER_WINDOW = 5;
@@ -278,7 +305,17 @@ function validateTelegramInitData(raw) {
 	return token ? validateTelegramInitData$1(raw, token) : null;
 }
 async function readBindingByTelegram(telegramUserId) {
-	return (await (await getSql()).query("SELECT pocket_option_id FROM telegram_pocket_bindings WHERE telegram_user_id = $1 LIMIT 1", [telegramUserId]))[0]?.pocket_option_id ?? null;
+	return (await (await getSql()).query(`SELECT pocket_option_id FROM (
+       SELECT pocket_option_id, 1 AS priority
+       FROM telegram_admin_access
+       WHERE telegram_user_id = $1
+       UNION ALL
+       SELECT pocket_option_id, 2 AS priority
+       FROM telegram_pocket_bindings
+       WHERE telegram_user_id = $1
+     ) access_ids
+     ORDER BY priority
+     LIMIT 1`, [telegramUserId]))[0]?.pocket_option_id ?? null;
 }
 async function getPocketGateStateForTelegram(initData) {
 	assertSameSiteRequest();
@@ -287,14 +324,16 @@ async function getPocketGateStateForTelegram(initData) {
 	try {
 		const pocketId = await readBindingByTelegram(telegramUserId);
 		if (!pocketId) return { status: "unverified" };
-		const partnerStatus = await readPartnerStatus(pocketId);
-		if (!partnerStatus.registered) return { status: "unverified" };
-		if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
-		if (partnerStatus.depositAmount === null) return { status: "check_unavailable" };
+		const adminBypass = telegramAdminBypassForPocketId(pocketId);
+		if (adminBypass) return adminBypass;
+		const gate = evaluatePocketGateStatus(await readPartnerStatus(pocketId), pocketId, telegramUserId);
+		if (gate.status === "not_registered") return { status: "unverified" };
+		if (gate.status === "deposit_required") return { status: "deposit_required" };
+		if (gate.status === "check_unavailable") return { status: "check_unavailable" };
 		return {
 			status: "verified",
 			pocketId,
-			depositAmount: partnerStatus.depositAmount
+			depositAmount: gate.depositAmount
 		};
 	} catch {
 		return { status: "check_unavailable" };
@@ -346,37 +385,42 @@ async function readPartnerStatus(pocketOptionId) {
 	}
 }
 async function verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId) {
-	if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+	if (!isValidPocketOptionId(pocketOptionId)) return { status: "invalid_id" };
 	try {
+		const adminBypass = telegramAdminBypassForPocketId(pocketOptionId);
 		const sql = await getSql();
+		if (adminBypass) {
+			await sql.query(`INSERT INTO telegram_admin_access (telegram_user_id, pocket_option_id)
+         VALUES ($1, $2)
+         ON CONFLICT (telegram_user_id) DO UPDATE
+           SET pocket_option_id = EXCLUDED.pocket_option_id,
+               granted_at = now()`, [telegramUserId, pocketOptionId]);
+			return adminBypass;
+		}
 		const existing = await sql.query(`SELECT telegram_user_id, pocket_option_id
        FROM telegram_pocket_bindings
        WHERE telegram_user_id = $1 OR pocket_option_id = $2
        LIMIT 1`, [telegramUserId, pocketOptionId]);
 		if (existing[0]) {
 			if (existing[0].telegram_user_id !== telegramUserId || existing[0].pocket_option_id !== pocketOptionId) return { status: "already_linked" };
-			const partnerStatus = await readPartnerStatus(pocketOptionId);
-			if (!partnerStatus.registered) return { status: "not_registered" };
-			if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
-			if (partnerStatus.depositAmount === null) return { status: "check_unavailable" };
+			const gate = evaluatePocketGateStatus(await readPartnerStatus(pocketOptionId), pocketOptionId, telegramUserId);
+			if (gate.status !== "verified") return gate;
 			return {
 				status: "verified",
 				pocketId: pocketOptionId,
-				depositAmount: partnerStatus.depositAmount
+				depositAmount: gate.depositAmount
 			};
 		}
 		if (await incrementAttemptCount(telegramUserId) > MAX_ATTEMPTS_PER_WINDOW) return { status: "rate_limited" };
-		const partnerStatus = await readPartnerStatus(pocketOptionId);
-		if (!partnerStatus.registered) return { status: "not_registered" };
-		if (!partnerStatus.hasDeposit) return { status: "deposit_required" };
-		if (partnerStatus.depositAmount === null) return { status: "check_unavailable" };
+		const gate = evaluatePocketGateStatus(await readPartnerStatus(pocketOptionId), pocketOptionId, telegramUserId);
+		if (gate.status !== "verified") return gate;
 		if ((await sql.query(`INSERT INTO telegram_pocket_bindings (telegram_user_id, pocket_option_id)
        VALUES ($1, $2)
        ON CONFLICT DO NOTHING
        RETURNING telegram_user_id`, [telegramUserId, pocketOptionId])).length > 0) return {
 			status: "verified",
 			pocketId: pocketOptionId,
-			depositAmount: partnerStatus.depositAmount
+			depositAmount: gate.depositAmount
 		};
 		const conflict = await sql.query(`SELECT telegram_user_id, pocket_option_id
        FROM telegram_pocket_bindings
@@ -385,23 +429,58 @@ async function verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUs
 		return conflict[0]?.telegram_user_id === telegramUserId && conflict[0]?.pocket_option_id === pocketOptionId ? {
 			status: "verified",
 			pocketId: pocketOptionId,
-			depositAmount: partnerStatus.depositAmount
+			depositAmount: gate.depositAmount
 		} : { status: "already_linked" };
 	} catch {
 		return { status: "check_unavailable" };
 	}
 }
 async function verifyPocketAccountForTelegram(pocketOptionId, initData) {
-	if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+	if (!isValidPocketOptionId(pocketOptionId)) return { status: "invalid_id" };
 	assertSameSiteRequest();
 	const telegramUserId = validateTelegramInitData(initData);
 	if (!telegramUserId) return { status: "telegram_required" };
 	return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
 }
 async function verifyPocketAccountForTelegramUser(pocketOptionId, telegramUserId) {
-	if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+	if (!isValidPocketOptionId(pocketOptionId)) return { status: "invalid_id" };
 	if (!/^\d{1,20}$/.test(telegramUserId)) return { status: "telegram_required" };
 	return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
+}
+async function verifyLinkedPocketAccountForTelegramUser(telegramUserId) {
+	if (!/^\d{1,20}$/.test(telegramUserId)) return { status: "telegram_required" };
+	try {
+		const pocketOptionId = await readBindingByTelegram(telegramUserId);
+		if (!pocketOptionId) return { status: "telegram_required" };
+		return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
+	} catch {
+		return { status: "check_unavailable" };
+	}
+}
+async function readTelegramLocale(telegramUserId) {
+	const locale = (await (await getSql()).query(`SELECT locale FROM (
+       SELECT locale, 1 AS priority
+       FROM telegram_admin_access
+       WHERE telegram_user_id = $1
+       UNION ALL
+       SELECT locale, 2 AS priority
+       FROM telegram_pocket_bindings
+       WHERE telegram_user_id = $1
+     ) locales
+     ORDER BY priority
+     LIMIT 1`, [telegramUserId]))[0]?.locale;
+	return locale === "ru" || locale === "uk" || locale === "en" ? locale : null;
+}
+async function saveTelegramLocale(telegramUserId, locale) {
+	const sql = await getSql();
+	if ((await sql.query(`UPDATE telegram_admin_access
+     SET locale = $1
+     WHERE telegram_user_id = $2
+     RETURNING telegram_user_id`, [locale, telegramUserId]))[0]) return;
+	if (!(await sql.query(`UPDATE telegram_pocket_bindings
+     SET locale = $1
+     WHERE telegram_user_id = $2
+     RETURNING telegram_user_id`, [locale, telegramUserId]))[0]) throw new Error("Cannot save a Telegram locale without a verified binding.");
 }
 async function requireVerifiedPocketAccess(initData) {
 	assertSameSiteRequest();
@@ -416,4 +495,4 @@ async function requireVerifiedPocketAccess(initData) {
 	};
 }
 //#endregion
-export { getPocketGateStateForTelegram, requireVerifiedPocketAccess, verifyPocketAccountForTelegram, verifyPocketAccountForTelegramUser };
+export { getPocketGateStateForTelegram, readTelegramLocale, requireVerifiedPocketAccess, saveTelegramLocale, verifyLinkedPocketAccountForTelegramUser, verifyPocketAccountForTelegram, verifyPocketAccountForTelegramUser };

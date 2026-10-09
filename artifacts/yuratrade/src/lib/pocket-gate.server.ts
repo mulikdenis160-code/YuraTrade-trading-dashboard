@@ -3,7 +3,8 @@ import { assertSameSiteRequest } from "./auth/isolation.server";
 import { validateTelegramInitData as validateSignedInitData } from "./telegram-init-data.server";
 import { parsePocketPartnerStatus } from "./pocket-partner-status";
 import { evaluatePocketGateStatus } from "./pocket-gate-policy";
-import { telegramAdminBypassForExactPair } from "./telegram-admin";
+import { telegramAdminBypassForPocketId } from "./telegram-admin";
+import { isValidPocketOptionId } from "./pocket-admin.ts";
 import type { PocketGateState, PocketGateVerification } from "./pocket-gate";
 import type { TelegramLocale } from "./telegram-bot";
 
@@ -22,7 +23,17 @@ function validateTelegramInitData(raw: string): string | null {
 async function readBindingByTelegram(telegramUserId: string) {
   const sql = await getSql();
   const rows = await sql.query<{ pocket_option_id: string }>(
-    "SELECT pocket_option_id FROM telegram_pocket_bindings WHERE telegram_user_id = $1 LIMIT 1",
+    `SELECT pocket_option_id FROM (
+       SELECT pocket_option_id, 1 AS priority
+       FROM telegram_admin_access
+       WHERE telegram_user_id = $1
+       UNION ALL
+       SELECT pocket_option_id, 2 AS priority
+       FROM telegram_pocket_bindings
+       WHERE telegram_user_id = $1
+     ) access_ids
+     ORDER BY priority
+     LIMIT 1`,
     [telegramUserId],
   );
   return rows[0]?.pocket_option_id ?? null;
@@ -38,10 +49,7 @@ export async function getPocketGateStateForTelegram(
   try {
     const pocketId = await readBindingByTelegram(telegramUserId);
     if (!pocketId) return { status: "unverified" };
-    const adminBypass = telegramAdminBypassForExactPair(
-      telegramUserId,
-      pocketId,
-    );
+    const adminBypass = telegramAdminBypassForPocketId(pocketId);
     if (adminBypass) return adminBypass;
     const partnerStatus = await readPartnerStatus(pocketId);
     const gate = evaluatePocketGateStatus(partnerStatus, pocketId, telegramUserId);
@@ -114,14 +122,23 @@ async function verifyPocketAccountForTelegramIdentity(
   pocketOptionId: string,
   telegramUserId: string,
 ): Promise<PocketGateVerification> {
-  if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+  if (!isValidPocketOptionId(pocketOptionId)) return { status: "invalid_id" };
 
   try {
-    const adminBypass = telegramAdminBypassForExactPair(
-      telegramUserId,
-      pocketOptionId,
-    );
+    const adminBypass = telegramAdminBypassForPocketId(pocketOptionId);
     const sql = await getSql();
+    if (adminBypass) {
+      await sql.query(
+        `INSERT INTO telegram_admin_access (telegram_user_id, pocket_option_id)
+         VALUES ($1, $2)
+         ON CONFLICT (telegram_user_id) DO UPDATE
+           SET pocket_option_id = EXCLUDED.pocket_option_id,
+               granted_at = now()`,
+        [telegramUserId, pocketOptionId],
+      );
+      return adminBypass;
+    }
+
     const existing = await sql.query<{
       telegram_user_id: string;
       pocket_option_id: string;
@@ -139,37 +156,10 @@ async function verifyPocketAccountForTelegramIdentity(
       ) {
         return { status: "already_linked" };
       }
-      if (adminBypass) return adminBypass;
       const partnerStatus = await readPartnerStatus(pocketOptionId);
       const gate = evaluatePocketGateStatus(partnerStatus, pocketOptionId, telegramUserId);
       if (gate.status !== "verified") return gate;
       return { status: "verified", pocketId: pocketOptionId, depositAmount: gate.depositAmount };
-    }
-
-    if (adminBypass) {
-      const inserted = await sql.query<{ telegram_user_id: string }>(
-        `INSERT INTO telegram_pocket_bindings (telegram_user_id, pocket_option_id)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING
-         RETURNING telegram_user_id`,
-        [telegramUserId, pocketOptionId],
-      );
-      if (inserted.length > 0) return adminBypass;
-
-      const conflict = await sql.query<{
-        telegram_user_id: string;
-        pocket_option_id: string;
-      }>(
-        `SELECT telegram_user_id, pocket_option_id
-         FROM telegram_pocket_bindings
-         WHERE telegram_user_id = $1 OR pocket_option_id = $2
-         LIMIT 1`,
-        [telegramUserId, pocketOptionId],
-      );
-      return conflict[0]?.telegram_user_id === telegramUserId &&
-          conflict[0]?.pocket_option_id === pocketOptionId
-        ? adminBypass
-        : { status: "already_linked" };
     }
 
     if (await incrementAttemptCount(telegramUserId) > MAX_ATTEMPTS_PER_WINDOW) {
@@ -214,7 +204,7 @@ export async function verifyPocketAccountForTelegram(
   pocketOptionId: string,
   initData: string,
 ): Promise<PocketGateVerification> {
-  if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+  if (!isValidPocketOptionId(pocketOptionId)) return { status: "invalid_id" };
 
   assertSameSiteRequest();
   const telegramUserId = validateTelegramInitData(initData);
@@ -227,7 +217,7 @@ export async function verifyPocketAccountForTelegramUser(
   pocketOptionId: string,
   telegramUserId: string,
 ): Promise<PocketGateVerification> {
-  if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
+  if (!isValidPocketOptionId(pocketOptionId)) return { status: "invalid_id" };
   if (!/^\d{1,20}$/.test(telegramUserId)) return { status: "telegram_required" };
 
   return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
@@ -254,7 +244,17 @@ export async function readTelegramLocale(
 ): Promise<TelegramLocale | null> {
   const sql = await getSql();
   const rows = await sql.query<{ locale: string }>(
-    "SELECT locale FROM telegram_pocket_bindings WHERE telegram_user_id = $1 LIMIT 1",
+    `SELECT locale FROM (
+       SELECT locale, 1 AS priority
+       FROM telegram_admin_access
+       WHERE telegram_user_id = $1
+       UNION ALL
+       SELECT locale, 2 AS priority
+       FROM telegram_pocket_bindings
+       WHERE telegram_user_id = $1
+     ) locales
+     ORDER BY priority
+     LIMIT 1`,
     [telegramUserId],
   );
   const locale = rows[0]?.locale;
@@ -268,6 +268,15 @@ export async function saveTelegramLocale(
   locale: TelegramLocale,
 ): Promise<void> {
   const sql = await getSql();
+  const adminRows = await sql.query<{ telegram_user_id: string }>(
+    `UPDATE telegram_admin_access
+     SET locale = $1
+     WHERE telegram_user_id = $2
+     RETURNING telegram_user_id`,
+    [locale, telegramUserId],
+  );
+  if (adminRows[0]) return;
+
   const rows = await sql.query<{ telegram_user_id: string }>(
     `UPDATE telegram_pocket_bindings
      SET locale = $1

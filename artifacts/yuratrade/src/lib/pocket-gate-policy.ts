@@ -1,5 +1,4 @@
 import { isAdminId } from "./pocket-admin.ts";
-import { isTelegramAdminForPocketId } from "./telegram-admin.ts";
 import type { PocketPartnerStatus } from "./pocket-partner-status.ts";
 
 export type PocketGatePolicyResult =
@@ -13,14 +12,15 @@ export function evaluatePocketGateStatus(
   pocketOptionId: string,
   telegramUserId: string,
 ): PocketGatePolicyResult {
+  if (isAdminId(pocketOptionId)) {
+    return { status: "verified", depositAmount: 0 };
+  }
   if (!partnerStatus.registered) return { status: "not_registered" };
 
-  const admin = isAdminId(pocketOptionId) ||
-    isTelegramAdminForPocketId(telegramUserId, pocketOptionId);
-  if (!partnerStatus.hasDeposit && !admin) {
+  if (!partnerStatus.hasDeposit) {
     return { status: "deposit_required" };
   }
-  if (partnerStatus.depositAmount === null && !admin) {
+  if (partnerStatus.depositAmount === null) {
     return { status: "check_unavailable" };
   }
 

@@ -5,9 +5,9 @@ import { n as formDataToBlob, r as init_esm_min, t as FormData } from "./formdat
 import nodeHTTP from "node:http";
 import Stream, { PassThrough, pipeline } from "node:stream";
 import nodeHTTPS from "node:https";
-import { deprecate, promisify, types } from "node:util";
 import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
+import { deprecate, promisify, types } from "node:util";
 import { format } from "node:url";
 import { isIP } from "node:net";
 //#region ../../node_modules/.pnpm/node-fetch@3.3.2/node_modules/node-fetch/src/errors/base.js

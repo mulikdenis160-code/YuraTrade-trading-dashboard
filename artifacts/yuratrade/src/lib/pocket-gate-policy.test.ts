@@ -15,16 +15,28 @@ test("an ordinary account without a confirmed deposit is denied", () => {
   );
 });
 
-test("the configured website Pocket Option admin needs a partner record but not a deposit", () => {
+test("configured Pocket Option admins do not need a partner record or deposit", () => {
   assert.deepEqual(
-    evaluatePocketGateStatus(noDeposit, "984367891", "123456789"),
+    evaluatePocketGateStatus(
+      { ...noDeposit, registered: false },
+      "984367891",
+      "123456789",
+    ),
     { status: "verified", depositAmount: 0 },
   );
 });
 
-test("the configured Telegram admin needs the matching registered Pocket Option ID", () => {
+test("every configured Pocket Option admin ID bypasses partner and deposit checks", () => {
   assert.deepEqual(
-    evaluatePocketGateStatus(noDeposit, "984367891", "984367891"),
+    evaluatePocketGateStatus(
+      { ...noDeposit, registered: false },
+      "113510708",
+      "123456789",
+    ),
+    { status: "verified", depositAmount: 0 },
+  );
+  assert.deepEqual(
+    evaluatePocketGateStatus(noDeposit, "92535291", "123456789"),
     { status: "verified", depositAmount: 0 },
   );
   assert.deepEqual(
@@ -33,12 +45,12 @@ test("the configured Telegram admin needs the matching registered Pocket Option 
   );
 });
 
-test("the standard partner gate policy denies absent IDs; the exact Telegram admin pair is handled separately", () => {
+test("the standard partner gate policy denies absent non-admin IDs", () => {
   assert.deepEqual(
     evaluatePocketGateStatus(
       { ...noDeposit, registered: false },
-      "984367891",
-      "984367891",
+      "123456789",
+      "123456789",
     ),
     { status: "not_registered" },
   );

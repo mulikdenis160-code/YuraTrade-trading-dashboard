@@ -1,5 +1,5 @@
 import { t as createMiddleware } from "./ssr.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-4O3BIfQO.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-Bvk_Ig-2.js
 var MIN_ENTRY_BUFFER_MS = 15e3;
 var SIGNAL_COPY_DELAY_MS = 1e4;
 var SIGNAL_ANALYSIS_TIMEOUT_MS = 19e3;
@@ -56,7 +56,7 @@ function initializeTelegramWebApp() {
 var pocketGateMiddleware = createMiddleware({ type: "function" }).client(async ({ next }) => {
 	return next({ sendContext: { pocketGateInitData: getTelegramInitData() } });
 }).server(async ({ next, context }) => {
-	const { requireVerifiedPocketAccess } = await import("./pocket-gate.server-CSH3Pyex.mjs");
+	const { requireVerifiedPocketAccess } = await import("./pocket-gate.server-eoJOoUVz.mjs");
 	return next({ context: { pocketGateIdentity: await requireVerifiedPocketAccess(context.pocketGateInitData) } });
 });
 //#endregion

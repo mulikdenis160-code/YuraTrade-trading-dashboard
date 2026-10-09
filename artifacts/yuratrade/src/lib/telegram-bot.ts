@@ -1,6 +1,5 @@
 import { levelForBalance } from "./levels.ts";
 import { isAdminId } from "./pocket-admin.ts";
-import { isTelegramAdminForPocketId } from "./telegram-admin.ts";
 import { POCKET_OPTION_REFERRAL_URL } from "./pocket-gate-config.ts";
 import type { PocketGateVerification } from "./pocket-gate.ts";
 
@@ -40,14 +39,14 @@ const messages: Record<
     start: "Привет! Зарегистрируйтесь в Pocket Option по партнёрской ссылке и внесите депозит. Если вы уже зарегистрированы, нажмите кнопку ниже — бот проверит ваш ID и сообщит дневной лимит.",
     register: "Регистрация в Pocket Option",
     alreadyRegistered: "Уже зарегистрирован",
-    askId: "Введите 9-значный Pocket Option ID ответом на это сообщение.",
-    invalidId: "ID должен состоять ровно из 9 цифр. Нажмите «Уже зарегистрирован» и отправьте ID ещё раз.",
+    askId: "Отправьте Pocket Option ID ответом на это сообщение. Обычные ID состоят из 9 цифр; настроенные админ-ID тоже принимаются.",
+    invalidId: "Обычный ID должен состоять ровно из 9 цифр. Нажмите «Уже зарегистрирован» и отправьте ID ещё раз.",
     notRegistered: "По этому ID не найдена регистрация через партнёрскую ссылку PRIME BOT. Сначала зарегистрируйтесь по кнопке /start.",
     depositRequired: "Регистрация найдена, но Pocket Option пока не подтвердил депозит. Попробуйте проверить ID позже.",
     alreadyLinked: "Этот Pocket Option ID или Telegram-аккаунт уже связан с другой учётной записью. Изменить привязку здесь нельзя.",
     rateLimited: "Слишком много попыток проверки. Попробуйте снова через час.",
     unavailable: "Не удалось проверить ID сейчас. Попробуйте позже.",
-    adminVerified: "Pocket Option ID подтверждён и связан с этим Telegram-аккаунтом. Для администратора дневного лимита нет.",
+    adminVerified: "Админ-доступ включён. Дневного лимита нет.",
     noLevel: "Pocket Option ID подтверждён и связан. Подтверждённого депозита пока недостаточно для первого уровня, поэтому сигналы пока недоступны.",
     verified: (level, limit) => `Pocket Option ID подтверждён и связан с этим Telegram-аккаунтом.\nУровень: ${level}.\nДневной лимит: ${limit}.`,
     unlimited: "без дневного лимита",
@@ -65,14 +64,14 @@ const messages: Record<
     start: "Вітаємо! Зареєструйтеся в Pocket Option за партнерським посиланням і внесіть депозит. Якщо ви вже зареєстровані, натисніть кнопку нижче — бот перевірить ваш ID і повідомить денний ліміт.",
     register: "Реєстрація в Pocket Option",
     alreadyRegistered: "Уже зареєстрований",
-    askId: "Введіть 9-значний Pocket Option ID у відповідь на це повідомлення.",
-    invalidId: "ID має містити рівно 9 цифр. Натисніть «Уже зареєстрований» і надішліть ID ще раз.",
+    askId: "Надішліть Pocket Option ID у відповідь на це повідомлення. Звичайні ID містять 9 цифр; налаштовані адмін-ID також приймаються.",
+    invalidId: "Звичайний ID має містити рівно 9 цифр. Натисніть «Уже зареєстрований» і надішліть ID ще раз.",
     notRegistered: "За цим ID не знайдено реєстрацію за партнерським посиланням PRIME BOT. Спочатку зареєструйтеся кнопкою /start.",
     depositRequired: "Реєстрацію знайдено, але Pocket Option ще не підтвердив депозит. Спробуйте перевірити ID пізніше.",
     alreadyLinked: "Цей Pocket Option ID або Telegram-акаунт уже пов’язаний з іншим обліковим записом. Змінити прив’язку тут не можна.",
     rateLimited: "Забагато спроб перевірки. Спробуйте знову за годину.",
     unavailable: "Зараз не вдалося перевірити ID. Спробуйте пізніше.",
-    adminVerified: "Pocket Option ID підтверджено та пов’язано з цим Telegram-акаунтом. Для адміністратора денного ліміту немає.",
+    adminVerified: "Адмін-доступ увімкнено. Денний ліміт не застосовується.",
     noLevel: "Pocket Option ID підтверджено та пов’язано. Підтвердженого депозиту поки недостатньо для першого рівня, тому сигнали ще недоступні.",
     verified: (level, limit) => `Pocket Option ID підтверджено та пов’язано з цим Telegram-акаунтом.\nРівень: ${level}.\nДенний ліміт: ${limit}.`,
     unlimited: "без денного ліміту",
@@ -90,14 +89,14 @@ const messages: Record<
     start: "Welcome! Register with Pocket Option using the partner link and make a deposit. If you are already registered, tap the button below and the bot will verify your ID and show your daily limit.",
     register: "Register with Pocket Option",
     alreadyRegistered: "Already registered",
-    askId: "Reply to this message with your 9-digit Pocket Option ID.",
-    invalidId: "The ID must contain exactly 9 digits. Tap “Already registered” and send it again.",
+    askId: "Reply to this message with your Pocket Option ID. Regular IDs have 9 digits; configured admin IDs are accepted too.",
+    invalidId: "A regular ID must contain exactly 9 digits. Tap “Already registered” and send it again.",
     notRegistered: "This ID is not registered through PRIME BOT’s partner link. Register using the button in /start first.",
     depositRequired: "The registration was found, but Pocket Option has not confirmed a deposit yet. Try again later.",
     alreadyLinked: "This Pocket Option ID or Telegram account is already linked to another account. The link cannot be changed here.",
     rateLimited: "Too many verification attempts. Try again in an hour.",
     unavailable: "The ID could not be verified right now. Try again later.",
-    adminVerified: "The Pocket Option ID is verified and linked to this Telegram account. Admin access has no daily limit.",
+    adminVerified: "Admin access is enabled. There is no daily signal limit.",
     noLevel: "The Pocket Option ID is verified and linked, but the confirmed deposit does not meet the first tier yet, so signals remain unavailable.",
     verified: (level, limit) => `The Pocket Option ID is verified and linked to this Telegram account.\nLevel: ${level}.\nDaily limit: ${limit}.`,
     unlimited: "unlimited",
@@ -245,10 +244,7 @@ export function formatTelegramVerificationReply(
     };
   }
 
-  if (
-    isAdminId(result.pocketId) ||
-    isTelegramAdminForPocketId(telegramUserId, result.pocketId)
-  ) {
+  if (isAdminId(result.pocketId)) {
     return { text: copy.adminVerified, retryWithId: false };
   }
 

@@ -413,9 +413,9 @@ const copy = {
   ],
   "gate.id": ["Идентификатор Pocket Option", "Ідентифікатор Pocket Option", "Pocket Option identifier"],
   "gate.idHelp": [
-    "Введите 9 цифр из профиля Pocket Option. Регистрация и депозит проверяются автоматически; партнёрская проверка не подтверждает владение счётом.",
-    "Введіть 9 цифр із профілю Pocket Option. Реєстрація та депозит перевіряються автоматично; партнерська перевірка не підтверджує володіння рахунком.",
-    "Enter the 9-digit ID from your Pocket Option profile. Registration and deposit are checked automatically; the partner API does not prove account ownership.",
+    "Обычный ID из профиля Pocket Option состоит из 9 цифр; настроенные админ-ID принимаются отдельно. Партнёрская проверка не подтверждает владение счётом.",
+    "Звичайний ID із профілю Pocket Option містить 9 цифр; налаштовані адмін-ID приймаються окремо. Партнерська перевірка не підтверджує володіння рахунком.",
+    "Regular Pocket Option IDs have 9 digits; configured admin IDs are accepted separately. The partner API does not prove account ownership.",
   ],
   "gate.error": [
     "Идентификатор должен состоять ровно из 9 цифр",

@@ -4,13 +4,14 @@ import {
   verifyPocketAccount,
   type PocketGateVerification,
 } from "./pocket-gate";
+import { isValidPocketOptionId } from "./pocket-admin.ts";
 import { getTelegramInitData, initializeTelegramWebApp } from "./telegram-webapp";
 
 export { ADMIN_IDS, isAdminId } from "./pocket-admin";
 const GATE_REQUEST_TIMEOUT_MS = 12_000;
 
 export function isPocketId(value: string) {
-  return /^\d{9}$/.test(value);
+  return isValidPocketOptionId(value);
 }
 
 function settleWithin<T>(promise: Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
