@@ -17,7 +17,10 @@ import {
   telegramLocaleCallbackData,
 } from "./telegram-bot.ts";
 import { isAdminId } from "./pocket-admin.ts";
-import { isTelegramAdminForPocketId } from "./telegram-admin.ts";
+import {
+  isTelegramAdminForPocketId,
+  telegramAdminBypassForExactPair,
+} from "./telegram-admin.ts";
 import { POCKET_OPTION_REFERRAL_URL } from "./pocket-gate-config.ts";
 
 test("start command detection accepts bot addressing and payloads", () => {
@@ -121,9 +124,18 @@ test("configured site and Telegram IDs are admins only for their matching Pocket
   assert.equal(isTelegramAdminForPocketId("984367891", "984367891"), true);
   assert.equal(isTelegramAdminForPocketId("984367891", "123456789"), false);
   assert.equal(isTelegramAdminForPocketId("123456789", "984367891"), false);
+  assert.deepEqual(
+    telegramAdminBypassForExactPair("984367891", "984367891"),
+    { status: "verified", pocketId: "984367891", depositAmount: 0 },
+  );
+  assert.equal(telegramAdminBypassForExactPair("123456789", "984367891"), null);
 });
 
-test("Telegram admin access is granted only after partner verification", () => {
+test("the exact Telegram admin pair is treated as verified without a partner result", () => {
+  assert.deepEqual(
+    telegramAdminBypassForExactPair("984367891", "984367891"),
+    { status: "verified", pocketId: "984367891", depositAmount: 0 },
+  );
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "984367891",

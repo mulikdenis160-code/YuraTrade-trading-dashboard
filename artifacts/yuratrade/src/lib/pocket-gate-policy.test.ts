@@ -33,7 +33,7 @@ test("the configured Telegram admin needs the matching registered Pocket Option 
   );
 });
 
-test("even admins are denied if the Pocket Option ID is absent from the partner record", () => {
+test("the standard partner gate policy denies absent IDs; the exact Telegram admin pair is handled separately", () => {
   assert.deepEqual(
     evaluatePocketGateStatus(
       { ...noDeposit, registered: false },

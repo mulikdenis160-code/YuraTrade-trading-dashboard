@@ -9,3 +9,16 @@ export function isTelegramAdminForPocketId(
   if (telegramUserId === null || telegramUserId === undefined) return false;
   return TELEGRAM_ADMIN_POCKET_IDS[String(telegramUserId)] === pocketOptionId;
 }
+
+export function telegramAdminBypassForExactPair(
+  telegramUserId: number | string | null | undefined,
+  pocketOptionId: string,
+): {
+  status: "verified";
+  pocketId: string;
+  depositAmount: 0;
+} | null {
+  return isTelegramAdminForPocketId(telegramUserId, pocketOptionId)
+    ? { status: "verified", pocketId: pocketOptionId, depositAmount: 0 }
+    : null;
+}

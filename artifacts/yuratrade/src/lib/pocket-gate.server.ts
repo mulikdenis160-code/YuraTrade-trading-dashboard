@@ -3,6 +3,7 @@ import { assertSameSiteRequest } from "./auth/isolation.server";
 import { validateTelegramInitData as validateSignedInitData } from "./telegram-init-data.server";
 import { parsePocketPartnerStatus } from "./pocket-partner-status";
 import { evaluatePocketGateStatus } from "./pocket-gate-policy";
+import { telegramAdminBypassForExactPair } from "./telegram-admin";
 import type { PocketGateState, PocketGateVerification } from "./pocket-gate";
 import type { TelegramLocale } from "./telegram-bot";
 
@@ -37,6 +38,11 @@ export async function getPocketGateStateForTelegram(
   try {
     const pocketId = await readBindingByTelegram(telegramUserId);
     if (!pocketId) return { status: "unverified" };
+    const adminBypass = telegramAdminBypassForExactPair(
+      telegramUserId,
+      pocketId,
+    );
+    if (adminBypass) return adminBypass;
     const partnerStatus = await readPartnerStatus(pocketId);
     const gate = evaluatePocketGateStatus(partnerStatus, pocketId, telegramUserId);
     if (gate.status === "not_registered") return { status: "unverified" };
@@ -111,6 +117,10 @@ async function verifyPocketAccountForTelegramIdentity(
   if (!/^\d{9}$/.test(pocketOptionId)) return { status: "invalid_id" };
 
   try {
+    const adminBypass = telegramAdminBypassForExactPair(
+      telegramUserId,
+      pocketOptionId,
+    );
     const sql = await getSql();
     const existing = await sql.query<{
       telegram_user_id: string;
@@ -129,10 +139,37 @@ async function verifyPocketAccountForTelegramIdentity(
       ) {
         return { status: "already_linked" };
       }
+      if (adminBypass) return adminBypass;
       const partnerStatus = await readPartnerStatus(pocketOptionId);
       const gate = evaluatePocketGateStatus(partnerStatus, pocketOptionId, telegramUserId);
       if (gate.status !== "verified") return gate;
       return { status: "verified", pocketId: pocketOptionId, depositAmount: gate.depositAmount };
+    }
+
+    if (adminBypass) {
+      const inserted = await sql.query<{ telegram_user_id: string }>(
+        `INSERT INTO telegram_pocket_bindings (telegram_user_id, pocket_option_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING
+         RETURNING telegram_user_id`,
+        [telegramUserId, pocketOptionId],
+      );
+      if (inserted.length > 0) return adminBypass;
+
+      const conflict = await sql.query<{
+        telegram_user_id: string;
+        pocket_option_id: string;
+      }>(
+        `SELECT telegram_user_id, pocket_option_id
+         FROM telegram_pocket_bindings
+         WHERE telegram_user_id = $1 OR pocket_option_id = $2
+         LIMIT 1`,
+        [telegramUserId, pocketOptionId],
+      );
+      return conflict[0]?.telegram_user_id === telegramUserId &&
+          conflict[0]?.pocket_option_id === pocketOptionId
+        ? adminBypass
+        : { status: "already_linked" };
     }
 
     if (await incrementAttemptCount(telegramUserId) > MAX_ATTEMPTS_PER_WINDOW) {
