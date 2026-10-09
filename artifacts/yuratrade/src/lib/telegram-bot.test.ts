@@ -45,19 +45,18 @@ test("verified-user menu has localized actions and the configured destinations",
     reply.inline_keyboard.map((row) => row[0]?.text),
     ["Відкрити SignalAI", "Обрати мову", "Інструкція", "Підтримка"],
   );
-  assert.equal(
-    reply.inline_keyboard[0]?.[0]?.web_app?.url,
-    "https://vlados-trade-trading-dashboard.replit.app/",
-  );
-  assert.equal(
-    reply.inline_keyboard[1]?.[0]?.callback_data,
-    TELEGRAM_LANGUAGE_CALLBACK_DATA,
-  );
-  assert.equal(
-    reply.inline_keyboard[2]?.[0]?.callback_data,
-    TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
-  );
-  assert.equal(reply.inline_keyboard[3]?.[0]?.url, "https://t.me/vladosprime1");
+  const openButton = reply.inline_keyboard[0]?.[0];
+  assert.ok(openButton && "web_app" in openButton);
+  assert.equal(openButton.web_app.url, "https://vlados-trade-trading-dashboard.replit.app/");
+  const languageButton = reply.inline_keyboard[1]?.[0];
+  assert.ok(languageButton && "callback_data" in languageButton);
+  assert.equal(languageButton.callback_data, TELEGRAM_LANGUAGE_CALLBACK_DATA);
+  const instructionsButton = reply.inline_keyboard[2]?.[0];
+  assert.ok(instructionsButton && "callback_data" in instructionsButton);
+  assert.equal(instructionsButton.callback_data, TELEGRAM_INSTRUCTIONS_CALLBACK_DATA);
+  const supportButton = reply.inline_keyboard[3]?.[0];
+  assert.ok(supportButton && "url" in supportButton);
+  assert.equal(supportButton.url, "https://t.me/vladosprime1");
   assert.equal(buildTelegramMainMenuMarkup("en").inline_keyboard[0]?.[0]?.text, "Open SignalAI");
   assert.equal(buildTelegramMainMenuMarkup("ru").inline_keyboard[1]?.[0]?.text, "Выбрать язык");
 });
