@@ -6,3 +6,4 @@
 - [Signal statistics integrity](signal-statistics.md) — report verified browser-local outcomes only; never seed synthetic historical performance.
 - [TanStack dev RPC diagnostics](tanstack-dev-rpc.md) — use the current Vite-generated function ID and same-origin `Origin` header for live dev calls.
 - [Node TypeScript tests](node-typescript-tests.md) — Node's built-in type-strip runner needs explicit `.ts` specifiers for relative ESM imports.
+- [Managed database publishing](managed-db-publishing.md) — keep app migrations in development; let Replit Publish apply production schema changes.
