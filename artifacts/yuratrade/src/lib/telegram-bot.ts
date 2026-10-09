@@ -6,10 +6,10 @@ import type { PocketGateVerification } from "./pocket-gate.ts";
 
 export const ALREADY_REGISTERED_CALLBACK_DATA = "already_registered";
 
-type Locale = "ru" | "uk" | "en";
+export type TelegramLocale = "ru" | "uk" | "en";
 
 const messages: Record<
-  Locale,
+  TelegramLocale,
   {
     start: string;
     register: string;
@@ -27,6 +27,13 @@ const messages: Record<
     unlimited: string;
     tierNames: Record<"iskra" | "vector" | "apex", string>;
     dailyLimit: (count: number) => string;
+    openSignalAI: string;
+    chooseLanguage: string;
+    instructions: string;
+    support: string;
+    chooseLanguagePrompt: string;
+    languageChanged: string;
+    instructionsText: string;
   }
 > = {
   ru: {
@@ -46,6 +53,13 @@ const messages: Record<
     unlimited: "без дневного лимита",
     tierNames: { iskra: "Искра", vector: "Вектор", apex: "Апекс" },
     dailyLimit: (count) => `${count} сигналов`,
+    openSignalAI: "Открыть SignalAI",
+    chooseLanguage: "Выбрать язык",
+    instructions: "Инструкция",
+    support: "Поддержка",
+    chooseLanguagePrompt: "Выберите язык:",
+    languageChanged: "Язык изменён.",
+    instructionsText: "Как пользоваться SignalAI:\n1. Нажмите «Открыть SignalAI».\n2. Выберите доступную валютную пару и срок сигнала.\n3. Дождитесь окончания таймера и проверьте актуальные котировки перед входом.\n\nСделки выполняются вручную. Сигналы не гарантируют прибыль — торгуйте ответственно.",
   },
   uk: {
     start: "Вітаємо! Зареєструйтеся в Pocket Option за партнерським посиланням і внесіть депозит. Якщо ви вже зареєстровані, натисніть кнопку нижче — бот перевірить ваш ID і повідомить денний ліміт.",
@@ -64,6 +78,13 @@ const messages: Record<
     unlimited: "без денного ліміту",
     tierNames: { iskra: "Іскра", vector: "Вектор", apex: "Апекс" },
     dailyLimit: (count) => `${count} сигналів`,
+    openSignalAI: "Відкрити SignalAI",
+    chooseLanguage: "Обрати мову",
+    instructions: "Інструкція",
+    support: "Підтримка",
+    chooseLanguagePrompt: "Оберіть мову:",
+    languageChanged: "Мову змінено.",
+    instructionsText: "Як користуватися SignalAI:\n1. Натисніть «Відкрити SignalAI».\n2. Оберіть доступну валютну пару та строк сигналу.\n3. Дочекайтеся завершення таймера й перевірте актуальні котирування перед входом.\n\nУгоди виконуються вручну. Сигнали не гарантують прибуток — торгуйте відповідально.",
   },
   en: {
     start: "Welcome! Register with Pocket Option using the partner link and make a deposit. If you are already registered, tap the button below and the bot will verify your ID and show your daily limit.",
@@ -82,14 +103,88 @@ const messages: Record<
     unlimited: "unlimited",
     tierNames: { iskra: "Spark", vector: "Vector", apex: "Apex" },
     dailyLimit: (count) => `${count} signals`,
+    openSignalAI: "Open SignalAI",
+    chooseLanguage: "Choose language",
+    instructions: "Instructions",
+    support: "Support",
+    chooseLanguagePrompt: "Choose a language:",
+    languageChanged: "Language updated.",
+    instructionsText: "How to use SignalAI:\n1. Tap “Open SignalAI”.\n2. Choose an available currency pair and signal expiry.\n3. Wait for the timer to finish and check the latest quote before entering.\n\nTrades are placed manually. Signals do not guarantee profit — trade responsibly.",
   },
 };
 
-export function telegramLocale(languageCode?: string): Locale {
+const SIGNAL_AI_URL = "https://vlados-trade-trading-dashboard.replit.app/";
+const SUPPORT_URL = "https://t.me/vladosprime1";
+export const TELEGRAM_LANGUAGE_CALLBACK_DATA = "primebot:language";
+export const TELEGRAM_INSTRUCTIONS_CALLBACK_DATA = "primebot:instructions";
+const LOCALE_CALLBACK_PREFIX = "primebot:locale:";
+const telegramLocales: TelegramLocale[] = ["ru", "uk", "en"];
+
+export function telegramLocale(languageCode?: string): TelegramLocale {
   const language = languageCode?.toLowerCase() ?? "";
   if (language.startsWith("uk")) return "uk";
   if (language.startsWith("en")) return "en";
   return "ru";
+}
+
+export function parseTelegramLocale(value: unknown): TelegramLocale | null {
+  return typeof value === "string" &&
+      telegramLocales.includes(value as TelegramLocale)
+    ? value as TelegramLocale
+    : null;
+}
+
+export function telegramLocaleCallbackData(locale: TelegramLocale): string {
+  return `${LOCALE_CALLBACK_PREFIX}${locale}`;
+}
+
+export function parseTelegramLocaleCallbackData(
+  value: unknown,
+): TelegramLocale | null {
+  if (typeof value !== "string" || !value.startsWith(LOCALE_CALLBACK_PREFIX)) {
+    return null;
+  }
+  return parseTelegramLocale(value.slice(LOCALE_CALLBACK_PREFIX.length));
+}
+
+export function buildTelegramMainMenuMarkup(languageCode?: string) {
+  const copy = messages[telegramLocale(languageCode)];
+  return {
+    inline_keyboard: [
+      [{ text: copy.openSignalAI, web_app: { url: SIGNAL_AI_URL } }],
+      [{
+        text: copy.chooseLanguage,
+        callback_data: TELEGRAM_LANGUAGE_CALLBACK_DATA,
+      }],
+      [{
+        text: copy.instructions,
+        callback_data: TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
+      }],
+      [{ text: copy.support, url: SUPPORT_URL }],
+    ],
+  };
+}
+
+export function buildTelegramLanguagePicker(languageCode?: string) {
+  const copy = messages[telegramLocale(languageCode)];
+  return {
+    text: copy.chooseLanguagePrompt,
+    reply_markup: {
+      inline_keyboard: [[
+        { text: "Русский", callback_data: telegramLocaleCallbackData("ru") },
+        { text: "Українська", callback_data: telegramLocaleCallbackData("uk") },
+        { text: "English", callback_data: telegramLocaleCallbackData("en") },
+      ]],
+    },
+  };
+}
+
+export function buildTelegramInstructions(languageCode?: string) {
+  return messages[telegramLocale(languageCode)].instructionsText;
+}
+
+export function buildTelegramLanguageChanged(languageCode?: string) {
+  return messages[telegramLocale(languageCode)].languageChanged;
 }
 
 export function isTelegramStartCommand(text: unknown): text is string {

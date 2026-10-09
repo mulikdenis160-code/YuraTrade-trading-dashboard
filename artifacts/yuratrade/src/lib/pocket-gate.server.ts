@@ -4,6 +4,7 @@ import { validateTelegramInitData as validateSignedInitData } from "./telegram-i
 import { parsePocketPartnerStatus } from "./pocket-partner-status";
 import { evaluatePocketGateStatus } from "./pocket-gate-policy";
 import type { PocketGateState, PocketGateVerification } from "./pocket-gate";
+import type { TelegramLocale } from "./telegram-bot";
 
 const PARTNER_ID = "857649";
 const PARTNER_API_URL = "https://pocketpartners.me/api/v1/user-info";
@@ -193,6 +194,53 @@ export async function verifyPocketAccountForTelegramUser(
   if (!/^\d{1,20}$/.test(telegramUserId)) return { status: "telegram_required" };
 
   return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
+}
+
+export async function verifyLinkedPocketAccountForTelegramUser(
+  telegramUserId: string,
+): Promise<PocketGateVerification> {
+  if (!/^\d{1,20}$/.test(telegramUserId)) {
+    return { status: "telegram_required" };
+  }
+
+  try {
+    const pocketOptionId = await readBindingByTelegram(telegramUserId);
+    if (!pocketOptionId) return { status: "telegram_required" };
+    return verifyPocketAccountForTelegramIdentity(pocketOptionId, telegramUserId);
+  } catch {
+    return { status: "check_unavailable" };
+  }
+}
+
+export async function readTelegramLocale(
+  telegramUserId: string,
+): Promise<TelegramLocale | null> {
+  const sql = await getSql();
+  const rows = await sql.query<{ locale: string }>(
+    "SELECT locale FROM telegram_pocket_bindings WHERE telegram_user_id = $1 LIMIT 1",
+    [telegramUserId],
+  );
+  const locale = rows[0]?.locale;
+  return locale === "ru" || locale === "uk" || locale === "en"
+    ? locale
+    : null;
+}
+
+export async function saveTelegramLocale(
+  telegramUserId: string,
+  locale: TelegramLocale,
+): Promise<void> {
+  const sql = await getSql();
+  const rows = await sql.query<{ telegram_user_id: string }>(
+    `UPDATE telegram_pocket_bindings
+     SET locale = $1
+     WHERE telegram_user_id = $2
+     RETURNING telegram_user_id`,
+    [locale, telegramUserId],
+  );
+  if (!rows[0]) {
+    throw new Error("Cannot save a Telegram locale without a verified binding.");
+  }
 }
 
 export async function requireVerifiedPocketAccess(

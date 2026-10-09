@@ -2,11 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ALREADY_REGISTERED_CALLBACK_DATA,
+  buildTelegramInstructions,
+  buildTelegramLanguagePicker,
+  buildTelegramMainMenuMarkup,
   buildTelegramPocketIdPrompt,
   buildTelegramStartReply,
   formatTelegramVerificationReply,
   isTelegramPocketIdPromptReply,
   isTelegramStartCommand,
+  parseTelegramLocale,
+  parseTelegramLocaleCallbackData,
+  TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
+  TELEGRAM_LANGUAGE_CALLBACK_DATA,
+  telegramLocaleCallbackData,
 } from "./telegram-bot.ts";
 import { isAdminId } from "./pocket-admin.ts";
 import { isTelegramAdminForPocketId } from "./telegram-admin.ts";
@@ -29,6 +37,47 @@ test("start message has registration and already-registered buttons, without Min
     }],
   ]);
   assert.equal(JSON.stringify(reply).includes("web_app"), false);
+});
+
+test("verified-user menu has localized actions and the configured destinations", () => {
+  const reply = buildTelegramMainMenuMarkup("uk");
+  assert.deepEqual(
+    reply.inline_keyboard.map((row) => row[0]?.text),
+    ["Відкрити SignalAI", "Обрати мову", "Інструкція", "Підтримка"],
+  );
+  assert.equal(
+    reply.inline_keyboard[0]?.[0]?.web_app?.url,
+    "https://vlados-trade-trading-dashboard.replit.app/",
+  );
+  assert.equal(
+    reply.inline_keyboard[1]?.[0]?.callback_data,
+    TELEGRAM_LANGUAGE_CALLBACK_DATA,
+  );
+  assert.equal(
+    reply.inline_keyboard[2]?.[0]?.callback_data,
+    TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
+  );
+  assert.equal(reply.inline_keyboard[3]?.[0]?.url, "https://t.me/vladosprime1");
+  assert.equal(buildTelegramMainMenuMarkup("en").inline_keyboard[0]?.[0]?.text, "Open SignalAI");
+  assert.equal(buildTelegramMainMenuMarkup("ru").inline_keyboard[1]?.[0]?.text, "Выбрать язык");
+});
+
+test("language picker accepts only supported locales and exposes localized instructions", () => {
+  const picker = buildTelegramLanguagePicker("en");
+  assert.equal(picker.text, "Choose a language:");
+  assert.deepEqual(
+    picker.reply_markup.inline_keyboard[0]?.map((button) => button.callback_data),
+    [
+      telegramLocaleCallbackData("ru"),
+      telegramLocaleCallbackData("uk"),
+      telegramLocaleCallbackData("en"),
+    ],
+  );
+  assert.equal(parseTelegramLocale("uk"), "uk");
+  assert.equal(parseTelegramLocale("fr"), null);
+  assert.equal(parseTelegramLocaleCallbackData("primebot:locale:en"), "en");
+  assert.equal(parseTelegramLocaleCallbackData("primebot:locale:admin"), null);
+  assert.match(buildTelegramInstructions("uk"), /торгуйте відповідально/);
 });
 
 test("the already-registered button asks for the Pocket Option ID in the user's language", () => {
