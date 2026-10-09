@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0",
-    "prebuild": "node scripts/migrate.mjs",
+    "dev": "node scripts/migrate.mjs && node scripts/with-app-env.mjs vite dev --host 0.0.0.0",
     "build": "node scripts/with-app-env.mjs vite build --config vite.config.ts",
     "serve": "node scripts/with-app-env.mjs vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
