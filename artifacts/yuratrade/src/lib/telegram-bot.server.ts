@@ -151,7 +151,11 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
     message.text.trim(),
     String(message.from.id),
   );
-  const reply = formatTelegramVerificationReply(result, message.from.language_code);
+  const reply = formatTelegramVerificationReply(
+    result,
+    message.from.language_code,
+    message.from.id,
+  );
   await sendTelegramMessage(chat.id, reply.text);
   if (reply.retryWithId) {
     await sendTelegramMessage(

@@ -1,5 +1,6 @@
 import { levelForBalance } from "./levels.ts";
 import { isAdminId } from "./pocket-admin.ts";
+import { isTelegramAdminForPocketId } from "./telegram-admin.ts";
 import { POCKET_OPTION_REFERRAL_URL } from "./pocket-gate-config.ts";
 import type { PocketGateVerification } from "./pocket-gate.ts";
 
@@ -126,6 +127,7 @@ export function isTelegramPocketIdPromptReply(
 export function formatTelegramVerificationReply(
   result: PocketGateVerification,
   languageCode?: string,
+  telegramUserId?: number | string | null,
 ): { text: string; retryWithId: boolean } {
   const locale = telegramLocale(languageCode);
   const copy = messages[locale];
@@ -148,7 +150,10 @@ export function formatTelegramVerificationReply(
     };
   }
 
-  if (isAdminId(result.pocketId)) {
+  if (
+    isAdminId(result.pocketId) ||
+    isTelegramAdminForPocketId(telegramUserId, result.pocketId)
+  ) {
     return { text: copy.adminVerified, retryWithId: false };
   }
 
