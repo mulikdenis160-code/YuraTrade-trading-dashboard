@@ -39,7 +39,8 @@ export async function getPocketGateStateForTelegram(
     const partnerStatus = await readPartnerStatus(pocketId);
     const gate = evaluatePocketGateStatus(partnerStatus, pocketId, telegramUserId);
     if (gate.status === "not_registered") return { status: "unverified" };
-    if (gate.status !== "verified") return gate;
+    if (gate.status === "deposit_required") return { status: "deposit_required" };
+    if (gate.status === "check_unavailable") return { status: "check_unavailable" };
     return { status: "verified", pocketId, depositAmount: gate.depositAmount };
   } catch {
     return { status: "check_unavailable" };

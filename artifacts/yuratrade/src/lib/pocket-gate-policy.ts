@@ -4,7 +4,9 @@ import type { PocketPartnerStatus } from "./pocket-partner-status.ts";
 
 export type PocketGatePolicyResult =
   | { status: "verified"; depositAmount: number }
-  | { status: "not_registered" | "deposit_required" | "check_unavailable" };
+  | { status: "not_registered" }
+  | { status: "deposit_required" }
+  | { status: "check_unavailable" };
 
 export function evaluatePocketGateStatus(
   partnerStatus: PocketPartnerStatus,

@@ -2,7 +2,7 @@
 - [Signal preparation flow](signal-preparation.md) — show the pair countdown only after a signal is ready; recheck the minute-entry window and quote before issuing.
 - [Signal model](signal-model.md) — use expiry-matched candle intervals and treat ADX as context, not an automatic no-signal cutoff.
 - [Rotating signal candidates](signal-candidate-rotation.md) — rotate one pair at a time through the 20 highest-payout eligible OTC currency pairs.
-- [Referral scope](referral-scope.md) — gate access on referral signup and deposit; keep Telegram↔Pocket Option identity links permanent and one-to-one.
+- [Referral scope](referral-scope.md) — keep the bot chat-based, deny unrecognized partner IDs, and preserve one-to-one Telegram↔Pocket Option links.
 - [Signal statistics integrity](signal-statistics.md) — report verified browser-local outcomes only; never seed synthetic historical performance.
 - [TanStack dev RPC diagnostics](tanstack-dev-rpc.md) — use the current Vite-generated function ID and same-origin `Origin` header for live dev calls.
 - [Node TypeScript tests](node-typescript-tests.md) — Node's built-in type-strip runner needs explicit `.ts` specifiers for relative ESM imports.
