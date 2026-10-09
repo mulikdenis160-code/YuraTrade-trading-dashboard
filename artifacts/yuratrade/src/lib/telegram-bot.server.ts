@@ -1,5 +1,4 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { ReplitConnectors } from "@replit/connectors-sdk";
 import { verifyPocketAccountForTelegramUser } from "./pocket-gate.server";
 import {
   ALREADY_REGISTERED_CALLBACK_DATA,
@@ -70,16 +69,31 @@ async function telegramRequest<T>(
   method: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const connectors = new ReplitConnectors();
-  const response = await connectors.proxy("telegram", `/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json() as TelegramApiEnvelope<T>;
+  const token = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
+
+  let response: Response;
+  try {
+    response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(`Telegram ${method} request failed before a response`);
+  }
+
+  let payload: TelegramApiEnvelope<T>;
+  try {
+    payload = await response.json() as TelegramApiEnvelope<T>;
+  } catch {
+    throw new Error(
+      `Telegram ${method} returned an invalid response (${response.status})`,
+    );
+  }
   if (!response.ok || !payload.ok) {
     throw new Error(
-      `Telegram ${method} failed (${response.status}): ${payload.description ?? "request rejected"}`,
+      `Telegram ${method} failed (${response.status})`,
     );
   }
   return payload.result as T;
