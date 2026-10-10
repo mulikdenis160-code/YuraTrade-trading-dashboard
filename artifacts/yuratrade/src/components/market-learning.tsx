@@ -8,8 +8,8 @@ export function MarketLearning() {
     <section className="panel grid items-center gap-5 overflow-hidden p-4 sm:p-5 md:grid-cols-[1fr_15rem]">
       <div>
         <p className="text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase">{t("learn.kicker")}</p>
-        <h2 className="mt-2 text-xl font-bold tracking-tight text-fg sm:text-2xl">{t("learn.title")}</h2>
-        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">{t("learn.trend.definition")}</p>
+        <h2 className="mt-2 text-xl font-bold tracking-tight text-fg sm:text-2xl">{t("learn.collectionTitle")}</h2>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">{t("learn.collectionDescription")}</p>
         <Link to="/learn" className="btn-ghost mt-4 min-h-10 justify-center text-sm">
           {t("learn.open")}
         </Link>

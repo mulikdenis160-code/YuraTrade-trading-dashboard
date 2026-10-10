@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-BXL1pvJA.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-bDj_8r_T.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -634,6 +634,186 @@ var copy = {
 		"Открыть материал",
 		"Відкрити матеріал",
 		"Open lesson"
+	],
+	"learn.collectionTitle": [
+		"Тренды, уровни и паттерны",
+		"Тренди, рівні та патерни",
+		"Trends, levels, and patterns"
+	],
+	"learn.collectionDescription": [
+		"Три коротких материала: о трендах, уровнях поддержки и сопротивления и свечных паттернах.",
+		"Три короткі матеріали: про тренди, рівні підтримки та опору й свічкові патерни.",
+		"Three short lessons on trends, support and resistance levels, and candlestick patterns."
+	],
+	"learn.levels.title": [
+		"Что такое уровни поддержки и сопротивления?",
+		"Що таке рівні підтримки та опору?",
+		"What are support and resistance levels?"
+	],
+	"learn.levels.definition": [
+		"Уровни поддержки и сопротивления — это важные зоны на графике, в которых цена может замедлить движение, остановиться или развернуться.",
+		"Рівні підтримки та опору — це важливі зони на графіку, у яких ціна може сповільнити рух, зупинитися або розвернутися.",
+		"Support and resistance are important chart zones where price may slow down, pause, or reverse."
+	],
+	"learn.levels.imageAlt": [
+		"Инфографика об уровнях поддержки и сопротивления: отскоки цены, пробои и смена роли уровня.",
+		"Інфографіка про рівні підтримки та опору: відскоки ціни, пробої та зміна ролі рівня.",
+		"Infographic about support and resistance: price bounces, breakouts, and role reversal."
+	],
+	"learn.levels.supportTitle": [
+		"1. Уровень поддержки",
+		"1. Рівень підтримки",
+		"1. Support level"
+	],
+	"learn.levels.support": [
+		"Это зона, от которой цена ранее отскакивала вверх. Здесь может появляться повышенный интерес покупателей, поэтому цена иногда снова начинает расти.",
+		"Це зона, від якої ціна раніше відскакувала вгору. Тут може зростати інтерес покупців, тому ціна іноді знову починає підніматися.",
+		"A zone where price has previously bounced upward. Buyer interest may increase here, so price may start rising again."
+	],
+	"learn.levels.resistanceTitle": [
+		"2. Уровень сопротивления",
+		"2. Рівень опору",
+		"2. Resistance level"
+	],
+	"learn.levels.resistance": [
+		"Это зона, от которой цена ранее отскакивала вниз. Здесь может усиливаться давление продавцов, из-за чего цена иногда начинает снижаться.",
+		"Це зона, від якої ціна раніше відскакувала вниз. Тут може посилюватися тиск продавців, через що ціна іноді починає знижуватися.",
+		"A zone where price has previously bounced downward. Selling pressure may increase here, sometimes pushing price lower."
+	],
+	"learn.levels.breakoutTitle": [
+		"3. Пробой уровня",
+		"3. Пробій рівня",
+		"3. Level breakout"
+	],
+	"learn.levels.breakout": [
+		"Если цена проходит через поддержку или сопротивление, это может указывать на продолжение движения. После пробоя сопротивление иногда становится поддержкой, а поддержка — сопротивлением.",
+		"Якщо ціна проходить крізь підтримку або опір, це може вказувати на продовження руху. Після пробою опір іноді стає підтримкою, а підтримка — опором.",
+		"If price moves through support or resistance, it may signal continuation. After a breakout, resistance can sometimes become support, and support can become resistance."
+	],
+	"learn.levels.practiceTitle": [
+		"Как использовать уровни на практике?",
+		"Як використовувати рівні на практиці?",
+		"How can you use levels?"
+	],
+	"learn.levels.step1": [
+		"Определи текущий тренд.",
+		"Визнач поточний тренд.",
+		"Identify the current trend."
+	],
+	"learn.levels.step2": [
+		"Найди зоны, от которых цена неоднократно отскакивала.",
+		"Знайди зони, від яких ціна неодноразово відскакувала.",
+		"Find zones where price has bounced repeatedly."
+	],
+	"learn.levels.step3": [
+		"Дождись реакции цены на уровень или подтверждённого пробоя.",
+		"Дочекайся реакції ціни на рівень або підтвердженого пробою.",
+		"Wait for a price reaction at the level or a confirmed breakout."
+	],
+	"learn.levels.step4": [
+		"Используй дополнительные инструменты анализа.",
+		"Використовуй додаткові інструменти аналізу.",
+		"Use additional analysis tools."
+	],
+	"learn.levels.step5": [
+		"Соблюдай риск-менеджмент и не входи в сделку только потому, что цена коснулась уровня.",
+		"Дотримуйся ризик-менеджменту й не входь в угоду лише тому, що ціна торкнулася рівня.",
+		"Manage risk, and do not enter a trade just because price touched a level."
+	],
+	"learn.levels.warning": [
+		"Важно: уровни поддержки и сопротивления — это зоны, а не точные линии. Цена может пробить их в любой момент, поэтому они не гарантируют успешный исход сделки.",
+		"Важливо: рівні підтримки та опору — це зони, а не точні лінії. Ціна може пробити їх будь-коли, тому вони не гарантують успішного результату угоди.",
+		"Important: support and resistance are zones, not exact lines. Price can break through them at any time, so they do not guarantee a successful trade."
+	],
+	"learn.levels.remember": [
+		"Запомни: поддержка помогает найти зоны возможного роста, сопротивление — зоны возможного снижения, а подтверждение движения помогает принимать более обоснованные решения.",
+		"Запам’ятай: підтримка допомагає знайти зони можливого зростання, опір — зони можливого зниження, а підтвердження руху допомагає ухвалювати обґрунтованіші рішення.",
+		"Remember: support can help identify potential rising zones, resistance potential falling zones, and confirmation can support more informed decisions."
+	],
+	"learn.patterns.title": [
+		"Что такое паттерны?",
+		"Що таке патерни?",
+		"What are chart patterns?"
+	],
+	"learn.patterns.definition": [
+		"Паттерны — это повторяющиеся комбинации свечей на графике, которые помогают предположить, куда цена может двигаться дальше.",
+		"Патерни — це повторювані комбінації свічок на графіку, які допомагають припустити, куди ціна може рухатися далі.",
+		"Patterns are recurring candle combinations on a chart that can help suggest where price may move next."
+	],
+	"learn.patterns.imageAlt": [
+		"Инфографика о бычьих и медвежьих паттернах продолжения и паттернах разворота.",
+		"Інфографіка про бичачі та ведмежі патерни продовження й патерни розвороту.",
+		"Infographic showing bullish and bearish continuation patterns and reversal patterns."
+	],
+	"learn.patterns.risingTitle": [
+		"1. Паттерны продолжения роста",
+		"1. Патерни продовження зростання",
+		"1. Bullish continuation patterns"
+	],
+	"learn.patterns.rising": [
+		"Появляются во время восходящего тренда и могут указывать на то, что после небольшой коррекции цена продолжит расти.",
+		"З’являються під час висхідного тренду й можуть вказувати на те, що після невеликої корекції ціна продовжить зростати.",
+		"They appear during an uptrend and may suggest that price will continue rising after a small correction."
+	],
+	"learn.patterns.fallingTitle": [
+		"2. Паттерны продолжения падения",
+		"2. Патерни продовження падіння",
+		"2. Bearish continuation patterns"
+	],
+	"learn.patterns.falling": [
+		"Формируются во время нисходящего тренда и могут указывать на продолжение движения цены вниз.",
+		"Формуються під час низхідного тренду й можуть вказувати на продовження руху ціни вниз.",
+		"They form during a downtrend and may suggest that price will continue moving lower."
+	],
+	"learn.patterns.reversalTitle": [
+		"3. Паттерны разворота",
+		"3. Патерни розвороту",
+		"3. Reversal patterns"
+	],
+	"learn.patterns.reversal": [
+		"Могут сигнализировать о возможной смене направления движения цены. Например: «Двойная вершина», «Двойное дно» или «Голова и плечи».",
+		"Можуть сигналізувати про можливу зміну напрямку руху ціни. Наприклад: «Подвійна вершина», «Подвійне дно» або «Голова та плечі».",
+		"They may signal a possible change in price direction. Examples include a double top, double bottom, or head and shoulders."
+	],
+	"learn.patterns.practiceTitle": [
+		"Как использовать паттерны на Pocket Option?",
+		"Як використовувати патерни на Pocket Option?",
+		"How can you use patterns on Pocket Option?"
+	],
+	"learn.patterns.step1": [
+		"Определи текущий тренд.",
+		"Визнач поточний тренд.",
+		"Identify the current trend."
+	],
+	"learn.patterns.step2": [
+		"Найди на графике формирующийся паттерн.",
+		"Знайди на графіку патерн, що формується.",
+		"Look for a pattern forming on the chart."
+	],
+	"learn.patterns.step3": [
+		"Дождись подтверждения — например, пробоя уровня или закрытия свечи.",
+		"Дочекайся підтвердження — наприклад, пробою рівня або закриття свічки.",
+		"Wait for confirmation, such as a level breakout or candle close."
+	],
+	"learn.patterns.step4": [
+		"Оцени уровни поддержки и сопротивления.",
+		"Оціни рівні підтримки та опору.",
+		"Assess support and resistance levels."
+	],
+	"learn.patterns.step5": [
+		"Не входи в сделку только из-за появления знакомой фигуры — учитывай общую ситуацию на рынке.",
+		"Не входь в угоду лише через появу знайомої фігури — враховуй загальну ситуацію на ринку.",
+		"Do not enter a trade just because a familiar shape appears; consider the overall market situation."
+	],
+	"learn.patterns.warning": [
+		"Важно: паттерны не гарантируют прибыль и могут отрабатывать неправильно. Даже если фигура выглядит идеально, цена может пойти в противоположную сторону. Соблюдай риск-менеджмент и не пытайся отыгрываться после убытков.",
+		"Важливо: патерни не гарантують прибутку й можуть відпрацьовувати неправильно. Навіть якщо фігура виглядає ідеально, ціна може піти в протилежний бік. Дотримуйся ризик-менеджменту й не намагайся відігратися після збитків.",
+		"Important: patterns do not guarantee profit and can fail. Even a perfect-looking pattern can be followed by a move in the opposite direction. Manage risk and do not chase losses."
+	],
+	"learn.patterns.remember": [
+		"Запомни: паттерн — это инструмент анализа, а не гарантия результата сделки.",
+		"Запам’ятай: патерн — це інструмент аналізу, а не гарантія результату угоди.",
+		"Remember: a pattern is an analysis tool, not a guarantee of a trade outcome."
 	],
 	"signal.connected": [
 		"Поток Pocket Option подключён",
@@ -2487,7 +2667,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-BNJhw_Uo.css";
+var styles_default = "/assets/styles-A4eBwswR.css";
 var Route$7 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -2550,15 +2730,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-DwDQtBEL.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-Br7n8HCu.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-DT1FtFX1.mjs");
+var $$splitComponentImporter$3 = () => import("./history-C1U-7smF.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-NjUePWTS.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-CiZ6dkty.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-KB64a2Jl.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-Bk1rAuVW.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-CE0nsilN.mjs");
+var $$splitComponentImporter = () => import("./signal-DDj-rWIV.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2663,7 +2843,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-Cx8RzNof.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-C31a4vkc.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

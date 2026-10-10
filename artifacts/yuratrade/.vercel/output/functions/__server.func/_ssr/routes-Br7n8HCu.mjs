@@ -3,11 +3,11 @@ import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Li
 import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-BXL1pvJA.mjs";
-import { t as StatRow } from "./stats-DP3O-Txn.mjs";
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-bDj_8r_T.mjs";
+import { t as StatRow } from "./stats-BIQI9dSf.mjs";
 import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DX0PuQUM.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BG4IHu59.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-DwDQtBEL.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-CkhZ4X43.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-Br7n8HCu.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -507,11 +507,11 @@ function MarketLearning() {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 				className: "mt-2 text-xl font-bold tracking-tight text-fg sm:text-2xl",
-				children: t("learn.title")
+				children: t("learn.collectionTitle")
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 				className: "mt-2 max-w-xl text-sm leading-relaxed text-muted",
-				children: t("learn.trend.definition")
+				children: t("learn.collectionDescription")
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
 				to: "/learn",
