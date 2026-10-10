@@ -33,7 +33,7 @@ function Home() {
         <SignalDesk />
       </div>
       <div className="rise rise-3">
-        <MarketLearning compact />
+        <MarketLearning />
       </div>
       <div className="rise rise-4 mx-auto w-full max-w-md">
         <BalanceCalculator />

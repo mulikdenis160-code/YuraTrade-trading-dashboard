@@ -1,14 +1,13 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
+import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-Bg7lHBFl.mjs";
-import { t as StatRow } from "./stats-Cj2uHrbr.mjs";
-import { t as MarketLearning } from "./market-learning-BvZE8Zq_.mjs";
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-BXL1pvJA.mjs";
+import { t as StatRow } from "./stats-DP3O-Txn.mjs";
 import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DX0PuQUM.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DwdGVmUG.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Drt0xJjU.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BG4IHu59.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DwDQtBEL.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -497,6 +496,41 @@ function BalanceCalculator() {
 		}) : null]
 	});
 }
+function MarketLearning() {
+	const { t } = useLanguage();
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		className: "panel grid items-center gap-5 overflow-hidden p-4 sm:p-5 md:grid-cols-[1fr_15rem]",
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
+				children: t("learn.kicker")
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+				className: "mt-2 text-xl font-bold tracking-tight text-fg sm:text-2xl",
+				children: t("learn.title")
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-2 max-w-xl text-sm leading-relaxed text-muted",
+				children: t("learn.trend.definition")
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+				to: "/learn",
+				className: "btn-ghost mt-4 min-h-10 justify-center text-sm",
+				children: t("learn.open")
+			})
+		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+			to: "/learn",
+			"aria-label": t("learn.open"),
+			className: "block overflow-hidden rounded-2xl border border-white/10",
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+				src: "/images/trend-infographic.webp",
+				alt: t("learn.trend.imageAlt"),
+				loading: "lazy",
+				className: "aspect-square w-full object-cover object-center transition-transform duration-300 hover:scale-[1.03]"
+			})
+		})]
+	});
+}
 function Home() {
 	const { t } = useLanguage();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -553,7 +587,7 @@ function Home() {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "rise rise-3",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MarketLearning, { compact: true })
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MarketLearning, {})
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "rise rise-4 mx-auto w-full max-w-md",

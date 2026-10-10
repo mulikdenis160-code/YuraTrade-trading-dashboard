@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-Bg7lHBFl.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-BXL1pvJA.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -600,80 +600,40 @@ var copy = {
 		"Підтверджених результатів поки немає. Показники з’являться після реальних сигналів.",
 		"No verified outcomes yet. Statistics will appear after real signals are recorded."
 	],
-	"market.kicker": [
-		"ОСНОВЫ РЫНКА",
-		"ОСНОВИ РИНКУ",
-		"MARKET BASICS"
+	"learn.trend.definition": [
+		"Тренд — это общее направление движения цены.",
+		"Тренд — це загальний напрямок руху ціни.",
+		"A trend is the overall direction in which price is moving."
 	],
-	"market.homeTitle": [
-		"Как читать движение цены",
-		"Як читати рух ціни",
-		"How to read price action"
+	"learn.trend.imageAlt": [
+		"Инфографика: восходящий тренд с более высокими вершинами и минимумами, нисходящий тренд с более низкими вершинами и минимумами и боковое движение в диапазоне.",
+		"Інфографіка: висхідний тренд із вищими вершинами та мінімумами, низхідний тренд із нижчими вершинами та мінімумами й боковий рух у діапазоні.",
+		"Infographic showing an uptrend with higher highs and lows, a downtrend with lower highs and lows, and sideways movement within a range."
 	],
-	"market.title": [
-		"Тренды и паттерны рынка",
-		"Тренди та патерни ринку",
-		"Market trends and patterns"
+	"learn.trend.up": [
+		"Восходящий тренд — цена в целом движется вверх, вершины и минимумы становятся выше.",
+		"Висхідний тренд — ціна загалом рухається вгору, вершини й мінімуми стають вищими.",
+		"An uptrend means price is generally moving higher, with higher highs and higher lows."
 	],
-	"market.intro": [
-		"Это основы рыночной структуры, а не инструкция по боту. Смотрите на закрытые свечи и учитывайте выбранный таймфрейм: уровни на разных масштабах могут отличаться.",
-		"Це основи ринкової структури, а не інструкція до бота. Дивіться на закриті свічки й зважайте на вибраний таймфрейм: рівні на різних масштабах можуть відрізнятися.",
-		"These are market-structure basics, not instructions for the bot. Use closed candles and keep the selected timeframe in mind; levels can differ across timeframes."
+	"learn.trend.down": [
+		"Нисходящий тренд — цена в целом движется вниз, вершины и минимумы становятся ниже.",
+		"Нисхідний тренд — ціна загалом рухається вниз, вершини й мінімуми стають нижчими.",
+		"A downtrend means price is generally moving lower, with lower highs and lower lows."
 	],
-	"market.trendTitle": [
-		"Тренд и диапазон",
-		"Тренд і діапазон",
-		"Trend and range"
+	"learn.trend.sideways": [
+		"Боковой тренд (флэт) — цена колеблется в определённом диапазоне без выраженного направления.",
+		"Боковий тренд (флет) — ціна коливається в певному діапазоні без вираженого напрямку.",
+		"A sideways trend (range) means price moves within a defined range without a clear direction."
 	],
-	"market.trendBody": [
-		"Восходящий тренд образует повышающиеся максимумы и минимумы. Нисходящий — понижающиеся. Если цена колеблется между уровнями без явного продвижения, это диапазон.",
-		"Висхідний тренд формує вищі максимуми й мінімуми. Низхідний — нижчі. Якщо ціна коливається між рівнями без помітного просування, це діапазон.",
-		"An uptrend forms higher highs and higher lows; a downtrend forms lower highs and lower lows. Price moving between levels without clear progression is a range."
+	"learn.trend.caution": [
+		"Тренд помогает понять общее направление движения цены, но не гарантирует результат сделки.",
+		"Тренд допомагає зрозуміти загальний напрямок руху ціни, але не гарантує результат угоди.",
+		"A trend helps identify the overall direction of price movement, but it does not guarantee a trade outcome."
 	],
-	"market.trendDetail": [
-		"Сравнивайте несколько подтверждённых локальных максимумов и минимумов на одном таймфрейме. Одна свеча сама по себе не задаёт тренд.",
-		"Порівнюйте кілька підтверджених локальних максимумів і мінімумів на одному таймфреймі. Одна свічка сама по собі не задає тренд.",
-		"Compare several confirmed swing highs and lows on the same timeframe. A single candle does not establish a trend."
-	],
-	"market.retestTitle": [
-		"Пробой и ретест",
-		"Пробій і ретест",
-		"Breakout and retest"
-	],
-	"market.retestBody": [
-		"Свеча закрывается за уровнем поддержки или сопротивления. При ретесте цена возвращается к этой зоне; удержание уровня с другой стороны может поддержать сценарий продолжения движения.",
-		"Свічка закривається за рівнем підтримки або опору. Під час ретесту ціна повертається до цієї зони; утримання рівня з іншого боку може підтримати сценарій продовження руху.",
-		"A candle closes beyond support or resistance. During a retest, price returns to that zone; holding the level from the other side can support a continuation scenario."
-	],
-	"market.retestDetail": [
-		"Если цена снова закрывается внутри прежнего диапазона, пробой мог оказаться ложным. Дождитесь закрытия свечи и заранее отметьте уровень отмены сценария.",
-		"Якщо ціна знову закривається всередині попереднього діапазону, пробій міг бути хибним. Дочекайтеся закриття свічки й заздалегідь визначте рівень скасування сценарію.",
-		"If price closes back inside the old range, the breakout may have failed. Wait for candle confirmation and define the scenario’s invalidation level in advance."
-	],
-	"market.doubleTitle": [
-		"Двойная вершина / двойное дно",
-		"Подвійна вершина / подвійне дно",
-		"Double top / double bottom"
-	],
-	"market.doubleBody": [
-		"Цена дважды тестирует близкую область максимума или минимума и отходит. Возможный разворот подтверждается пробоем промежуточного минимума между вершинами или максимума между впадинами.",
-		"Ціна двічі тестує близьку область максимуму або мінімуму й відходить. Можливий розворот підтверджується пробоєм проміжного мінімуму між вершинами або максимуму між западинами.",
-		"Price tests a similar high or low twice and pulls away. A possible reversal is confirmed by a break of the intervening swing low between tops or swing high between bottoms."
-	],
-	"market.doubleDetail": [
-		"Два пика или два минимума сами по себе ничего не подтверждают: это может быть консолидация. Ищите закрытие за промежуточным уровнем («линией шеи»).",
-		"Дві вершини або два мінімуми самі по собі нічого не підтверджують: це може бути консолідація. Чекайте закриття за проміжним рівнем («лінією шиї»).",
-		"Two peaks or troughs alone confirm nothing; they can be consolidation. Look for a close beyond the intervening level, often called the neckline."
-	],
-	"market.caution": [
-		"Паттерны — возможные сценарии, а не обещание результата. Они могут не сработать; учитывайте контекст и заранее ограничивайте риск.",
-		"Патерни — можливі сценарії, а не обіцянка результату. Вони можуть не спрацювати; враховуйте контекст і заздалегідь обмежуйте ризик.",
-		"Patterns describe possible scenarios, not guaranteed outcomes. They can fail; consider context and define risk limits in advance."
-	],
-	"market.learnMore": [
-		"Все уроки",
-		"Усі уроки",
-		"Full lessons"
+	"learn.open": [
+		"Открыть материал",
+		"Відкрити матеріал",
+		"Open lesson"
 	],
 	"signal.connected": [
 		"Поток Pocket Option подключён",
@@ -1371,54 +1331,19 @@ var copy = {
 		"Cancel"
 	],
 	"learn.kicker": [
-		"Курс",
-		"Курс",
-		"Guide"
+		"ОСНОВЫ РЫНКА",
+		"ОСНОВИ РИНКУ",
+		"MARKET BASICS"
 	],
 	"learn.title": [
-		"Обучение",
-		"Навчання",
-		"Learning"
+		"Что такое тренд?",
+		"Що таке тренд?",
+		"What is a trend?"
 	],
 	"learn.intro": [
-		"Сначала основы рынка, затем инструкция по PRIME BOT. Это обучение не обещает доход. Прочитано уроков по боту: {done} из {total}.",
-		"Спочатку основи ринку, далі інструкція до PRIME BOT. Це навчання не обіцяє доходу. Прочитано уроків про бота: {done} з {total}.",
-		"Start with market basics, then learn how PRIME BOT works. This guide does not promise income. Bot lessons read: {done} of {total}."
-	],
-	"learn.minutes": [
-		"{minutes} минут",
-		"{minutes} хвилин",
-		"{minutes} minutes"
-	],
-	"learn.read": [
-		" · прочитано",
-		" · прочитано",
-		" · read"
-	],
-	"learn.done": [
-		"Уже отмечено",
-		"Вже позначено",
-		"Completed"
-	],
-	"learn.next": [
-		"Дальше",
-		"Далі",
-		"Next"
-	],
-	"learn.quiz": [
-		"Проверка",
-		"Перевірка",
-		"Knowledge check"
-	],
-	"learn.quizEmpty": [
-		"Шесть вопросов по темам выше.",
-		"Шість запитань за темами вище.",
-		"Six questions about the topics above."
-	],
-	"learn.correct": [
-		"Верно {score} из {total}.",
-		"Правильно {score} із {total}.",
-		"{score} of {total} correct."
+		"Главное, что нужно запомнить:",
+		"Головне, що потрібно запам’ятати:",
+		"Key points to remember:"
 	],
 	"profile.admin": [
 		"Админ",
@@ -2562,7 +2487,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-Ba8nDSV3.css";
+var styles_default = "/assets/styles-BNJhw_Uo.css";
 var Route$7 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -2625,15 +2550,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-Drt0xJjU.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-DwDQtBEL.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-CoCfJBrv.mjs");
+var $$splitComponentImporter$3 = () => import("./history-DT1FtFX1.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-B4Ja6EYm.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-NjUePWTS.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-BVNtWan3.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-KB64a2Jl.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-C09xYUa1.mjs");
+var $$splitComponentImporter = () => import("./signal-CE0nsilN.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2738,7 +2663,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-CLYSKFIW.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-Cx8RzNof.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {
