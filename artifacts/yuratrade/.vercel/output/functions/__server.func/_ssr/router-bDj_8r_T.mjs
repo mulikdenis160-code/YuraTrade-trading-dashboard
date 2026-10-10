@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-D_jLfy1u.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-bDj_8r_T.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -599,66 +599,6 @@ var copy = {
 		"Подтверждённых исходов пока нет. Показатели появятся после реальных сигналов.",
 		"Підтверджених результатів поки немає. Показники з’являться після реальних сигналів.",
 		"No verified outcomes yet. Statistics will appear after real signals are recorded."
-	],
-	"demoStats.badge": [
-		"ДЕМО · НЕ РЕАЛЬНЫЕ ДАННЫЕ",
-		"ДЕМО · НЕ РЕАЛЬНІ ДАНІ",
-		"DEMO · NOT REAL DATA"
-	],
-	"demoStats.title": [
-		"Пример статистики",
-		"Приклад статистики",
-		"Example statistics"
-	],
-	"demoStats.disclaimer": [
-		"Условный пример для демонстрации интерфейса. Эти показатели и сделки не основаны на реальных сигналах, не сохраняются и не входят в фактическую статистику.",
-		"Умовний приклад для демонстрації інтерфейсу. Ці показники та угоди не ґрунтуються на реальних сигналах, не зберігаються й не входять до фактичної статистики.",
-		"Illustrative interface sample only. These metrics and trades are not based on real signals, are not saved, and are excluded from actual statistics."
-	],
-	"demoStats.hitRate": [
-		"Проходимость · демо",
-		"Прохідність · демо",
-		"Hit rate · demo"
-	],
-	"demoStats.wins": [
-		"Побед из 25 закрытых примеров",
-		"Перемог із 25 закритих прикладів",
-		"Wins of 25 closed examples"
-	],
-	"demoStats.losses": [
-		"Поражения · демо",
-		"Поразки · демо",
-		"Losses · demo"
-	],
-	"demoStats.examplesTitle": [
-		"Примеры сделок · не реальные",
-		"Приклади угод · не реальні",
-		"Trade examples · not real"
-	],
-	"demoStats.up": [
-		"Вверх · пример",
-		"Вгору · приклад",
-		"Up · example"
-	],
-	"demoStats.down": [
-		"Вниз · пример",
-		"Вниз · приклад",
-		"Down · example"
-	],
-	"demoStats.closedWin": [
-		"Закрыта · демо-победа",
-		"Закрита · демо-перемога",
-		"Closed · demo win"
-	],
-	"demoStats.closedLoss": [
-		"Закрыта · демо-убыток",
-		"Закрита · демо-збиток",
-		"Closed · demo loss"
-	],
-	"demoStats.open": [
-		"Открыта · демо-пример",
-		"Відкрита · демо-приклад",
-		"Open · demo example"
 	],
 	"learn.trend.definition": [
 		"Тренд — это общее направление движения цены.",
@@ -2727,7 +2667,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-D4xbRU-c.css";
+var styles_default = "/assets/styles-A4eBwswR.css";
 var Route$7 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -2790,15 +2730,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-CIqYzdbx.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-Br7n8HCu.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-CiwI3DHd.mjs");
+var $$splitComponentImporter$3 = () => import("./history-C1U-7smF.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-Dq0PkExa.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-CiZ6dkty.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-BtOOVFGw.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-Bk1rAuVW.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-v7Ncj2rP.mjs");
+var $$splitComponentImporter = () => import("./signal-DDj-rWIV.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2903,7 +2843,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-DPO--reX.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-C31a4vkc.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

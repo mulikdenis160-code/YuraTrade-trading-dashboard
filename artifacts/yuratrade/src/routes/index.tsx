@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SignalDesk } from "@/components/signal-desk";
 import { BalanceCalculator } from "@/components/calculator";
 import { MarketLearning } from "@/components/market-learning";
-import { DemoStats } from "@/components/demo-stats";
 import { StatRow } from "@/components/stats";
 import { useLanguage } from "@/lib/language";
 
@@ -29,7 +28,6 @@ function Home() {
           <p className="mt-1 text-xs leading-relaxed text-dim">{t("home.disclaimer")}</p>
         </section>
         <StatRow />
-        <DemoStats />
       </div>
       <div className="rise rise-2">
         <SignalDesk />
