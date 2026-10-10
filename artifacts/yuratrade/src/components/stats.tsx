@@ -11,6 +11,7 @@ import {
   resolveDailySignalStatsSnapshot,
   type DailySignalStatsSnapshot,
 } from "@/lib/daily-signal-stats";
+import { subscribeToSignalJournal } from "@/lib/signal-journal";
 import { useLanguage } from "@/lib/language";
 
 const emptyStats: SignalJournalTotals = {
@@ -55,7 +56,7 @@ export function StatRow() {
         today,
         readSignalJournalTotals(),
       );
-      if (saved?.dayKey !== next.dayKey) saveSnapshot(next);
+      if (JSON.stringify(saved) !== JSON.stringify(next)) saveSnapshot(next);
       setSnapshot(next);
       window.clearTimeout(timer);
       timer = window.setTimeout(
@@ -63,22 +64,16 @@ export function StatRow() {
         millisecondsUntilNextLocalDay(now) + 100,
       );
     };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== DAILY_SIGNAL_STATS_STORAGE_KEY) return;
-      const saved = readSavedSnapshot();
-      if (saved?.dayKey === localSignalStatsDayKey(new Date())) setSnapshot(saved);
-      else update();
-    };
     const onVisibility = () => {
       if (document.visibilityState === "visible") update();
     };
     update();
-    window.addEventListener("storage", onStorage);
+    const unsubscribeJournal = subscribeToSignalJournal(update);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       disposed = true;
       window.clearTimeout(timer);
-      window.removeEventListener("storage", onStorage);
+      unsubscribeJournal();
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);

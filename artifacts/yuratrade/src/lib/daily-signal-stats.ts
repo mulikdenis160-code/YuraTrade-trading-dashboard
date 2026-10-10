@@ -57,6 +57,15 @@ export function resolveDailySignalStatsSnapshot(
   today: string,
   current: SignalJournalTotals,
 ): DailySignalStatsSnapshot {
-  if (saved?.dayKey === today) return saved;
+  if (
+    saved?.dayKey === today &&
+    saved.stats.settled === current.settled &&
+    saved.stats.wins === current.wins &&
+    saved.stats.losses === current.losses &&
+    saved.stats.draws === current.draws &&
+    saved.stats.hitRate === current.hitRate
+  ) {
+    return saved;
+  }
   return { dayKey: today, stats: current };
 }

@@ -15,7 +15,7 @@ const emptyStats = {
   hitRate: null,
 };
 
-test("daily signal statistics stay fixed within a day and refresh on the next local day", () => {
+test("daily signal statistics refresh from verified outcomes within the day", () => {
   const saved = {
     dayKey: "2026-10-07",
     stats: { settled: 1, wins: 1, losses: 0, draws: 0, hitRate: 100 },
@@ -30,7 +30,7 @@ test("daily signal statistics stay fixed within a day and refresh on the next lo
 
   assert.deepEqual(
     resolveDailySignalStatsSnapshot(saved, "2026-10-07", changedDuringDay),
-    saved,
+    { dayKey: "2026-10-07", stats: changedDuringDay },
   );
   assert.deepEqual(
     resolveDailySignalStatsSnapshot(saved, "2026-10-08", changedDuringDay),

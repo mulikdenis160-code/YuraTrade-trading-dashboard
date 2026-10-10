@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { k as useLanguage, s as readSignalJournalTotals } from "./router-bDj_8r_T.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/stats-BIQI9dSf.js
+import { k as useLanguage, p as subscribeToSignalJournal, s as readSignalJournalTotals } from "./router-D3IH-mrb.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/stats-voRxp_GZ.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var DAILY_SIGNAL_STATS_STORAGE_KEY = "vprime_daily_signal_stats_v1";
@@ -40,7 +40,7 @@ function normalizeDailySignalStatsSnapshot(value) {
 	};
 }
 function resolveDailySignalStatsSnapshot(saved, today, current) {
-	if (saved?.dayKey === today) return saved;
+	if (saved?.dayKey === today && saved.stats.settled === current.settled && saved.stats.wins === current.wins && saved.stats.losses === current.losses && saved.stats.draws === current.draws && saved.stats.hitRate === current.hitRate) return saved;
 	return {
 		dayKey: today,
 		stats: current
@@ -78,27 +78,21 @@ function StatRow() {
 			const today = localSignalStatsDayKey(now);
 			const saved = readSavedSnapshot();
 			const next = resolveDailySignalStatsSnapshot(saved, today, readSignalJournalTotals());
-			if (saved?.dayKey !== next.dayKey) saveSnapshot(next);
+			if (JSON.stringify(saved) !== JSON.stringify(next)) saveSnapshot(next);
 			setSnapshot(next);
 			window.clearTimeout(timer);
 			timer = window.setTimeout(update, millisecondsUntilNextLocalDay(now) + 100);
-		};
-		const onStorage = (event) => {
-			if (event.key !== "vprime_daily_signal_stats_v1") return;
-			const saved = readSavedSnapshot();
-			if (saved?.dayKey === localSignalStatsDayKey(/* @__PURE__ */ new Date())) setSnapshot(saved);
-			else update();
 		};
 		const onVisibility = () => {
 			if (document.visibilityState === "visible") update();
 		};
 		update();
-		window.addEventListener("storage", onStorage);
+		const unsubscribeJournal = subscribeToSignalJournal(update);
 		document.addEventListener("visibilitychange", onVisibility);
 		return () => {
 			disposed = true;
 			window.clearTimeout(timer);
-			window.removeEventListener("storage", onStorage);
+			unsubscribeJournal();
 			document.removeEventListener("visibilitychange", onVisibility);
 		};
 	}, []);

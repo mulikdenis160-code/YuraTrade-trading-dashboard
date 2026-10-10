@@ -44,9 +44,9 @@ const copy = {
     "Hit rate on completed currency signals",
   ],
   "home.disclaimer": [
-    "Только реальные подтверждённые результаты из истории этого браузера. Срез обновляется раз в сутки; прошлые результаты не гарантируют будущих.",
-    "Лише реальні підтверджені результати з історії цього браузера. Зріз оновлюється раз на добу; минулі результати не гарантують майбутніх.",
-    "Only verified results from this browser’s history. The snapshot updates once daily; past results do not guarantee future outcomes.",
+    "Только подтверждённые результаты сигналов из истории этого браузера. Показатели обновляются после фиксации исхода; прошлые результаты не гарантируют будущих.",
+    "Лише підтверджені результати сигналів з історії цього браузера. Показники оновлюються після фіксації результату; минулі результати не гарантують майбутніх.",
+    "Only verified signal outcomes from this browser’s history. Statistics update when an outcome is recorded; past results do not guarantee future outcomes.",
   ],
   "stats.title": ["Реальная статистика", "Реальна статистика", "Recorded statistics"],
   "stats.settled": ["Завершено", "Завершено", "Completed"],
@@ -56,8 +56,8 @@ const copy = {
   "stats.rate": ["Проходимость", "Прохідність", "Hit rate"],
   "stats.source": [
     "Только подтверждённые исходы из истории этого браузера; срез обновляется раз в сутки. Ничьи не входят в проходимость.",
-    "Лише підтверджені результати з історії цього браузера; зріз оновлюється раз на добу. Нічиї не входять до прохідності.",
-    "Verified outcomes from this browser’s history; snapshot updates daily. Draws are excluded from hit rate.",
+    "Лише підтверджені результати з історії цього браузера; показники оновлюються після запису результату. Нічиї не входять до прохідності.",
+    "Verified outcomes from this browser’s history; statistics refresh after an outcome is recorded. Draws are excluded from hit rate.",
   ],
   "stats.asOf": ["Обновлено: {date}", "Оновлено: {date}", "Updated: {date}"],
   "stats.empty": [

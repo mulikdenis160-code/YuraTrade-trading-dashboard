@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-bDj_8r_T.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-D3IH-mrb.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -551,9 +551,9 @@ var copy = {
 		"Hit rate on completed currency signals"
 	],
 	"home.disclaimer": [
-		"Только реальные подтверждённые результаты из истории этого браузера. Срез обновляется раз в сутки; прошлые результаты не гарантируют будущих.",
-		"Лише реальні підтверджені результати з історії цього браузера. Зріз оновлюється раз на добу; минулі результати не гарантують майбутніх.",
-		"Only verified results from this browser’s history. The snapshot updates once daily; past results do not guarantee future outcomes."
+		"Только подтверждённые результаты сигналов из истории этого браузера. Показатели обновляются после фиксации исхода; прошлые результаты не гарантируют будущих.",
+		"Лише підтверджені результати сигналів з історії цього браузера. Показники оновлюються після фіксації результату; минулі результати не гарантують майбутніх.",
+		"Only verified signal outcomes from this browser’s history. Statistics update when an outcome is recorded; past results do not guarantee future outcomes."
 	],
 	"stats.title": [
 		"Реальная статистика",
@@ -587,8 +587,8 @@ var copy = {
 	],
 	"stats.source": [
 		"Только подтверждённые исходы из истории этого браузера; срез обновляется раз в сутки. Ничьи не входят в проходимость.",
-		"Лише підтверджені результати з історії цього браузера; зріз оновлюється раз на добу. Нічиї не входять до прохідності.",
-		"Verified outcomes from this browser’s history; snapshot updates daily. Draws are excluded from hit rate."
+		"Лише підтверджені результати з історії цього браузера; показники оновлюються після запису результату. Нічиї не входять до прохідності.",
+		"Verified outcomes from this browser’s history; statistics refresh after an outcome is recorded. Draws are excluded from hit rate."
 	],
 	"stats.asOf": [
 		"Обновлено: {date}",
@@ -2730,15 +2730,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-Br7n8HCu.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-BEP9rEu_.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-C1U-7smF.mjs");
+var $$splitComponentImporter$3 = () => import("./history-DSKfdieh.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-CiZ6dkty.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-wOqK4quX.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-Bk1rAuVW.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-CfRiCGEX.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-DDj-rWIV.mjs");
+var $$splitComponentImporter = () => import("./signal-CaQXAbc4.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2843,7 +2843,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-C31a4vkc.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-CcmYvfex.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {
