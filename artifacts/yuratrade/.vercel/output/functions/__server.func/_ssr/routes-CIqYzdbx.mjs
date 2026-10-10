@@ -3,11 +3,11 @@ import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Li
 import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-bDj_8r_T.mjs";
-import { t as StatRow } from "./stats-BIQI9dSf.mjs";
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-D_jLfy1u.mjs";
+import { t as StatRow } from "./stats-D_CiEPVl.mjs";
 import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DX0PuQUM.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-CkhZ4X43.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Br7n8HCu.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-A_cRq8RW.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CIqYzdbx.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -531,6 +531,109 @@ function MarketLearning() {
 		})]
 	});
 }
+var exampleTrades = [
+	{
+		pair: "EUR/USD OTC",
+		directionKey: "demoStats.up",
+		statusKey: "demoStats.closedWin",
+		tone: "text-win"
+	},
+	{
+		pair: "GBP/USD OTC",
+		directionKey: "demoStats.down",
+		statusKey: "demoStats.closedLoss",
+		tone: "text-loss"
+	},
+	{
+		pair: "USD/JPY OTC",
+		directionKey: "demoStats.up",
+		statusKey: "demoStats.open",
+		tone: "text-blue-soft"
+	}
+];
+function DemoStats() {
+	const { t } = useLanguage();
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		"aria-labelledby": "demo-stats-title",
+		className: "mt-4 rounded-2xl border border-blue-soft/25 bg-blue-soft/[0.045] p-4 sm:p-5",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-center gap-2",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "rounded-full border border-amber-300/35 bg-amber-300/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-amber-200 uppercase",
+					children: t("demoStats.badge")
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+					id: "demo-stats-title",
+					className: "text-base font-bold text-fg sm:text-lg",
+					children: t("demoStats.title")
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-2 text-xs leading-relaxed text-muted sm:text-sm",
+				children: t("demoStats.disclaimer")
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-white/8 bg-black/15 px-3 py-3 text-center",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "font-mono text-2xl font-extrabold text-blue-soft",
+							children: "72%"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-1 text-xs font-semibold text-dim",
+							children: t("demoStats.hitRate")
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-xl border border-white/8 bg-black/15 px-3 py-3 text-center",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "font-mono text-2xl font-extrabold text-win",
+							children: "18 / 25"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-1 text-xs font-semibold text-dim",
+							children: t("demoStats.wins")
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "col-span-2 rounded-xl border border-white/8 bg-black/15 px-3 py-3 text-center sm:col-span-1",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "font-mono text-2xl font-extrabold text-loss",
+							children: "7"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-1 text-xs font-semibold text-dim",
+							children: t("demoStats.losses")
+						})]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+				className: "mt-4 text-xs font-bold tracking-wide text-dim uppercase",
+				children: t("demoStats.examplesTitle")
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", {
+				className: "mt-2 space-y-2",
+				children: exampleTrades.map((trade) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
+					className: "flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-white/8 bg-black/15 px-3 py-2.5 text-sm",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "font-semibold text-fg",
+							children: trade.pair
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-muted",
+							children: t(trade.directionKey)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: `font-semibold ${trade.tone}`,
+							children: t(trade.statusKey)
+						})
+					]
+				}, trade.pair))
+			})
+		]
+	});
+}
 function Home() {
 	const { t } = useLanguage();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -538,48 +641,52 @@ function Home() {
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "rise",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "panel mb-4 overflow-hidden p-4 sm:p-5",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
-							children: t("home.eyebrow")
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-							className: "mt-2 text-2xl font-extrabold tracking-tight text-fg sm:text-3xl",
-							children: t("home.title")
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "mt-2 max-w-2xl text-sm leading-relaxed text-muted sm:text-base",
-							children: t("home.body")
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "mt-4 grid gap-2 sm:grid-cols-3",
-							children: [
-								"feature1",
-								"feature2",
-								"feature3"
-							].map((feature) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "rounded-2xl border border-white/8 bg-white/4 px-3 py-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "text-sm font-semibold text-fg",
-									children: t(`home.${feature}.title`)
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "mt-1 text-xs leading-relaxed text-dim",
-									children: t(`home.${feature}.body`)
-								})]
-							}, feature))
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "mt-4 text-sm font-semibold text-blue-soft",
-							children: t("home.rateCaption")
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "mt-1 text-xs leading-relaxed text-dim",
-							children: t("home.disclaimer")
-						})
-					]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatRow, {})]
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "panel mb-4 overflow-hidden p-4 sm:p-5",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs font-semibold tracking-[0.16em] text-blue-soft uppercase",
+								children: t("home.eyebrow")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+								className: "mt-2 text-2xl font-extrabold tracking-tight text-fg sm:text-3xl",
+								children: t("home.title")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-2 max-w-2xl text-sm leading-relaxed text-muted sm:text-base",
+								children: t("home.body")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-4 grid gap-2 sm:grid-cols-3",
+								children: [
+									"feature1",
+									"feature2",
+									"feature3"
+								].map((feature) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-2xl border border-white/8 bg-white/4 px-3 py-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-sm font-semibold text-fg",
+										children: t(`home.${feature}.title`)
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1 text-xs leading-relaxed text-dim",
+										children: t(`home.${feature}.body`)
+									})]
+								}, feature))
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-4 text-sm font-semibold text-blue-soft",
+								children: t("home.rateCaption")
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "mt-1 text-xs leading-relaxed text-dim",
+								children: t("home.disclaimer")
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatRow, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DemoStats, {})
+				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "rise rise-2",
