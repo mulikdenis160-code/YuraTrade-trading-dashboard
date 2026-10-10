@@ -3,20 +3,24 @@ import test from "node:test";
 import {
   analysisPeriodForExpiry,
   alternativeExpiryMinutes,
+  EXPIRY_OPTIONS_SECONDS,
   formatExpiry,
   isValidExpirySeconds,
   lookbackForExpiry,
 } from "./expiry.ts";
 
-test("expirations cover whole minutes from one minute through four hours", () => {
+test("expirations include 30 seconds and whole minutes through four hours", () => {
+  assert.equal(isValidExpirySeconds(30), true);
   assert.equal(isValidExpirySeconds(60), true);
   assert.equal(isValidExpirySeconds(14_400), true);
   assert.equal(isValidExpirySeconds(0), false);
   assert.equal(isValidExpirySeconds(90), false);
+  assert.equal(isValidExpirySeconds(45), false);
   assert.equal(isValidExpirySeconds(14_460), false);
 });
 
 test("analysis timeframe scales with the selected expiration", () => {
+  assert.equal(analysisPeriodForExpiry(30), 60);
   assert.equal(analysisPeriodForExpiry(60), 60);
   assert.equal(analysisPeriodForExpiry(3 * 60), 60);
   assert.equal(analysisPeriodForExpiry(5 * 60), 300);
@@ -34,6 +38,8 @@ test("alternative expirations prioritize options using the same analysis timefra
 });
 
 test("lookback grows for longer expirations and labels hours clearly", () => {
+  assert.equal(EXPIRY_OPTIONS_SECONDS[0], 30);
+  assert.equal(formatExpiry(30), "30 сек");
   assert.equal(lookbackForExpiry(60, 60), 12);
   assert.equal(lookbackForExpiry(60 * 60, 300), 18);
   assert.equal(lookbackForExpiry(4 * 60 * 60, 900), 24);

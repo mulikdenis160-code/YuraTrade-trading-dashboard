@@ -126,9 +126,9 @@ const copy = {
   ],
   "signal.connecting": ["Подключаемся к Pocket Option…", "Підключаємося до Pocket Option…", "Connecting to Pocket Option…"],
   "signal.description": [
-    "Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; ИИ напрямую анализирует свечи и выбирает направление.",
-    "Перевіряються лише валютні пари з виплатою 92% і 80%. Оберіть експірацію від 1 хвилини до 4 годин; ШІ безпосередньо аналізує свічки та обирає напрямок.",
-    "Only currency pairs with 92% or 80% payout are checked. Choose an expiry from 1 minute to 4 hours; AI directly analyzes the candles and selects a direction.",
+    "Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 30 секунд до 4 часов; ИИ напрямую анализирует свечи и выбирает направление.",
+    "Перевіряються лише валютні пари з виплатою 92% і 80%. Оберіть експірацію від 30 секунд до 4 годин; ШІ безпосередньо аналізує свічки та обирає напрямок.",
+    "Only currency pairs with 92% or 80% payout are checked. Choose an expiry from 30 seconds to 4 hours; AI directly analyzes the candles and selects a direction.",
   ],
   "signal.experimental": [
     "Самооценка уверенности ИИ субъективна: это не измеренная вероятность и не историческая проходимость. Результат не гарантирован.",
@@ -382,9 +382,9 @@ const copy = {
   ],
   "profile.adminInfo": ["Админский ID. Лимита сигналов нет, депозит для входа не нужен.", "ID адміністратора. Ліміту сигналів немає, депозит для доступу не потрібен.", "Admin ID. No signal limit or minimum deposit is required."],
   "profile.userInfo": [
-    "Уровень зависит от первого депозита. Искра от $60 — 10 сигналов в день, Вектор от $200 — 40, Апекс от $500 — без лимита.",
-    "Рівень залежить від першого депозиту. Іскра від $60 — 10 сигналів на день, Вектор від $200 — 40, Апекс від $500 — без ліміту.",
-    "Your level depends on the first deposit. Spark from $60: 10 signals/day; Vector from $200: 40; Apex from $500: unlimited.",
+    "Тариф зависит от первого депозита. Базовый от $60 — 10 сигналов в день, Профессиональный от $200 — 40, Глубокий от $500 — без лимита.",
+    "Тариф залежить від першого депозиту. Базовий від $60 — 10 сигналів на день, Професійний від $200 — 40, Глибокий від $500 — без ліміту.",
+    "Your plan depends on the first deposit. Basic from $60: 10 signals/day; Professional from $200: 40; Deep from $500: unlimited.",
   ],
   "profile.currentLimit": [
     "Ваш персональный дневной лимит: {limit}.",
@@ -519,6 +519,9 @@ export function useLanguage() {
 }
 
 export function formatExpiryForLanguage(seconds: number, language: Language) {
+  if (seconds === 30) {
+    return language === "en" ? "30 sec" : language === "uk" ? "30 с" : "30 сек";
+  }
   const totalMinutes = Math.max(1, Math.round(seconds / 60));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;

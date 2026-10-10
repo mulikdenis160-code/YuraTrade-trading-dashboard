@@ -1,5 +1,5 @@
 import { t as createMiddleware } from "./ssr.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-Bvk_Ig-2.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-yFUUqodX.js
 var MIN_ENTRY_BUFFER_MS = 15e3;
 var SIGNAL_COPY_DELAY_MS = 1e4;
 var SIGNAL_ANALYSIS_TIMEOUT_MS = 19e3;
@@ -11,7 +11,7 @@ var ANALYSIS_PERIODS_SECONDS = [
 	300,
 	900
 ];
-var EXPIRY_OPTIONS_MINUTES = [
+var EXPIRY_OPTIONS_SECONDS = [30, ...[
 	1,
 	2,
 	3,
@@ -24,9 +24,9 @@ var EXPIRY_OPTIONS_MINUTES = [
 	120,
 	180,
 	240
-];
+].map((minutes) => minutes * 60)];
 function isValidExpirySeconds(value) {
-	return Number.isInteger(value) && value >= 60 && value <= 14400 && value % 60 === 0;
+	return Number.isInteger(value) && (value === 30 || value >= 60) && value <= 14400 && (value === 30 || value % 60 === 0);
 }
 function analysisPeriodForExpiry(expirySeconds) {
 	if (expirySeconds <= 180) return 60;
@@ -34,6 +34,7 @@ function analysisPeriodForExpiry(expirySeconds) {
 	return 900;
 }
 function formatExpiry(seconds) {
+	if (seconds === 30) return "30 сек";
 	const minutes = Math.max(1, Math.round(seconds / 60));
 	const hours = Math.floor(minutes / 60);
 	const remainingMinutes = minutes % 60;
@@ -60,4 +61,4 @@ var pocketGateMiddleware = createMiddleware({ type: "function" }).client(async (
 	return next({ context: { pocketGateIdentity: await requireVerifiedPocketAccess(context.pocketGateInitData) } });
 });
 //#endregion
-export { SIGNAL_COPY_DELAY_MS as a, SIGNAL_QUOTE_WAIT_MS as c, getTelegramInitData as d, initializeTelegramWebApp as f, SIGNAL_ANALYSIS_TIMEOUT_MS as i, analysisPeriodForExpiry as l, pocketGateMiddleware as m, EXPIRY_OPTIONS_MINUTES as n, SIGNAL_HISTORY_PAGE_TIMEOUT_MS as o, isValidExpirySeconds as p, MIN_ENTRY_BUFFER_MS as r, SIGNAL_PREPARATION_TIMEOUT_MS as s, ANALYSIS_PERIODS_SECONDS as t, formatExpiry as u };
+export { SIGNAL_COPY_DELAY_MS as a, SIGNAL_QUOTE_WAIT_MS as c, getTelegramInitData as d, initializeTelegramWebApp as f, SIGNAL_ANALYSIS_TIMEOUT_MS as i, analysisPeriodForExpiry as l, pocketGateMiddleware as m, EXPIRY_OPTIONS_SECONDS as n, SIGNAL_HISTORY_PAGE_TIMEOUT_MS as o, isValidExpirySeconds as p, MIN_ENTRY_BUFFER_MS as r, SIGNAL_PREPARATION_TIMEOUT_MS as s, ANALYSIS_PERIODS_SECONDS as t, formatExpiry as u };

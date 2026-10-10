@@ -21,9 +21,10 @@ import {
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import {
   analysisPeriodForExpiry,
-  EXPIRY_OPTIONS_MINUTES,
+  EXPIRY_OPTIONS_SECONDS,
 } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
+import { visibleSignalReleaseAt } from "@/lib/signal-release-time";
 
 type PairChoice = Awaited<ReturnType<typeof chooseSignalPair>>;
 type PreparedSignal = Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }>
@@ -50,7 +51,7 @@ export function SignalDesk() {
   const [copyRemaining, setCopyRemaining] = useState(SIGNAL_COPY_DELAY_SECONDS);
   const [copiedPair, setCopiedPair] = useState(false);
   const [used, setUsed] = useState(0);
-  const [expiryMinutes, setExpiryMinutes] = useState(2);
+  const [selectedExpirySeconds, setSelectedExpirySeconds] = useState(120);
   const attemptRef = useRef(0);
 
   useEffect(() => () => {
@@ -108,7 +109,7 @@ export function SignalDesk() {
   }, []);
 
   const level = levelForBalance(depositAmount);
-  const expirySeconds = expiryMinutes * 60;
+  const expirySeconds = selectedExpirySeconds;
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const cap = admin ? null : level ? level.daily : 0;
   const left = cap === null ? null : Math.max(0, cap - used);
@@ -214,7 +215,7 @@ export function SignalDesk() {
           ...candidate,
           attempt,
           seconds: requestedExpiry,
-          copyUntil: result.releaseAtMs,
+          copyUntil: visibleSignalReleaseAt(result.releaseAtMs, Date.now()),
         };
         break;
       }
@@ -280,17 +281,17 @@ export function SignalDesk() {
             <p className="text-sm font-bold text-blue-soft">{expiryLabel(expirySeconds)}</p>
           </div>
           <div className="mt-3 grid grid-cols-4 gap-2">
-            {EXPIRY_OPTIONS_MINUTES.map((minutes) => {
-              const selected = expiryMinutes === minutes;
-              const label = expiryLabel(minutes * 60);
+            {EXPIRY_OPTIONS_SECONDS.map((seconds) => {
+              const selected = expirySeconds === seconds;
+              const label = expiryLabel(seconds);
               return (
                 <button
-                  key={minutes}
+                  key={seconds}
                   type="button"
                   disabled={phase !== "idle"}
                   aria-pressed={selected}
-                  title={expiryLabel(minutes * 60)}
-                  onClick={() => setExpiryMinutes(minutes)}
+                  title={expiryLabel(seconds)}
+                  onClick={() => setSelectedExpirySeconds(seconds)}
                   className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${
                     selected
                       ? "border-blue/40 bg-blue/12 text-blue-soft"

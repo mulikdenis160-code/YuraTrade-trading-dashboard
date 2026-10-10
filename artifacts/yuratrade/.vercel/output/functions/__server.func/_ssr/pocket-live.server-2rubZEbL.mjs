@@ -1,8 +1,8 @@
-import { a as SIGNAL_COPY_DELAY_MS, c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, r as MIN_ENTRY_BUFFER_MS, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-Bvk_Ig-2.mjs";
+import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
-import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
+import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DX0PuQUM.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-cB9Sl0tj.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-2rubZEbL.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -810,34 +810,6 @@ function parsePocketOptionHistory(data) {
 		rejectedRows: data.length - candles.length
 	};
 }
-function nextCandleEntryWindow(candles, nowMs) {
-	const candleMs = 6e4;
-	const lastClosed = candles.reduce((latest, candle) => {
-		if (!Number.isFinite(candle.time) || candle.time * 1e3 + candleMs > nowMs) return latest;
-		return !latest || candle.time > latest.time ? candle : latest;
-	}, null);
-	if (!lastClosed) return null;
-	const opensAtMs = (lastClosed.time + 60) * 1e3;
-	const closesAtMs = opensAtMs + candleMs;
-	const remainingMs = closesAtMs - nowMs;
-	return {
-		opensAtMs,
-		closesAtMs,
-		remainingMs,
-		canEnter: nowMs >= opensAtMs && remainingMs >= 15e3
-	};
-}
-function signalReleaseAt(candles, nowMs) {
-	const window = nextCandleEntryWindow(candles, nowMs);
-	if (!window) return null;
-	const minimumRemaining = SIGNAL_COPY_DELAY_MS + MIN_ENTRY_BUFFER_MS + SIGNAL_QUOTE_WAIT_MS + 1e3;
-	let countdownStartsAt;
-	if (nowMs < window.opensAtMs) countdownStartsAt = window.opensAtMs;
-	else if (window.closesAtMs - nowMs >= minimumRemaining) countdownStartsAt = nowMs;
-	else if (nowMs < window.closesAtMs) countdownStartsAt = window.closesAtMs;
-	else countdownStartsAt = window.closesAtMs + 6e4;
-	return countdownStartsAt + SIGNAL_COPY_DELAY_MS;
-}
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
@@ -1317,7 +1289,7 @@ function summarizeCandleCadence(series, expectedSeconds) {
 	};
 }
 async function feedSignal(symbol, expirySeconds) {
-	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
 	const pipelineStartedAt = performance.now();
 	const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 	await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
@@ -1365,7 +1337,8 @@ async function feedSignal(symbol, expirySeconds) {
 		decision: "pass",
 		reason: "Ответ ИИ не прошёл проверку пары и направления; сигнал не выдан."
 	};
-	const releaseAtMs = signalReleaseAt((await waitForSignalRequest(entryHistoryRequest, Math.max(0, preparationDeadlineAtMs - Date.now()), SIGNAL_PREPARATION_TIMEOUT_MESSAGE)).candles, Date.now());
+	const entryHistory = await waitForSignalRequest(entryHistoryRequest, Math.max(0, preparationDeadlineAtMs - Date.now()), SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
+	const releaseAtMs = signalReleaseAt(entryHistory.candles, Date.now());
 	if (releaseAtMs === null) return {
 		decision: "pass",
 		reason: "Не удалось подготовить безопасное окно входа. Сигнал не выдан."
@@ -1437,7 +1410,7 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		}));
 	};
 	try {
-		if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+		if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
 		stage = "feed";
 		const feedStartedAt = performance.now();
 		await ensureFeed();

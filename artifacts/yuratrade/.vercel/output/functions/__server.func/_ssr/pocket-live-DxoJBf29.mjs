@@ -1,14 +1,14 @@
 import { n as createServerFn } from "./ssr.mjs";
-import { m as pocketGateMiddleware, p as isValidExpirySeconds } from "./pocket-gate.middleware-Bvk_Ig-2.mjs";
+import { m as pocketGateMiddleware, p as isValidExpirySeconds } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { t as createServerRpc } from "./createServerRpc-DlvCGy7w.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-DGW0V6GS.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-DxoJBf29.js
 var loadFeed_createServerFn_handler = createServerRpc({
 	id: "fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043",
 	name: "loadFeed",
 	filename: "src/lib/pocket-live.ts"
 }, (opts) => loadFeed.__executeServer(opts));
 var loadFeed = createServerFn({ method: "GET" }).middleware([pocketGateMiddleware]).handler(loadFeed_createServerFn_handler, async () => {
-	const { feedSnapshot } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { feedSnapshot } = await import("./pocket-live.server-2rubZEbL.mjs");
 	return feedSnapshot();
 });
 var readClose_createServerFn_handler = createServerRpc({
@@ -21,7 +21,7 @@ var readClose = createServerFn({ method: "POST" }).middleware([pocketGateMiddlew
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
 	return { symbol };
 }).handler(readClose_createServerFn_handler, async ({ data }) => {
-	const { feedClose } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { feedClose } = await import("./pocket-live.server-2rubZEbL.mjs");
 	return { close: await feedClose(data.symbol) };
 });
 var takeSignal_createServerFn_handler = createServerRpc({
@@ -32,13 +32,13 @@ var takeSignal_createServerFn_handler = createServerRpc({
 var takeSignal = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
 	const expirySeconds = Number(input?.expirySeconds);
-	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) throw new Error("Выберите пару и срок экспирации от 1 минуты до 4 часов.");
+	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) throw new Error("Выберите пару и срок экспирации от 30 секунд до 4 часов.");
 	return {
 		symbol,
 		expirySeconds
 	};
 }).handler(takeSignal_createServerFn_handler, async ({ data }) => {
-	const { feedSignal } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { feedSignal } = await import("./pocket-live.server-2rubZEbL.mjs");
 	return feedSignal(data.symbol, data.expirySeconds);
 });
 var confirmSignalEntry_createServerFn_handler = createServerRpc({
@@ -51,7 +51,7 @@ var confirmSignalEntry = createServerFn({ method: "POST" }).middleware([pocketGa
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
 	return { symbol };
 }).handler(confirmSignalEntry_createServerFn_handler, async ({ data }) => {
-	const { feedConfirmSignalEntry } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { feedConfirmSignalEntry } = await import("./pocket-live.server-2rubZEbL.mjs");
 	return feedConfirmSignalEntry(data.symbol);
 });
 var chooseSignalPair_createServerFn_handler = createServerRpc({
@@ -62,7 +62,7 @@ var chooseSignalPair_createServerFn_handler = createServerRpc({
 var chooseSignalPair = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	return { excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : [] };
 }).handler(chooseSignalPair_createServerFn_handler, async ({ data }) => {
-	const { feedNextPair } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { feedNextPair } = await import("./pocket-live.server-2rubZEbL.mjs");
 	return feedNextPair(data.excludedSymbols);
 });
 var takeBest_createServerFn_handler = createServerRpc({
@@ -72,13 +72,13 @@ var takeBest_createServerFn_handler = createServerRpc({
 }, (opts) => takeBest.__executeServer(opts));
 var takeBest = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	const expirySeconds = Number(input?.expirySeconds);
-	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
 	return {
 		expirySeconds,
 		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
 	};
 }).handler(takeBest_createServerFn_handler, async ({ data }) => {
-	const { feedBest } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { feedBest } = await import("./pocket-live.server-2rubZEbL.mjs");
 	return feedBest(data.expirySeconds, data.excludedSymbols);
 });
 //#endregion

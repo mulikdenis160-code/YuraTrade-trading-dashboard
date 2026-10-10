@@ -1,8 +1,8 @@
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
-import { A as levelForBalance } from "./router-rJs9lsOP.mjs";
+import { A as levelForBalance } from "./router-Bg7lHBFl.mjs";
 import { readTelegramLocale, saveTelegramLocale, verifyLinkedPocketAccountForTelegramUser, verifyPocketAccountForTelegramUser } from "./pocket-gate.server-eoJOoUVz.mjs";
 import { createHash, timingSafeEqual } from "node:crypto";
-//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-BKO-lxu3.js
+//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-CLYSKFIW.js
 var POCKET_OPTION_REFERRAL_URL = "https://po-ru4.click/register?utm_campaign=857649&utm_source=affiliate&utm_medium=sr&a=iRpVNOoIijYLHF&al=1788919&ac=ftd&cid=974710&code=50START";
 var ALREADY_REGISTERED_CALLBACK_DATA = "already_registered";
 var messages = {
@@ -22,9 +22,9 @@ var messages = {
 		verified: (level, limit) => `Pocket Option ID подтверждён и связан с этим Telegram-аккаунтом.\nУровень: ${level}.\nДневной лимит: ${limit}.`,
 		unlimited: "без дневного лимита",
 		tierNames: {
-			iskra: "Искра",
-			vector: "Вектор",
-			apex: "Апекс"
+			iskra: "Базовый",
+			vector: "Профессиональный",
+			apex: "Глубокий"
 		},
 		dailyLimit: (count) => `${count} сигналов`,
 		openSignalAI: "Открыть SignalAI",
@@ -51,9 +51,9 @@ var messages = {
 		verified: (level, limit) => `Pocket Option ID підтверджено та пов’язано з цим Telegram-акаунтом.\nРівень: ${level}.\nДенний ліміт: ${limit}.`,
 		unlimited: "без денного ліміту",
 		tierNames: {
-			iskra: "Іскра",
-			vector: "Вектор",
-			apex: "Апекс"
+			iskra: "Базовий",
+			vector: "Професійний",
+			apex: "Глибокий"
 		},
 		dailyLimit: (count) => `${count} сигналів`,
 		openSignalAI: "Відкрити SignalAI",
@@ -80,9 +80,9 @@ var messages = {
 		verified: (level, limit) => `The Pocket Option ID is verified and linked to this Telegram account.\nLevel: ${level}.\nDaily limit: ${limit}.`,
 		unlimited: "unlimited",
 		tierNames: {
-			iskra: "Spark",
-			vector: "Vector",
-			apex: "Apex"
+			iskra: "Basic",
+			vector: "Professional",
+			apex: "Deep"
 		},
 		dailyLimit: (count) => `${count} signals`,
 		openSignalAI: "Open SignalAI",

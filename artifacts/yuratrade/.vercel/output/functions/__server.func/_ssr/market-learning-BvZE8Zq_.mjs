@@ -1,6 +1,6 @@
 import { g as require_jsx_runtime, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { k as useLanguage } from "./router-rJs9lsOP.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/market-learning-D0Fhk3Lx.js
+import { k as useLanguage } from "./router-Bg7lHBFl.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/market-learning-BvZE8Zq_.js
 var import_jsx_runtime = require_jsx_runtime();
 function MarketLearning({ compact = false }) {
 	const { t } = useLanguage();

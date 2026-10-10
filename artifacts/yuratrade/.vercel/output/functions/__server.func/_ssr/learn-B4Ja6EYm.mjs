@@ -1,8 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { k as useLanguage } from "./router-rJs9lsOP.mjs";
-import { t as MarketLearning } from "./market-learning-D0Fhk3Lx.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/learn-DLjGvIab.js
+import { k as useLanguage } from "./router-Bg7lHBFl.mjs";
+import { t as MarketLearning } from "./market-learning-BvZE8Zq_.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/learn-B4Ja6EYm.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var lessons = [
@@ -212,28 +212,28 @@ var lessons = [
 		id: "levels",
 		title: "Уровни депозита",
 		minutes: 4,
-		lead: "Искра, Вектор и Апекс — глубина разбора, не другой список пар.",
+		lead: "Базовый, Профессиональный и Глубокий отличаются глубиной разбора, а не списком пар.",
 		blocks: [
 			{
 				type: "rows",
 				headers: [
-					"Уровень",
+					"Тариф",
 					"Депозит",
 					"Разбор"
 				],
 				rows: [
 					[
-						"Искра",
+						"Базовый",
 						"$60",
 						"Короткая карточка, до трёх перекрытий"
 					],
 					[
-						"Вектор",
+						"Профессиональный",
 						"$200",
 						"Два срока, фильтр слабого входа, до трёх перекрытий"
 					],
 					[
-						"Апекс",
+						"Глубокий",
 						"$500",
 						"Структура, пропуск слабого сценария, три перекрытия"
 					]
@@ -342,7 +342,7 @@ var quiz = [
 		why: "Только проигрыш. Сначала 10 секунд на подготовку, потом новый разбор той же пары и того же срока."
 	},
 	{
-		q: "Чем Апекс отличается от Искры?",
+		q: "Чем Глубокий отличается от Базового?",
 		options: [
 			"Другим списком пар",
 			"Глубиной разбора и фильтрами",

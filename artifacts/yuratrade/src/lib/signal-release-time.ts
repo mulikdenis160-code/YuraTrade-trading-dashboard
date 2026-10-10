@@ -34,3 +34,7 @@ export function signalReleaseAt(
 
   return countdownStartsAt + SIGNAL_COPY_DELAY_MS;
 }
+
+export function visibleSignalReleaseAt(releaseAtMs: number, nowMs: number): number {
+  return Math.max(releaseAtMs, nowMs + SIGNAL_COPY_DELAY_MS);
+}

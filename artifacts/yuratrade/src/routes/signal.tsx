@@ -27,6 +27,7 @@ import {
 import { copyPairName } from "@/lib/pair-clipboard";
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
+import { visibleSignalReleaseAt } from "@/lib/signal-release-time";
 import { getTelegramInitData } from "@/lib/telegram-webapp";
 
 type Group = "fx";
@@ -457,8 +458,9 @@ function SignalCard({ search }: { search: Search }) {
         }
         if (stop) return;
         setPreparedRecovery(result);
-        setCopyUntil(result.releaseAtMs);
-        setCopyRemaining(Math.max(0, Math.ceil((result.releaseAtMs - Date.now()) / 1000)));
+        const visibleReleaseAt = visibleSignalReleaseAt(result.releaseAtMs, Date.now());
+        setCopyUntil(visibleReleaseAt);
+        setCopyRemaining(Math.max(0, Math.ceil((visibleReleaseAt - Date.now()) / 1000)));
         setPhase("copy");
       })
       .catch((cause: unknown) => {

@@ -22,7 +22,7 @@ test("all users can receive three additional overlays after the first signal", (
   assert.equal(MAX_SIGNAL_ATTEMPTS, 4);
 });
 
-test("daily tier limits are doubled while the Apex tier stays unlimited", () => {
+test("daily tier limits are doubled while the Deep tier stays unlimited", () => {
   assert.equal(levelForBalance(60)?.daily, 10);
   assert.equal(levelForBalance(200)?.daily, 40);
   assert.equal(levelForBalance(500)?.daily, null);

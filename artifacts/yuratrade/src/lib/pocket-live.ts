@@ -30,7 +30,7 @@ export const takeSignal = createServerFn({ method: "POST" })
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     const expirySeconds = Number(input?.expirySeconds);
     if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) {
-      throw new Error("Выберите пару и срок экспирации от 1 минуты до 4 часов.");
+      throw new Error("Выберите пару и срок экспирации от 30 секунд до 4 часов.");
     }
     return {
       symbol,
@@ -79,7 +79,7 @@ export const takeBest = createServerFn({ method: "POST" })
   .validator((input: { expirySeconds: number; excludedSymbols?: unknown }) => {
     const expirySeconds = Number(input?.expirySeconds);
     if (!isValidExpirySeconds(expirySeconds)) {
-      throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+      throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
     }
     const excludedSymbols = Array.isArray(input?.excludedSymbols)
       ? [...new Set(

@@ -649,7 +649,7 @@ export async function feedSignal(
   symbol: string,
   expirySeconds: number,
 ): Promise<FeedSignalResult> {
-  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
   const pipelineStartedAt = performance.now();
   const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
   await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
@@ -817,7 +817,7 @@ export async function feedBest(
   };
 
   try {
-    if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+    if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
     stage = "feed";
     const feedStartedAt = performance.now();
     await ensureFeed();

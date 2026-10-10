@@ -1,14 +1,14 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
-import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_MINUTES, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-Bvk_Ig-2.mjs";
+import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-rJs9lsOP.mjs";
-import { t as StatRow } from "./stats-BfiZQynO.mjs";
-import { t as MarketLearning } from "./market-learning-D0Fhk3Lx.mjs";
-import { n as waitForSignalRequest, t as settleSignalRequest } from "./signal-request-D1JknhjO.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-Hvf4Nfl1.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Cv7e9b7J.js
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-Bg7lHBFl.mjs";
+import { t as StatRow } from "./stats-Cj2uHrbr.mjs";
+import { t as MarketLearning } from "./market-learning-BvZE8Zq_.mjs";
+import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DX0PuQUM.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DwdGVmUG.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-Drt0xJjU.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -26,7 +26,7 @@ function SignalDesk() {
 	const [copyRemaining, setCopyRemaining] = (0, import_react.useState)(10);
 	const [copiedPair, setCopiedPair] = (0, import_react.useState)(false);
 	const [used, setUsed] = (0, import_react.useState)(0);
-	const [expiryMinutes, setExpiryMinutes] = (0, import_react.useState)(2);
+	const [selectedExpirySeconds, setSelectedExpirySeconds] = (0, import_react.useState)(120);
 	const attemptRef = (0, import_react.useRef)(0);
 	(0, import_react.useEffect)(() => () => {
 		attemptRef.current += 1;
@@ -72,7 +72,7 @@ function SignalDesk() {
 		requestSignalBatchStop(hasActiveSeries);
 	}, []);
 	const level = levelForBalance(depositAmount);
-	const expirySeconds = expiryMinutes * 60;
+	const expirySeconds = selectedExpirySeconds;
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 	const cap = admin ? null : level ? level.daily : 0;
 	const left = cap === null ? null : Math.max(0, cap - used);
@@ -154,7 +154,7 @@ function SignalDesk() {
 					...candidate,
 					attempt,
 					seconds: requestedExpiry,
-					copyUntil: result.releaseAtMs
+					copyUntil: visibleSignalReleaseAt(result.releaseAtMs, Date.now())
 				};
 				break;
 			}
@@ -228,18 +228,18 @@ function SignalDesk() {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "mt-3 grid grid-cols-4 gap-2",
-								children: EXPIRY_OPTIONS_MINUTES.map((minutes) => {
-									const selected = expiryMinutes === minutes;
-									const label = expiryLabel(minutes * 60);
+								children: EXPIRY_OPTIONS_SECONDS.map((seconds) => {
+									const selected = expirySeconds === seconds;
+									const label = expiryLabel(seconds);
 									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "button",
 										disabled: phase !== "idle",
 										"aria-pressed": selected,
-										title: expiryLabel(minutes * 60),
-										onClick: () => setExpiryMinutes(minutes),
+										title: expiryLabel(seconds),
+										onClick: () => setSelectedExpirySeconds(seconds),
 										className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"} disabled:cursor-not-allowed disabled:opacity-50`,
 										children: label
-									}, minutes);
+									}, seconds);
 								})
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {

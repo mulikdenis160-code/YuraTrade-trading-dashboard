@@ -100,17 +100,17 @@ test("verification replies report the same tier limits as the website", () => {
     status: "verified",
     pocketId: "123456789",
     depositAmount: 60,
-  }, "ru").text, /Искра.*10 сигналов/s);
+  }, "ru").text, /Базовый.*10 сигналов/s);
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "123456789",
     depositAmount: 200,
-  }, "en").text, /Vector.*40 signals/s);
+  }, "en").text, /Professional.*40 signals/s);
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "123456789",
     depositAmount: 500,
-  }, "en").text, /Apex.*unlimited/s);
+  }, "en").text, /Deep.*unlimited/s);
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "123456789",

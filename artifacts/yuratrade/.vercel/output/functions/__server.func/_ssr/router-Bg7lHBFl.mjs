@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, m as useNavigate, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { i as getServerFnById, n as createServerFn, r as TSS_SERVER_FUNCTION } from "./ssr.mjs";
-import { d as getTelegramInitData, f as initializeTelegramWebApp, l as analysisPeriodForExpiry, m as pocketGateMiddleware, p as isValidExpirySeconds, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-Bvk_Ig-2.mjs";
+import { d as getTelegramInitData, f as initializeTelegramWebApp, l as analysisPeriodForExpiry, m as pocketGateMiddleware, p as isValidExpirySeconds, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-rJs9lsOP.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-Bg7lHBFl.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -35,7 +35,7 @@ var __exportAll = (all, no_symbols) => {
 var levels = [
 	{
 		id: "iskra",
-		name: "Искра",
+		name: "Базовый",
 		deposit: 60,
 		tag: "Базовый",
 		lead: "Один срок, направление и короткая карточка. Хватает, чтобы войти по свечам и не перепутать пару.",
@@ -63,7 +63,7 @@ var levels = [
 	},
 	{
 		id: "vector",
-		name: "Вектор",
+		name: "Профессиональный",
 		deposit: 200,
 		tag: "Профессиональный",
 		lead: "Младший срок сверяется со старшим. Слабый и спорный вход отсекается до карточки.",
@@ -93,7 +93,7 @@ var levels = [
 	},
 	{
 		id: "apex",
-		name: "Апекс",
+		name: "Глубокий",
 		deposit: 500,
 		tag: "Глубокий",
 		lead: "Полный разбор окна, запас до границы и жёсткий пропуск слабого сценария. До трёх перекрытий на всех уровнях.",
@@ -701,9 +701,9 @@ var copy = {
 		"Connecting to Pocket Option…"
 	],
 	"signal.description": [
-		"Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 1 минуты до 4 часов; ИИ напрямую анализирует свечи и выбирает направление.",
-		"Перевіряються лише валютні пари з виплатою 92% і 80%. Оберіть експірацію від 1 хвилини до 4 годин; ШІ безпосередньо аналізує свічки та обирає напрямок.",
-		"Only currency pairs with 92% or 80% payout are checked. Choose an expiry from 1 minute to 4 hours; AI directly analyzes the candles and selects a direction."
+		"Проверяются только валютные пары с выплатой 92% и 80%. Выберите экспирацию от 30 секунд до 4 часов; ИИ напрямую анализирует свечи и выбирает направление.",
+		"Перевіряються лише валютні пари з виплатою 92% і 80%. Оберіть експірацію від 30 секунд до 4 годин; ШІ безпосередньо аналізує свічки та обирає напрямок.",
+		"Only currency pairs with 92% or 80% payout are checked. Choose an expiry from 30 seconds to 4 hours; AI directly analyzes the candles and selects a direction."
 	],
 	"signal.experimental": [
 		"Самооценка уверенности ИИ субъективна: это не измеренная вероятность и не историческая проходимость. Результат не гарантирован.",
@@ -1441,9 +1441,9 @@ var copy = {
 		"Admin ID. No signal limit or minimum deposit is required."
 	],
 	"profile.userInfo": [
-		"Уровень зависит от первого депозита. Искра от $60 — 10 сигналов в день, Вектор от $200 — 40, Апекс от $500 — без лимита.",
-		"Рівень залежить від першого депозиту. Іскра від $60 — 10 сигналів на день, Вектор від $200 — 40, Апекс від $500 — без ліміту.",
-		"Your level depends on the first deposit. Spark from $60: 10 signals/day; Vector from $200: 40; Apex from $500: unlimited."
+		"Тариф зависит от первого депозита. Базовый от $60 — 10 сигналов в день, Профессиональный от $200 — 40, Глубокий от $500 — без лимита.",
+		"Тариф залежить від першого депозиту. Базовий від $60 — 10 сигналів на день, Професійний від $200 — 40, Глибокий від $500 — без ліміту.",
+		"Your plan depends on the first deposit. Basic from $60: 10 signals/day; Professional from $200: 40; Deep from $500: unlimited."
 	],
 	"profile.currentLimit": [
 		"Ваш персональный дневной лимит: {limit}.",
@@ -1600,6 +1600,7 @@ function useLanguage() {
 	return value;
 }
 function formatExpiryForLanguage(seconds, language) {
+	if (seconds === 30) return language === "en" ? "30 sec" : language === "uk" ? "30 с" : "30 сек";
 	const totalMinutes = Math.max(1, Math.round(seconds / 60));
 	const hours = Math.floor(totalMinutes / 60);
 	const minutes = totalMinutes % 60;
@@ -1873,7 +1874,7 @@ var readClose = createServerFn({ method: "POST" }).middleware([pocketGateMiddlew
 var takeSignal = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
 	const expirySeconds = Number(input?.expirySeconds);
-	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) throw new Error("Выберите пару и срок экспирации от 1 минуты до 4 часов.");
+	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) throw new Error("Выберите пару и срок экспирации от 30 секунд до 4 часов.");
 	return {
 		symbol,
 		expirySeconds
@@ -1889,7 +1890,7 @@ var chooseSignalPair = createServerFn({ method: "POST" }).middleware([pocketGate
 }).handler(createSsrRpc("4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e"));
 createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	const expirySeconds = Number(input?.expirySeconds);
-	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 1 минуты до 4 часов.");
+	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
 	return {
 		expirySeconds,
 		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
@@ -2624,15 +2625,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-Cv7e9b7J.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-Drt0xJjU.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-avcOUcNh.mjs");
+var $$splitComponentImporter$3 = () => import("./history-CoCfJBrv.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-DLjGvIab.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-B4Ja6EYm.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-CKfcCc37.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-BVNtWan3.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-Dhowasrn.mjs");
+var $$splitComponentImporter = () => import("./signal-C09xYUa1.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2695,7 +2696,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	}
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-cB9Sl0tj.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-2rubZEbL.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2737,7 +2738,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-BKO-lxu3.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-CLYSKFIW.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

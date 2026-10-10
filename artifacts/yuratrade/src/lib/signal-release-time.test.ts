@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SIGNAL_COPY_DELAY_MS } from "./signal-config.ts";
-import { signalReleaseAt } from "./signal-release-time.ts";
+import { signalReleaseAt, visibleSignalReleaseAt } from "./signal-release-time.ts";
 
 const candles = Array.from({ length: 3 }, (_, index) => ({
   time: 1_800_000_000 + index * 60,
@@ -30,5 +30,17 @@ test("stale candle timestamps schedule release in a future minute", () => {
   assert.equal(
     signalReleaseAt(candles, nowMs),
     currentWindowClosesAt + 60_000 + SIGNAL_COPY_DELAY_MS,
+  );
+});
+
+test("signal countdown remains visible for the full copy delay after preparation", () => {
+  const nowMs = 1_800_000_000_000;
+  assert.equal(
+    visibleSignalReleaseAt(nowMs + 2_000, nowMs),
+    nowMs + SIGNAL_COPY_DELAY_MS,
+  );
+  assert.equal(
+    visibleSignalReleaseAt(nowMs + 60_000, nowMs),
+    nowMs + 60_000,
   );
 });
