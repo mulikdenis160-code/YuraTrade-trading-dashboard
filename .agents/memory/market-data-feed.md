@@ -39,8 +39,8 @@ Choose the Pocket Option WebSocket endpoint from the auth frame's `isDemo` value
 
 **How to apply:** keep request cursors in local epoch, add the stream offset when requesting provider history, and subtract it from returned candle times before comparing against local time.
 
-Treat fresh ticks and fresh candle history as separate requirements. A current quote does not make an old OHLC history valid; keep rejecting stale candles instead of fabricating or loosening their timestamps. Preserve the user's minimum payout filter unless they explicitly change it.
+Treat fresh ticks and fresh candle history as separate requirements. A current quote does not make an old OHLC history valid; keep rejecting stale candles instead of fabricating or loosening their timestamps. The user chose to wait for provider history to refresh rather than use approximate tick-built candles. Preserve the user's minimum payout filter unless they explicitly change it.
 
-**Why:** live Pocket Option checks found a fresh quote alongside several minutes of stale candle history on the only pairs meeting the configured payout threshold.
+**Why:** live Pocket Option checks found a fresh quote alongside several minutes of stale candle history. The user explicitly preferred waiting for the source to refresh over analyzing approximate candles.
 
 **How to apply:** skip stale-history pairs and search other eligible pairs; if none remain, explain that fresh history is unavailable and ask before lowering the payout threshold.
