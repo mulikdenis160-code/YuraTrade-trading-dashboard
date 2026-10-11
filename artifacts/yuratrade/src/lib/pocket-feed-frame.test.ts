@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildPocketHistoryRequest,
   buildPocketSubscriptionFrames,
   findPocketRows,
   parsePocketFastHistory,
@@ -31,6 +32,19 @@ test("builds both Pocket Option market stream subscription frames", () => {
     '42["changeSymbol",{"asset":"AUDNZD_otc","period":60}]',
     '42["subfor","AUDNZD_otc"]',
   ]);
+});
+
+test("Pocket Option history request preserves the requested provider window", () => {
+  assert.deepEqual(
+    buildPocketHistoryRequest("AUDNZD_otc", 60, 1_800_000_000, 179176900000, 9_000),
+    {
+      asset: "AUDNZD_otc",
+      index: 179176900000,
+      offset: 9_000,
+      period: 60,
+      time: 1_800_000_000,
+    },
+  );
 });
 
 test("parses a Socket.IO event and its inline updateStream payload", () => {

@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-BxlBrvaS.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-D8PzE4KO.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -896,6 +896,15 @@ function findPocketRows(value, isRow, depth = 0) {
 	}
 	return null;
 }
+function buildPocketHistoryRequest(asset, periodSeconds, requestTime, index, historyWindow) {
+	return {
+		asset,
+		index,
+		offset: historyWindow,
+		period: periodSeconds,
+		time: requestTime
+	};
+}
 function parsePocketFastHistory(payload) {
 	if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
 	const record = payload;
@@ -1567,13 +1576,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 					socketReadyState: current.readyState
 				}));
 				sendPocketSubscription(current, symbol, seconds);
-				current.send("42" + JSON.stringify(["loadHistoryPeriod", {
-					asset: symbol,
-					index: 7e3 + Math.floor(Math.random() * 2e3),
-					time: requestTime,
-					offset: seconds * HISTORY_PAGE_CANDLES,
-					period: seconds
-				}]));
+				current.send("42" + JSON.stringify(["loadHistoryPeriod", buildPocketHistoryRequest(symbol, seconds, requestTime, Math.floor(Date.now() / 10), seconds * HISTORY_PAGE_CANDLES)]));
 			} catch {
 				clearTimeout(timer);
 				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);

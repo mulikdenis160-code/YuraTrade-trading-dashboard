@@ -29,6 +29,7 @@ import {
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
 import {
+  buildPocketHistoryRequest,
   buildPocketSubscriptionFrames,
   findPocketRows,
   parsePocketFastHistory,
@@ -836,13 +837,13 @@ async function loadHistoryPage(
           "42" +
             JSON.stringify([
               "loadHistoryPeriod",
-              {
-                asset: symbol,
-                index: 7000 + Math.floor(Math.random() * 2000),
-                time: requestTime,
-                offset: seconds * HISTORY_PAGE_CANDLES,
-                period: seconds,
-              },
+              buildPocketHistoryRequest(
+                symbol,
+                seconds,
+                requestTime,
+                Math.floor(Date.now() / 10),
+                seconds * HISTORY_PAGE_CANDLES,
+              ),
             ]),
         );
       } catch {

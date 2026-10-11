@@ -39,6 +39,12 @@ Choose the Pocket Option WebSocket endpoint from the auth frame's `isDemo` value
 
 **How to apply:** keep request cursors in local epoch, add the stream offset when requesting provider history, and subtract it from returned candle times before comparing against local time.
 
+Pocket Option history requests need a time-based unique `index` and an `offset` window scaled by the candle period (for example, 60 × 150 for 150 one-minute candles).
+
+**Why:** a live probe with a small bare offset returned only two candles; the period-scaled window and time-based request index returned a full page and a usable signal.
+
+**How to apply:** match the provider client's request ID shape and preserve its period-scaled offset semantics when changing the history request path.
+
 Treat fresh ticks and fresh candle history as separate requirements. The user approved using Pocket Option's `updateHistoryNewFast` ticks to reconstruct missing closed bars only when each minute has at least four samples spanning 70% of the interval; otherwise keep rejecting stale history. Preserve the user's minimum payout filter unless they explicitly change it.
 
 **Why:** Pocket Option's regular history lagged by several minutes, while the user asked for signals when requested and authorized the provider's fast-history path with a coverage safeguard.

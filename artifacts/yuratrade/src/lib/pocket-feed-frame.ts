@@ -72,6 +72,22 @@ export function findPocketRows(
   return null;
 }
 
+export function buildPocketHistoryRequest(
+  asset: string,
+  periodSeconds: number,
+  requestTime: number,
+  index: number,
+  historyWindow: number,
+) {
+  return {
+    asset,
+    index,
+    offset: historyWindow,
+    period: periodSeconds,
+    time: requestTime,
+  };
+}
+
 export function parsePocketFastHistory(payload: unknown): PocketFastHistory | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const record = payload as Record<string, unknown>;
