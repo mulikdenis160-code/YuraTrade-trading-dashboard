@@ -1,7 +1,7 @@
 import { a as getRequest } from "./ssr.mjs";
-import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
+import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
 import { createHmac, timingSafeEqual } from "node:crypto";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.server-eoJOoUVz.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.server-By8mD9Rm.js
 var _0001_telegram_pocket_gate_default = "CREATE TABLE IF NOT EXISTS telegram_pocket_bindings (\n  telegram_user_id TEXT PRIMARY KEY,\n  pocket_option_id TEXT NOT NULL UNIQUE\n    CHECK (pocket_option_id ~ '^[0-9]{9}$'),\n  verified_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS telegram_pocket_gate_attempts (\n  telegram_user_id TEXT PRIMARY KEY,\n  window_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n  attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0)\n);\n";
 var _0002_telegram_locale_default = "ALTER TABLE telegram_pocket_bindings\n  ADD COLUMN locale TEXT\n    CHECK (locale IN ('ru', 'uk', 'en'));\n";
 var _0003_telegram_admin_access_default = "CREATE TABLE IF NOT EXISTS telegram_admin_access (\n  telegram_user_id TEXT PRIMARY KEY\n    CHECK (telegram_user_id ~ '^[0-9]{1,20}$'),\n  pocket_option_id TEXT NOT NULL\n    CHECK (pocket_option_id IN ('113510708', '92535291', '984367891')),\n  locale TEXT CHECK (locale IN ('ru', 'uk', 'en')),\n  granted_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n";

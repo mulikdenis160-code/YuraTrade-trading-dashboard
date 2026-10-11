@@ -1,6 +1,6 @@
 import { n as createServerFn } from "./ssr.mjs";
 import { t as createServerRpc } from "./createServerRpc-DlvCGy7w.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate-B8yixPn6.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate-m4PKRTJB.js
 var readInitData = (input) => typeof input?.initData === "string" && input.initData.length <= 1e4 ? input.initData : "";
 var getPocketGateState_createServerFn_handler = createServerRpc({
 	id: "b900180c993554286d82dd224bf57a5fc610cd2c0e205fb2e89f79e8fa4a3641",
@@ -8,7 +8,7 @@ var getPocketGateState_createServerFn_handler = createServerRpc({
 	filename: "src/lib/pocket-gate.ts"
 }, (opts) => getPocketGateState.__executeServer(opts));
 var getPocketGateState = createServerFn({ method: "POST" }).validator((input) => ({ initData: readInitData(input) })).handler(getPocketGateState_createServerFn_handler, async ({ data }) => {
-	const { getPocketGateStateForTelegram } = await import("./pocket-gate.server-eoJOoUVz.mjs");
+	const { getPocketGateStateForTelegram } = await import("./pocket-gate.server-By8mD9Rm.mjs");
 	return getPocketGateStateForTelegram(data.initData);
 });
 var verifyPocketAccount_createServerFn_handler = createServerRpc({
@@ -20,7 +20,7 @@ var verifyPocketAccount = createServerFn({ method: "POST" }).validator((input) =
 	pocketId: typeof input?.pocketId === "string" ? input.pocketId.trim() : "",
 	initData: readInitData(input)
 })).handler(verifyPocketAccount_createServerFn_handler, async ({ data }) => {
-	const { verifyPocketAccountForTelegram } = await import("./pocket-gate.server-eoJOoUVz.mjs");
+	const { verifyPocketAccountForTelegram } = await import("./pocket-gate.server-By8mD9Rm.mjs");
 	return verifyPocketAccountForTelegram(data.pocketId, data.initData);
 });
 //#endregion

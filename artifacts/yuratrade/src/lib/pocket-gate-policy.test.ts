@@ -40,6 +40,10 @@ test("every configured Pocket Option admin ID bypasses partner and deposit check
     { status: "verified", depositAmount: 0 },
   );
   assert.deepEqual(
+    evaluatePocketGateStatus(noDeposit, "987651256", "123456789"),
+    { status: "verified", depositAmount: 0 },
+  );
+  assert.deepEqual(
     evaluatePocketGateStatus(noDeposit, "123456789", "984367891"),
     { status: "deposit_required" },
   );

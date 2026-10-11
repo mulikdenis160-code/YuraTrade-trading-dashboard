@@ -120,7 +120,8 @@ test("verification replies report the same tier limits as the website", () => {
 
 test("configured admin IDs bypass verification when entered in Telegram", () => {
   assert.equal(isAdminId("984367891"), true);
-  for (const pocketId of ["113510708", "92535291", "984367891"]) {
+  assert.equal(isAdminId("987651256"), true);
+  for (const pocketId of ["113510708", "92535291", "984367891", "987651256"]) {
     assert.equal(isValidPocketOptionId(pocketId), true);
     assert.deepEqual(
       telegramAdminBypassForPocketId(pocketId),
