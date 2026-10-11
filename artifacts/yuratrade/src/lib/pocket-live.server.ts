@@ -101,14 +101,22 @@ export type FeedBestResult = PassResult | BestSignalResult;
 
 type Pending = {
   asset: string;
+  periodSeconds: number;
   resolve: (history: ParsedHistoryPage) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
 
 type LoadedHistory = { candles: HistoricalCandle[]; rejectedRows: number };
+type PairTick = { price: number; time: number };
+type PairMarketData = {
+  ticks: PairTick[];
+  history: HistoricalCandle[];
+  historyPeriodSeconds: number | null;
+};
 
 const pairs = new Map<string, FeedPair>();
+const pairMarketData = new Map<string, PairMarketData>();
 let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
@@ -118,11 +126,20 @@ let expectAssets = false;
 let expectBalance = false;
 let lastPocketMessageAt = 0;
 let pocketServerClockOffsetSeconds: number | null = null;
-const quotes = new Map<string, { price: number; at: number }>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
 const pendingHistory = new Map<string, Pending>();
 let lastStreamDiagnosticAt = 0;
+
+function latestPairTick(symbol: string) {
+  const ticks = pairMarketData.get(symbol)?.ticks;
+  return ticks?.at(-1) ?? null;
+}
+
+function latestPairQuote(symbol: string) {
+  const tick = latestPairTick(symbol);
+  return tick ? { price: tick.price, at: tick.time } : null;
+}
 
 function logStreamDiagnostic(level: "info" | "warn", details: Record<string, unknown>) {
   const now = Date.now();
@@ -223,6 +240,9 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 3 || typeof row[0] !== "string") continue;
     const rawTimestamp = Number(row[1]);
+    const serverTimeMs = rawTimestamp >= 1_000_000_000_000
+      ? rawTimestamp
+      : rawTimestamp * 1000;
     if (Number.isFinite(rawTimestamp) && Math.abs(rawTimestamp) >= 1_000_000_000) {
       epochLikeTimestamps += 1;
     }
@@ -235,8 +255,21 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
       console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds, source: "updateStream" }));
     }
     const price = Number(row[2]);
-    if (!Number.isFinite(price)) continue;
-    quotes.set(String(row[0]), { price, at: receivedAtMs });
+    if (!Number.isFinite(price) || price <= 0 || offsetSeconds === null) continue;
+    const symbol = String(row[0]);
+    const tickTime = Math.min(
+      receivedAtMs,
+      serverTimeMs - (pocketServerClockOffsetSeconds ?? offsetSeconds) * 1000,
+    );
+    const state = pairMarketData.get(symbol) ?? {
+      ticks: [],
+      history: [],
+      historyPeriodSeconds: null,
+    };
+    state.ticks.push({ price, time: tickTime });
+    state.ticks.sort((left, right) => left.time - right.time);
+    if (state.ticks.length > 2_000) state.ticks.splice(0, state.ticks.length - 2_000);
+    pairMarketData.set(symbol, state);
     quoteRows += 1;
   }
   logStreamDiagnostic("info", {
@@ -290,7 +323,7 @@ function subscribe(symbol: string, periodSeconds = 1) {
 }
 
 function waitQuote(symbol: string, timeoutMs = 12_000) {
-  const current = quotes.get(symbol);
+  const current = latestPairQuote(symbol);
   if (current && Date.now() - current.at <= 2000) return Promise.resolve(current.price);
   const started = Date.now();
   subscribe(symbol);
@@ -311,20 +344,20 @@ function waitQuote(symbol: string, timeoutMs = 12_000) {
       resolve(price);
     };
     quoteTimer = setInterval(() => {
-      const quote = quotes.get(symbol);
+      const quote = latestPairQuote(symbol);
       if (quote && quote.at >= started - 250) {
         accept(quote.price);
       }
     }, 200);
     retryTimer = setInterval(() => {
-      const quote = quotes.get(symbol);
+      const quote = latestPairQuote(symbol);
       if (!quote || Date.now() - quote.at > 2000) subscribe(symbol);
     }, 500);
     stopTimer = setTimeout(() => {
       if (settled) return;
       settled = true;
       clearTimers();
-      const quote = quotes.get(symbol);
+      const quote = latestPairQuote(symbol);
       if (quote && Date.now() - quote.at <= 2000) resolve(quote.price);
       else reject(new Error(
         `Цена по паре ${symbol} не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`,
@@ -334,7 +367,7 @@ function waitQuote(symbol: string, timeoutMs = 12_000) {
 }
 
 function freshQuoteFromCache(symbol: string) {
-  const quote = quotes.get(symbol);
+  const quote = latestPairQuote(symbol);
   if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
     throw new Error(`Не удалось получить живую котировку по паре ${symbol}.`);
   }
@@ -469,11 +502,19 @@ function handleMessage(current: WebSocket, message: string) {
     try {
       const parsed = JSON.parse(message) as { asset?: string; data?: unknown[] };
       if (typeof parsed.asset === "string" && Array.isArray(parsed.data)) {
-        const request = pendingHistory.get(parsed.asset);
+          const request = pendingHistory.get(parsed.asset);
         if (request) {
           clearTimeout(request.timer);
           pendingHistory.delete(parsed.asset);
           const history = parsePocketOptionHistory(parsed.data);
+            const state = pairMarketData.get(parsed.asset) ?? {
+              ticks: [],
+              history: [],
+              historyPeriodSeconds: null,
+            };
+            state.history = history.candles.slice(-DIRECT_AI_HISTORY_CANDLES);
+            state.historyPeriodSeconds = request.periodSeconds;
+            pairMarketData.set(parsed.asset, state);
           console.info("[pocket-history-response]", JSON.stringify({
             symbol: parsed.asset,
             receivedRows: parsed.data.length,
@@ -685,7 +726,7 @@ async function loadHistoryPage(
         }));
         reject(new Error(`История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
       }, timeoutMs);
-      request = { asset: symbol, resolve, reject, timer };
+      request = { asset: symbol, periodSeconds: seconds, resolve, reject, timer };
       pendingHistory.set(symbol, request);
       try {
         console.info("[pocket-history-request]", JSON.stringify({
@@ -760,9 +801,9 @@ export function followQuote(symbol: string) {
   if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) {
     void feedSnapshot().catch(() => {});
   }
-  const current = quotes.get(symbol);
+  const current = latestPairQuote(symbol);
   if (!current || Date.now() - current.at > 2000) subscribe(symbol);
-  return quotes.get(symbol) ?? null;
+  return latestPairQuote(symbol);
 }
 
 export function quoteStatus(symbol: string) {
@@ -775,7 +816,7 @@ export function quoteStatus(symbol: string) {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return { status: "connecting" as const, message: "Подключаемся к потоку Pocket Option." };
   }
-  const quote = quotes.get(symbol);
+  const quote = latestPairQuote(symbol);
   if (quote && Date.now() - quote.at <= 5000) {
     return { status: "connected" as const, message: "" };
   }
@@ -785,7 +826,7 @@ export function quoteStatus(symbol: string) {
 export async function feedClose(symbol: string) {
   await ensureFeed();
   if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
-  const quote = quotes.get(symbol);
+  const quote = latestPairQuote(symbol);
   if (quote && Date.now() - quote.at < 800) return quote.price;
   return waitQuote(symbol);
 }
