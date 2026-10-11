@@ -115,8 +115,6 @@ let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
 let connectionError = "";
-let pocketAuthAccepted = false;
-let pocketAuthSentAt = 0;
 let retryAfter = 0;
 let expectAssets = false;
 let expectBalance = false;
@@ -275,29 +273,6 @@ function rememberTicks(message: string, frameFormat = "split-array") {
 }
 
 const subscribedAt = new Map<string, number>();
-const seenSocketEventNames = new Set<string>();
-const loggedPocketEventMarkers = new Set<string>();
-
-function logPocketEventMarker(message: string, current: WebSocket) {
-  for (const name of [
-    "successauth",
-    "successAuth",
-    "NotAuthorized",
-    "updateAssets",
-    "updateStream",
-    "updateHistoryNewFast",
-    "loadHistoryPeriod",
-    "history",
-  ]) {
-    if (!message.includes(name) || loggedPocketEventMarkers.has(name)) continue;
-    loggedPocketEventMarkers.add(name);
-    console.info("[pocket-feed-event-marker]", JSON.stringify({
-      name,
-      frameLength: message.length,
-      socketReadyState: current.readyState,
-    }));
-  }
-}
 
 function sendPocketSubscription(target: WebSocket, symbol: string, periodSeconds: number) {
   for (const frame of buildPocketSubscriptionFrames(symbol, periodSeconds)) target.send(frame);
@@ -409,7 +384,6 @@ function failPending(error: Error) {
 
 function handleMessage(current: WebSocket, message: string) {
   lastPocketMessageAt = Date.now();
-  logPocketEventMarker(message, current);
   if (message.startsWith("0") && message.includes("sid")) {
     current.send("40");
     return;
@@ -419,24 +393,10 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   if (message.startsWith("40") && message.includes("sid")) {
-    pocketAuthAccepted = false;
-    pocketAuthSentAt = Date.now();
     current.send(FEED_AUTH);
-    console.info("[pocket-feed-auth-sent]");
     return;
   }
-  const eventName = parsePocketSocketIoEvent(message)?.name.toLowerCase();
-  if (
-    eventName === "successauth" ||
-    eventName === "authenticated" ||
-    message.toLowerCase().includes("successauth")
-  ) {
-    pocketAuthAccepted = true;
-    connectionError = "";
-    console.info("[pocket-feed-auth-accepted]", JSON.stringify({ socketReadyState: current.readyState }));
-  }
   if (message.includes("NotAuthorized")) {
-    pocketAuthAccepted = false;
     connectionError = AUTH_REJECTED_MESSAGE;
     console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
     failPending(new Error(connectionError));
@@ -448,14 +408,6 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   const socketEvent = parsePocketSocketIoEvent(message);
-  if (socketEvent && !seenSocketEventNames.has(socketEvent.name)) {
-    seenSocketEventNames.add(socketEvent.name);
-    console.info("[pocket-socket-event]", JSON.stringify({
-      name: socketEvent.name,
-      payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
-      socketReadyState: current.readyState,
-    }));
-  }
   if (socketEvent?.name === "updateAssets") {
     const rows = findPocketRows(
       socketEvent.payload,
@@ -574,8 +526,6 @@ function connect() {
     }
   }
   connectionError = "";
-  pocketAuthAccepted = false;
-  pocketAuthSentAt = 0;
   pocketServerClockOffsetSeconds = null;
   subscribedAt.clear();
   const next = new WebSocket(FEED_URL, {
@@ -598,26 +548,6 @@ function connect() {
     failPending(new Error(connectionError));
   });
   socket = next;
-  const upgradeSocket = next as unknown as {
-    on: (
-      event: "upgrade",
-      listener: (response: { headers: { date?: string | string[] } }) => void,
-    ) => unknown;
-  };
-  upgradeSocket.on("upgrade", (response) => {
-    const dateHeader = response.headers.date;
-    const dateValue = Array.isArray(dateHeader) ? dateHeader[0] : dateHeader;
-    if (!dateValue) return;
-    const serverTimeMs = Date.parse(dateValue);
-    if (!Number.isFinite(serverTimeMs)) return;
-    const offsetSeconds = estimatePocketServerClockOffsetSeconds(serverTimeMs, Date.now());
-    if (offsetSeconds === null) return;
-    pocketServerClockOffsetSeconds = offsetSeconds;
-    console.info("[pocket-feed-clock]", JSON.stringify({
-      source: "websocket-upgrade-date",
-      offsetSeconds,
-    }));
-  });
   next.on("message", (data) => handleMessage(next, textOf(data)));
   const closeEventSocket = next as unknown as {
     on: (event: "close", listener: (code: number, reason: Buffer) => void) => unknown;
@@ -637,42 +567,16 @@ function connect() {
 }
 
 function ensureFeed() {
-  if (
-    pocketAuthAccepted &&
-    pairs.size > 0 &&
-    socket &&
-    socket.readyState === WebSocket.OPEN
-  ) {
-    return Promise.resolve();
-  }
+  if (pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) return Promise.resolve();
   if (ready) return ready;
   connect();
   ready = new Promise<void>((resolve, reject) => {
     const started = Date.now();
     const timer = setInterval(() => {
-      if (
-        pocketAuthAccepted &&
-        pairs.size > 0 &&
-        socket &&
-        socket.readyState === WebSocket.OPEN
-      ) {
+      if (pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
         clearInterval(timer);
         ready = null;
         resolve();
-        return;
-      }
-      if (
-        pairs.size > 0 &&
-        socket?.readyState === WebSocket.OPEN &&
-        pocketAuthSentAt > 0 &&
-        !pocketAuthAccepted &&
-        Date.now() - pocketAuthSentAt >= 6000
-      ) {
-        clearInterval(timer);
-        ready = null;
-        connectionError =
-          "Pocket Option не подтвердил авторизацию сессии. Обновите POCKET_OPTION_FEED_AUTH.";
-        reject(new Error(connectionError));
         return;
       }
       if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) connect();
