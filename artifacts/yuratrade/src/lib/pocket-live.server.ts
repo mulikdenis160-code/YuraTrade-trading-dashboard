@@ -30,7 +30,11 @@ import {
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
-import { findPocketRows, parsePocketSocketIoEvent } from "./pocket-feed-frame";
+import {
+  buildPocketSubscriptionFrames,
+  findPocketRows,
+  parsePocketSocketIoEvent,
+} from "./pocket-feed-frame";
 import {
   estimatePocketServerClockOffsetSeconds,
   pocketHistoryRequestTime,
@@ -269,13 +273,45 @@ function rememberTicks(message: string, frameFormat = "split-array") {
 }
 
 const subscribedAt = new Map<string, number>();
+const seenSocketEventNames = new Set<string>();
+const loggedPocketEventMarkers = new Set<string>();
 
-function subscribe(symbol: string) {
+function logPocketEventMarker(message: string, current: WebSocket) {
+  for (const name of [
+    "successauth",
+    "successAuth",
+    "NotAuthorized",
+    "updateAssets",
+    "updateStream",
+    "updateHistoryNewFast",
+    "loadHistoryPeriod",
+    "history",
+  ]) {
+    if (!message.includes(name) || loggedPocketEventMarkers.has(name)) continue;
+    loggedPocketEventMarkers.add(name);
+    console.info("[pocket-feed-event-marker]", JSON.stringify({
+      name,
+      frameLength: message.length,
+      socketReadyState: current.readyState,
+    }));
+  }
+}
+
+function sendPocketSubscription(target: WebSocket, symbol: string, periodSeconds: number) {
+  for (const frame of buildPocketSubscriptionFrames(symbol, periodSeconds)) target.send(frame);
+  console.info(
+    "[pocket-feed-subscribe]",
+    JSON.stringify({ symbol, periodSeconds, socketReadyState: target.readyState }),
+  );
+}
+
+function subscribe(symbol: string, periodSeconds = 1) {
   const now = Date.now();
-  if (now - (subscribedAt.get(symbol) ?? 0) < 2000) return;
+  const key = `${symbol}:${periodSeconds}`;
+  if (now - (subscribedAt.get(key) ?? 0) < 2000) return;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
-  subscribedAt.set(symbol, now);
-  socket.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: 1 }]));
+  subscribedAt.set(key, now);
+  sendPocketSubscription(socket, symbol, periodSeconds);
 }
 
 function waitQuote(symbol: string, timeoutMs = 12_000) {
@@ -371,6 +407,7 @@ function failPending(error: Error) {
 
 function handleMessage(current: WebSocket, message: string) {
   lastPocketMessageAt = Date.now();
+  logPocketEventMarker(message, current);
   if (message.startsWith("0") && message.includes("sid")) {
     current.send("40");
     return;
@@ -395,6 +432,14 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   const socketEvent = parsePocketSocketIoEvent(message);
+  if (socketEvent && !seenSocketEventNames.has(socketEvent.name)) {
+    seenSocketEventNames.add(socketEvent.name);
+    console.info("[pocket-socket-event]", JSON.stringify({
+      name: socketEvent.name,
+      payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
+      socketReadyState: current.readyState,
+    }));
+  }
   if (socketEvent?.name === "updateAssets") {
     const rows = findPocketRows(
       socketEvent.payload,
@@ -535,6 +580,26 @@ function connect() {
     failPending(new Error(connectionError));
   });
   socket = next;
+  const upgradeSocket = next as unknown as {
+    on: (
+      event: "upgrade",
+      listener: (response: { headers: { date?: string | string[] } }) => void,
+    ) => unknown;
+  };
+  upgradeSocket.on("upgrade", (response) => {
+    const dateHeader = response.headers.date;
+    const dateValue = Array.isArray(dateHeader) ? dateHeader[0] : dateHeader;
+    if (!dateValue) return;
+    const serverTimeMs = Date.parse(dateValue);
+    if (!Number.isFinite(serverTimeMs)) return;
+    const offsetSeconds = estimatePocketServerClockOffsetSeconds(serverTimeMs, Date.now());
+    if (offsetSeconds === null) return;
+    pocketServerClockOffsetSeconds = offsetSeconds;
+    console.info("[pocket-feed-clock]", JSON.stringify({
+      source: "websocket-upgrade-date",
+      offsetSeconds,
+    }));
+  });
   next.on("message", (data) => handleMessage(next, textOf(data)));
   const closeEventSocket = next as unknown as {
     on: (event: "close", listener: (code: number, reason: Buffer) => void) => unknown;
@@ -634,7 +699,7 @@ async function loadHistoryPage(
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
     const clockDeadline = Date.now() + Math.min(timeoutMs, 2000);
     while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
-      subscribe(symbol);
+      subscribe(symbol, seconds);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     const clockOffsetSeconds = pocketServerClockOffsetSeconds;
@@ -685,7 +750,7 @@ async function loadHistoryPage(
           timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
           socketReadyState: current.readyState,
         }));
-        current.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: seconds }]));
+        sendPocketSubscription(current, symbol, seconds);
         current.send(
           "42" +
             JSON.stringify([

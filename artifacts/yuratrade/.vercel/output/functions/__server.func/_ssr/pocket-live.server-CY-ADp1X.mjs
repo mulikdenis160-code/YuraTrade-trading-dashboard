@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-C6OkpNbw.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CY-ADp1X.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -810,6 +810,16 @@ function parsePocketOptionHistory(data) {
 		rejectedRows: data.length - candles.length
 	};
 }
+function buildPocketSubscriptionFrames(symbol, periodSeconds) {
+	return [
+		`42${JSON.stringify(["subscribeSymbol", symbol])}`,
+		`42${JSON.stringify(["changeSymbol", {
+			asset: symbol,
+			period: periodSeconds
+		}])}`,
+		`42${JSON.stringify(["subfor", symbol])}`
+	];
+}
 function parsePocketSocketIoEvent(message) {
 	if (!message.startsWith("42")) return null;
 	try {
@@ -1012,15 +1022,43 @@ function rememberTicks(message, frameFormat = "split-array") {
 	}
 }
 var subscribedAt = /* @__PURE__ */ new Map();
-function subscribe(symbol) {
+var seenSocketEventNames = /* @__PURE__ */ new Set();
+var loggedPocketEventMarkers = /* @__PURE__ */ new Set();
+function logPocketEventMarker(message, current) {
+	for (const name of [
+		"successauth",
+		"successAuth",
+		"NotAuthorized",
+		"updateAssets",
+		"updateStream",
+		"updateHistoryNewFast",
+		"loadHistoryPeriod",
+		"history"
+	]) {
+		if (!message.includes(name) || loggedPocketEventMarkers.has(name)) continue;
+		loggedPocketEventMarkers.add(name);
+		console.info("[pocket-feed-event-marker]", JSON.stringify({
+			name,
+			frameLength: message.length,
+			socketReadyState: current.readyState
+		}));
+	}
+}
+function sendPocketSubscription(target, symbol, periodSeconds) {
+	for (const frame of buildPocketSubscriptionFrames(symbol, periodSeconds)) target.send(frame);
+	console.info("[pocket-feed-subscribe]", JSON.stringify({
+		symbol,
+		periodSeconds,
+		socketReadyState: target.readyState
+	}));
+}
+function subscribe(symbol, periodSeconds = 1) {
 	const now = Date.now();
-	if (now - (subscribedAt.get(symbol) ?? 0) < 2e3) return;
+	const key = `${symbol}:${periodSeconds}`;
+	if (now - (subscribedAt.get(key) ?? 0) < 2e3) return;
 	if (!socket || socket.readyState !== wrapper_default.OPEN) return;
-	subscribedAt.set(symbol, now);
-	socket.send("42" + JSON.stringify(["changeSymbol", {
-		asset: symbol,
-		period: 1
-	}]));
+	subscribedAt.set(key, now);
+	sendPocketSubscription(socket, symbol, periodSeconds);
 }
 function waitQuote(symbol, timeoutMs = 12e3) {
 	const current = quotes.get(symbol);
@@ -1096,6 +1134,7 @@ function failPending(error) {
 }
 function handleMessage(current, message) {
 	lastPocketMessageAt = Date.now();
+	logPocketEventMarker(message, current);
 	if (message.startsWith("0") && message.includes("sid")) {
 		current.send("40");
 		return;
@@ -1118,6 +1157,14 @@ function handleMessage(current, message) {
 		return;
 	}
 	const socketEvent = parsePocketSocketIoEvent(message);
+	if (socketEvent && !seenSocketEventNames.has(socketEvent.name)) {
+		seenSocketEventNames.add(socketEvent.name);
+		console.info("[pocket-socket-event]", JSON.stringify({
+			name: socketEvent.name,
+			payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
+			socketReadyState: current.readyState
+		}));
+	}
 	if (socketEvent?.name === "updateAssets") {
 		const rows = findPocketRows(socketEvent.payload, (row) => row.length >= 15 && row[14] === true && row[9] === 1);
 		if (rows) {
@@ -1244,6 +1291,20 @@ function connect() {
 		failPending(new Error(connectionError));
 	});
 	socket = next;
+	next.on("upgrade", (response) => {
+		const dateHeader = response.headers.date;
+		const dateValue = Array.isArray(dateHeader) ? dateHeader[0] : dateHeader;
+		if (!dateValue) return;
+		const serverTimeMs = Date.parse(dateValue);
+		if (!Number.isFinite(serverTimeMs)) return;
+		const offsetSeconds = estimatePocketServerClockOffsetSeconds(serverTimeMs, Date.now());
+		if (offsetSeconds === null) return;
+		pocketServerClockOffsetSeconds = offsetSeconds;
+		console.info("[pocket-feed-clock]", JSON.stringify({
+			source: "websocket-upgrade-date",
+			offsetSeconds
+		}));
+	});
 	next.on("message", (data) => handleMessage(next, textOf(data)));
 	next.on("close", (code, reason) => {
 		if (socket !== next) return;
@@ -1320,7 +1381,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsSe
 		if (!socket || socket.readyState !== wrapper_default.OPEN) throw new Error("Котировки сейчас недоступны.");
 		const clockDeadline = Date.now() + Math.min(timeoutMs, 2e3);
 		while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
-			subscribe(symbol);
+			subscribe(symbol, seconds);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 		}
 		const clockOffsetSeconds = pocketServerClockOffsetSeconds;
@@ -1370,10 +1431,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsSe
 					timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
 					socketReadyState: current.readyState
 				}));
-				current.send("42" + JSON.stringify(["changeSymbol", {
-					asset: symbol,
-					period: seconds
-				}]));
+				sendPocketSubscription(current, symbol, seconds);
 				current.send("42" + JSON.stringify(["loadHistoryPeriod", {
 					asset: symbol,
 					index: 7e3 + Math.floor(Math.random() * 2e3),

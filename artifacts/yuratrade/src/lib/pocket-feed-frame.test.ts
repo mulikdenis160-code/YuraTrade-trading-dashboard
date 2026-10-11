@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findPocketRows, parsePocketSocketIoEvent } from "./pocket-feed-frame.ts";
+import {
+  buildPocketSubscriptionFrames,
+  findPocketRows,
+  parsePocketSocketIoEvent,
+} from "./pocket-feed-frame.ts";
+
+test("builds both Pocket Option market stream subscription frames", () => {
+  assert.deepEqual(buildPocketSubscriptionFrames("AUDNZD_otc", 60), [
+    '42["subscribeSymbol","AUDNZD_otc"]',
+    '42["changeSymbol",{"asset":"AUDNZD_otc","period":60}]',
+    '42["subfor","AUDNZD_otc"]',
+  ]);
+});
 
 test("parses a Socket.IO event and its inline updateStream payload", () => {
   const parsed = parsePocketSocketIoEvent(

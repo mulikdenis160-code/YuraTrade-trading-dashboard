@@ -1,5 +1,16 @@
 export type SocketIoEvent = { name: string; payload: unknown };
 
+export function buildPocketSubscriptionFrames(
+  symbol: string,
+  periodSeconds: number,
+): [string, string, string] {
+  return [
+    `42${JSON.stringify(["subscribeSymbol", symbol])}`,
+    `42${JSON.stringify(["changeSymbol", { asset: symbol, period: periodSeconds }])}`,
+    `42${JSON.stringify(["subfor", symbol])}`,
+  ];
+}
+
 export function parsePocketSocketIoEvent(message: string): SocketIoEvent | null {
   if (!message.startsWith("42")) return null;
   try {
