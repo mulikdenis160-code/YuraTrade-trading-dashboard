@@ -1,4 +1,9 @@
 export type SocketIoEvent = { name: string; payload: unknown };
+export type PocketFastHistory = {
+  asset: string;
+  periodSeconds: number | null;
+  ticks: Array<{ time: number; price: number }>;
+};
 
 export function pocketFeedUrlForAuth(auth: string): string | null {
   const frame = auth.trim();
@@ -65,4 +70,27 @@ export function findPocketRows(
     }
   }
   return null;
+}
+
+export function parsePocketFastHistory(payload: unknown): PocketFastHistory | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.asset !== "string" || !record.asset) return null;
+  const period = Number(record.period);
+  const rows = findPocketRows(
+    record.history,
+    (row) => row.length >= 2 && Number.isFinite(Number(row[0])) && Number.isFinite(Number(row[1])),
+  );
+  if (!rows) return null;
+  const ticks = rows.flatMap((row) => {
+    const time = Number(row[0]);
+    const price = Number(row[1]);
+    return Number.isFinite(time) && time > 0 && price > 0 ? [{ time, price }] : [];
+  });
+  if (ticks.length === 0) return null;
+  return {
+    asset: record.asset,
+    periodSeconds: Number.isInteger(period) && period > 0 ? period : null,
+    ticks,
+  };
 }
