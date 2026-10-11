@@ -44,7 +44,7 @@ const HISTORY_PAGE_CANDLES = 150;
 const SIGNAL_CANDIDATES_PER_SEARCH = 1;
 const MAX_ELIGIBLE_PAIRS = 20;
 const MIN_SIGNAL_PAYOUT = 92;
-const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
+const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 8_000;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
   "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 const runHistoryRequest = createKeyedAsyncQueue();
@@ -109,6 +109,7 @@ let connectionError = "";
 let retryAfter = 0;
 let expectAssets = false;
 let expectBalance = false;
+let lastPocketMessageAt = 0;
 const quotes = new Map<string, { price: number; at: number }>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
@@ -313,6 +314,7 @@ function failPending(error: Error) {
 }
 
 function handleMessage(current: WebSocket, message: string) {
+  lastPocketMessageAt = Date.now();
   if (message.startsWith("0") && message.includes("sid")) {
     current.send("40");
     return;
@@ -327,6 +329,7 @@ function handleMessage(current: WebSocket, message: string) {
   }
   if (message.includes("NotAuthorized")) {
     connectionError = AUTH_REJECTED_MESSAGE;
+    console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
     failPending(new Error(connectionError));
     try {
       current.close();
@@ -342,9 +345,18 @@ function handleMessage(current: WebSocket, message: string) {
   if (expectAssets && message.startsWith("[")) {
     expectAssets = false;
     try {
-      storeAssets(JSON.parse(message) as unknown[]);
+      const rows = JSON.parse(message) as unknown[];
+      storeAssets(rows);
+      console.info("[pocket-feed-assets]", JSON.stringify({
+        receivedRows: rows.length,
+        activePairs: pairs.size,
+        socketReadyState: current.readyState,
+      }));
     } catch {
-      /* ignore a bad catalog frame */
+      console.warn("[pocket-feed-assets-parse-failed]", JSON.stringify({
+        socketReadyState: current.readyState,
+        frameLength: message.length,
+      }));
     }
     return;
   }
@@ -356,7 +368,14 @@ function handleMessage(current: WebSocket, message: string) {
         if (request) {
           clearTimeout(request.timer);
           pendingHistory.delete(parsed.asset);
-          request.resolve(parsePocketOptionHistory(parsed.data));
+          const history = parsePocketOptionHistory(parsed.data);
+          console.info("[pocket-history-response]", JSON.stringify({
+            symbol: parsed.asset,
+            receivedRows: parsed.data.length,
+            validCandles: history.candles.length,
+            rejectedRows: history.rejectedRows,
+          }));
+          request.resolve(history);
           return;
         }
       }
@@ -385,6 +404,7 @@ function handleMessage(current: WebSocket, message: string) {
 function connect() {
   if (!FEED_AUTH.trim()) {
     connectionError = AUTH_MISSING_MESSAGE;
+    console.error("[pocket-feed-auth-missing]");
     throw new Error(connectionError);
   }
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === 0)) return;
@@ -415,9 +435,22 @@ function connect() {
     failPending(new Error(connectionError));
   });
   socket = next;
+  next.on("open", () => {
+    if (socket === next) {
+      console.info("[pocket-feed-open]", JSON.stringify({ socketReadyState: next.readyState }));
+    }
+  });
   next.on("message", (data) => handleMessage(next, textOf(data)));
+  next.on("error", (error) => {
+    if (socket !== next) return;
+    console.error("[pocket-feed-error]", JSON.stringify({
+      errorName: error.name,
+      socketReadyState: next.readyState,
+    }));
+  });
   next.on("close", () => {
     if (socket !== next) return;
+    console.warn("[pocket-feed-closed]", JSON.stringify({ socketReadyState: next.readyState }));
     socket = null;
     retryAfter = Date.now() + 2000;
     if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
@@ -508,6 +541,15 @@ async function loadHistoryPage(
       let request: Pending;
       const timer = setTimeout(() => {
         if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+        console.warn("[pocket-history-timeout]", JSON.stringify({
+          symbol,
+          periodSeconds: seconds,
+          timeoutMs,
+          socketReadyState: socket?.readyState ?? null,
+          pairAvailable: pairs.has(symbol),
+          connectionError: connectionError || null,
+          lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null,
+        }));
         reject(new Error(`История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
       }, timeoutMs);
       request = { asset: symbol, resolve, reject, timer };
