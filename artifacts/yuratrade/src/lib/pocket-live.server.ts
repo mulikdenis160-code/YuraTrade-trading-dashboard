@@ -49,6 +49,13 @@ const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
   "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 const runHistoryRequest = createKeyedAsyncQueue();
 
+class CandidateQuoteUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CandidateQuoteUnavailableError";
+  }
+}
+
 function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
   return waitForSignalRequest(
     settleSignalRequest(request),
@@ -258,7 +265,7 @@ function waitQuote(symbol: string, timeoutMs = 12_000) {
       clearTimers();
       const quote = quotes.get(symbol);
       if (quote && Date.now() - quote.at <= 2000) resolve(quote.price);
-      else reject(new Error(
+      else reject(new CandidateQuoteUnavailableError(
         `Цена по паре ${symbol} не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`,
       ));
     }, timeoutMs);
@@ -268,11 +275,11 @@ function waitQuote(symbol: string, timeoutMs = 12_000) {
 function freshQuoteFromCache(symbol: string) {
   const quote = quotes.get(symbol);
   if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
-    throw new Error(`Не удалось получить живую котировку по паре ${symbol}.`);
+    throw new CandidateQuoteUnavailableError(`Не удалось получить живую котировку по паре ${symbol}.`);
   }
   const ageMs = Date.now() - quote.at;
   if (ageMs < 0 || ageMs > MAX_QUOTE_AGE_MS) {
-    throw new Error(`Котировка по паре ${symbol} старше 20 секунд. Сигнал не выдан.`);
+    throw new CandidateQuoteUnavailableError(`Котировка по паре ${symbol} старше 20 секунд.`);
   }
   return {
     price: quote.price,
@@ -666,13 +673,33 @@ export async function feedSignal(
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const historyStartedAt = performance.now();
   const inputQuoteStartedAt = historyStartedAt;
-  const [history, inputQuote] = await waitForSignalPreparation(
+  const quoteRequest = waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS).then(
+    (quote) => ({ available: true as const, quote }),
+    (error: unknown) => {
+      if (error instanceof CandidateQuoteUnavailableError) {
+        return { available: false as const, error };
+      }
+      throw error;
+    },
+  );
+  const [history, quoteResult] = await waitForSignalPreparation(
     Promise.all([
       loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1),
-      waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS),
+      quoteRequest,
     ]),
     preparationDeadlineAtMs,
   );
+  if (!quoteResult.available) {
+    console.info("[signal-candidate-skip]", JSON.stringify({
+      symbol,
+      reason: "quote-unavailable",
+    }));
+    return {
+      decision: "pass",
+      reason: `${quoteResult.error.message} Пара пропущена.`,
+    };
+  }
+  const inputQuote = quoteResult.quote;
   const historyMs = Math.round(performance.now() - historyStartedAt);
   const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
   const candles = history.candles;

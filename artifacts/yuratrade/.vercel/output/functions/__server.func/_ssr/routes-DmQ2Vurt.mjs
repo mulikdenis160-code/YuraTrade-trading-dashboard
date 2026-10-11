@@ -3,13 +3,17 @@ import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Li
 import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-D3IH-mrb.mjs";
-import { t as StatRow } from "./stats-voRxp_GZ.mjs";
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-DYIzAJVx.mjs";
+import { t as StatRow } from "./stats-Dl8c_2ri.mjs";
 import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DX0PuQUM.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-9SeYnrO-.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BEP9rEu_.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-CJy_m50t.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DmQ2Vurt.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
+function isCandidateQuoteUnavailable(error, symbol) {
+	const message = error instanceof Error ? error.message : "";
+	return message.includes(`Цена по паре ${symbol} не пришла`) || message.includes(`Не удалось получить живую котировку по паре ${symbol}`) || message.includes(`Котировка по паре ${symbol} старше`);
+}
 function SignalDesk() {
 	const navigate = useNavigate();
 	const { id, depositAmount } = usePocket();
@@ -115,17 +119,17 @@ function SignalDesk() {
 			setCopiedPair(false);
 		}
 	};
-	const ask = async () => {
+	const ask = async (previouslyUnavailableSymbols = [], quoteRetries = 0) => {
 		if (phase !== "idle" || blocked || !ready) return;
 		const requestedExpiry = expirySeconds;
 		const attempt = ++attemptRef.current;
-		const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+		let preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 		setPhase("choosing");
 		setSearchError("");
 		setNotice("");
 		setPendingPair(null);
 		try {
-			const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
+			const excludedSymbols = [.../* @__PURE__ */ new Set([...recentlyUsedSignalSymbols(readSignalJournal()), ...previouslyUnavailableSymbols])];
 			const checkedSymbols = /* @__PURE__ */ new Set();
 			let selected = null;
 			let prepared = null;
@@ -139,10 +143,17 @@ function SignalDesk() {
 				checkedSymbols.add(candidate.symbol);
 				const signalBudgetMs = preparationDeadlineAtMs - Date.now();
 				if (signalBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
-				const result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
-					symbol: candidate.symbol,
-					expirySeconds: requestedExpiry
-				} })), signalBudgetMs, t("signal.analysisTimeout"));
+				let result;
+				try {
+					result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
+						symbol: candidate.symbol,
+						expirySeconds: requestedExpiry
+					} })), signalBudgetMs, t("signal.analysisTimeout"));
+				} catch (cause) {
+					if (!isCandidateQuoteUnavailable(cause, candidate.symbol)) throw cause;
+					lastReason = cause instanceof Error ? `${cause.message} Пара пропущена.` : "";
+					continue;
+				}
 				if (attemptRef.current !== attempt) return;
 				if (result.decision === "pass") {
 					lastReason = result.reason;
@@ -172,7 +183,28 @@ function SignalDesk() {
 			});
 			if (attemptRef.current !== attempt) return;
 			setPhase("analysis");
-			const entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
+			let entry;
+			try {
+				entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
+			} catch (cause) {
+				if (!isCandidateQuoteUnavailable(cause, readyPair.symbol)) throw cause;
+				const reason = cause instanceof Error ? `${cause.message} Пара пропущена.` : `По паре ${readyPair.symbol} нет свежей котировки. Пара пропущена.`;
+				if (quoteRetries >= 1) {
+					setPendingPair(null);
+					setNotice(reason);
+					setPhase("idle");
+					return;
+				}
+				setPendingPair(null);
+				setNotice(reason);
+				setPhase("idle");
+				await ask([.../* @__PURE__ */ new Set([
+					...excludedSymbols,
+					...checkedSymbols,
+					readyPair.symbol
+				])], quoteRetries + 1);
+				return;
+			}
 			if (attemptRef.current !== attempt) return;
 			await openSignal({
 				...prepared,
