@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildPocketSubscriptionFrames,
   findPocketRows,
+  parsePocketFastHistory,
   parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
 } from "./pocket-feed-frame.ts";
@@ -60,6 +61,25 @@ test("finds market rows nested in Socket.IO event objects", () => {
     ),
     [["EURUSD_otc", 1800000000, 1.12345]],
   );
+});
+
+test("parses Pocket Option updateHistoryNewFast tick history", () => {
+  const parsed = parsePocketSocketIoEvent(
+    '42["updateHistoryNewFast",{"asset":"AUDNZD_otc","period":60,"history":[[1800000000,1.12],[1800000015,1.13]]}]',
+  );
+  assert.deepEqual(parsePocketFastHistory(parsed?.payload), {
+    asset: "AUDNZD_otc",
+    periodSeconds: 60,
+    ticks: [
+      { time: 1800000000, price: 1.12 },
+      { time: 1800000015, price: 1.13 },
+    ],
+  });
+});
+
+test("rejects malformed fast-history payloads", () => {
+  assert.equal(parsePocketFastHistory({ asset: "AUDNZD_otc", period: 60, history: [] }), null);
+  assert.equal(parsePocketFastHistory({ asset: 12, period: 60, history: [[1800000000, 1.12]] }), null);
 });
 
 test("ignores malformed Socket.IO event frames", () => {

@@ -1,6 +1,39 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parsePocketOptionHistory } from "./pocket-option-history.ts";
+import {
+  appendCoveredFastCandles,
+  parsePocketOptionHistory,
+} from "./pocket-option-history.ts";
+
+test("fast-history ticks fill every missing closed minute only with adequate coverage", () => {
+  const base = [{ time: 60, open: 1, close: 1, high: 1, low: 1 }];
+  const ticks = [];
+  for (let minute = 2; minute <= 5; minute += 1) {
+    for (const second of [1, 15, 30, 45]) {
+      ticks.push({ time: (minute * 60 + second) * 1000, price: 1 + minute / 100 });
+    }
+  }
+
+  const result = appendCoveredFastCandles(base, ticks, 60, 360_000);
+  assert.deepEqual(result.map((candle) => candle.time), [60, 120, 180, 240, 300]);
+  assert.equal(result.at(-1)?.close, 1.05);
+});
+
+test("fast-history data never fills partial coverage or the currently forming candle", () => {
+  const base = [{ time: 60, open: 1, close: 1, high: 1, low: 1 }];
+  const incomplete = [
+    { time: 121_000, price: 1.02 },
+    { time: 135_000, price: 1.03 },
+    { time: 150_000, price: 1.04 },
+  ];
+  assert.equal(appendCoveredFastCandles(base, incomplete, 60, 180_000), base);
+
+  const currentOnly = [241_000, 256_000, 271_000, 280_000].map((time, index) => ({
+    time,
+    price: 1.05 + index / 100,
+  }));
+  assert.equal(appendCoveredFastCandles(base, currentOnly, 60, 285_000), base);
+});
 
 test("Pocket Option history keeps complete valid OHLC rows and sorts by timestamp", () => {
   const parsed = parsePocketOptionHistory([

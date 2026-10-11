@@ -14,6 +14,7 @@ import {
   loadCandidatesInParallel,
 } from "./signal-candidate-pool.ts";
 import {
+  appendCoveredFastCandles,
   parsePocketOptionHistory,
   type HistoricalCandle,
   type ParsedHistoryPage,
@@ -30,6 +31,7 @@ import {
 import {
   buildPocketSubscriptionFrames,
   findPocketRows,
+  parsePocketFastHistory,
   parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
 } from "./pocket-feed-frame";
@@ -288,6 +290,65 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
   });
 }
 
+function rememberFastHistory(payload: unknown) {
+  const update = parsePocketFastHistory(payload);
+  if (!update) {
+    const record = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : null;
+    const history = record?.history;
+    console.warn("[pocket-fast-history-unusable]", JSON.stringify({
+      payloadType: Array.isArray(payload) ? "array" : typeof payload,
+      keys: record ? Object.keys(record).slice(0, 12) : [],
+      assetType: typeof record?.asset,
+      periodType: typeof record?.period,
+      historyType: Array.isArray(history) ? "array" : typeof history,
+      historyLength: Array.isArray(history) ? history.length : null,
+      firstRowLength: Array.isArray(history) && Array.isArray(history[0])
+        ? history[0].length
+        : null,
+    }));
+    return;
+  }
+  const receivedAtMs = Date.now();
+  const clockOffsetSeconds = pocketServerClockOffsetSeconds;
+  if (clockOffsetSeconds === null) {
+    console.warn("[pocket-fast-history-unusable]", JSON.stringify({
+      symbol: update.asset,
+      reason: "clock-not-synced",
+      tickCount: update.ticks.length,
+    }));
+    return;
+  }
+  const ticks: PairTick[] = [];
+  for (const tick of update.ticks) {
+    const rawTime = tick.time >= 1_000_000_000_000 ? tick.time / 1000 : tick.time;
+    ticks.push({
+      time: (rawTime - clockOffsetSeconds) * 1000,
+      price: tick.price,
+    });
+  }
+  if (ticks.length === 0) return;
+  const state = pairMarketData.get(update.asset) ?? {
+    ticks: [],
+    history: [],
+    historyPeriodSeconds: null,
+  };
+  const byTime = new Map(state.ticks.map((tick) => [tick.time, tick]));
+  for (const tick of ticks) byTime.set(tick.time, tick);
+  state.ticks = [...byTime.values()]
+    .sort((left, right) => left.time - right.time)
+    .slice(-2_000);
+  pairMarketData.set(update.asset, state);
+  console.info("[pocket-fast-history]", JSON.stringify({
+    symbol: update.asset,
+    periodSeconds: update.periodSeconds,
+    tickCount: ticks.length,
+    oldestTickTime: Math.floor(Math.min(...ticks.map((tick) => tick.time)) / 1000),
+    newestTickAgeMs: Math.max(0, Date.now() - Math.max(...ticks.map((tick) => tick.time))),
+  }));
+}
+
 function rememberTicks(message: string, frameFormat = "split-array") {
   try {
     const parsed: unknown = JSON.parse(message);
@@ -481,6 +542,10 @@ function handleMessage(current: WebSocket, message: string) {
         clockSynced: pocketServerClockOffsetSeconds !== null,
       });
     }
+    return;
+  }
+  if (socketEvent?.name === "updateHistoryNewFast") {
+    rememberFastHistory(socketEvent.payload);
     return;
   }
   if (message.includes("updateAssets")) {
@@ -817,7 +882,7 @@ async function loadCandles(
     if (collected.size === previousSize || oldestTime <= 0 || oldestTime >= cursor) break;
     cursor = oldestTime - 1;
   }
-  const candles = [...collected.values()]
+  let candles = [...collected.values()]
     .sort((a, b) => a.time - b.time)
     .slice(-DIRECT_AI_HISTORY_CANDLES);
   const state = pairMarketData.get(symbol) ?? {
@@ -825,6 +890,20 @@ async function loadCandles(
     history: [],
     historyPeriodSeconds: null,
   };
+  const beforeRealtime = candles.at(-1)?.time ?? null;
+  candles = appendCoveredFastCandles(candles, state.ticks, seconds, Date.now());
+  const latest = candles.at(-1)?.time ?? null;
+  if (latest !== beforeRealtime) {
+    console.info("[pocket-history-reconciled]", JSON.stringify({
+      symbol,
+      periodSeconds: seconds,
+      appendedCandles: candles.length - collected.size,
+      latestCandleTime: latest,
+      latestCandleAgeSeconds: latest === null
+        ? null
+        : Math.max(0, Math.floor(Date.now() / 1000) - latest - seconds),
+    }));
+  }
   state.history = candles;
   state.historyPeriodSeconds = seconds;
   pairMarketData.set(symbol, state);

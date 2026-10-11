@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-yNqzWlBe.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-BxlBrvaS.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -779,6 +779,39 @@ function loadCandidatesInParallel(items, load) {
 		}
 	}));
 }
+function appendCoveredFastCandles(candles, ticks, periodSeconds, nowMs, maxGapCandles = 8) {
+	if (candles.length === 0 || ticks.length === 0 || !Number.isInteger(periodSeconds) || periodSeconds <= 0) return candles;
+	const periodMs = periodSeconds * 1e3;
+	const orderedCandles = [...candles].sort((a, b) => a.time - b.time);
+	const latestKnownTimeMs = orderedCandles.at(-1).time * 1e3;
+	const formingCandleStartMs = Math.floor(nowMs / periodMs) * periodMs;
+	const missingCount = Math.floor((formingCandleStartMs - periodMs - latestKnownTimeMs) / periodMs);
+	if (missingCount <= 0 || missingCount > maxGapCandles) return candles;
+	const grouped = /* @__PURE__ */ new Map();
+	for (const tick of ticks) {
+		if (!Number.isFinite(tick.time) || !Number.isFinite(tick.price) || tick.time <= latestKnownTimeMs || tick.time >= formingCandleStartMs || tick.price <= 0) continue;
+		const candleTimeMs = Math.floor(tick.time / periodMs) * periodMs;
+		const group = grouped.get(candleTimeMs) ?? [];
+		group.push(tick);
+		grouped.set(candleTimeMs, group);
+	}
+	const reconstructed = [];
+	for (let index = 1; index <= missingCount; index += 1) {
+		const candleTimeMs = latestKnownTimeMs + index * periodMs;
+		const group = (grouped.get(candleTimeMs) ?? []).sort((a, b) => a.time - b.time);
+		if (group.length < 4) return candles;
+		if (group.at(-1).time - group[0].time < periodMs * .7) return candles;
+		const prices = group.map((tick) => tick.price);
+		reconstructed.push({
+			time: candleTimeMs / 1e3,
+			open: prices[0],
+			high: Math.max(...prices),
+			low: Math.min(...prices),
+			close: prices.at(-1)
+		});
+	}
+	return [...orderedCandles, ...reconstructed];
+}
 function parsePocketOptionHistory(data) {
 	const candles = [];
 	for (const row of data) {
@@ -862,6 +895,28 @@ function findPocketRows(value, isRow, depth = 0) {
 		if (found) return found;
 	}
 	return null;
+}
+function parsePocketFastHistory(payload) {
+	if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+	const record = payload;
+	if (typeof record.asset !== "string" || !record.asset) return null;
+	const period = Number(record.period);
+	const rows = findPocketRows(record.history, (row) => row.length >= 2 && Number.isFinite(Number(row[0])) && Number.isFinite(Number(row[1])));
+	if (!rows) return null;
+	const ticks = rows.flatMap((row) => {
+		const time = Number(row[0]);
+		const price = Number(row[1]);
+		return Number.isFinite(time) && time > 0 && price > 0 ? [{
+			time,
+			price
+		}] : [];
+	});
+	if (ticks.length === 0) return null;
+	return {
+		asset: record.asset,
+		periodSeconds: Number.isInteger(period) && period > 0 ? period : null,
+		ticks
+	};
 }
 var MAX_SERVER_CLOCK_OFFSET_SECONDS = 50400;
 function estimatePocketServerClockOffsetSeconds(rawServerTime, receivedAtMs) {
@@ -1042,6 +1097,57 @@ function rememberTickRows(rows, frameFormat) {
 		clockSynced: pocketServerClockOffsetSeconds !== null
 	});
 }
+function rememberFastHistory(payload) {
+	const update = parsePocketFastHistory(payload);
+	if (!update) {
+		const record = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
+		const history = record?.history;
+		console.warn("[pocket-fast-history-unusable]", JSON.stringify({
+			payloadType: Array.isArray(payload) ? "array" : typeof payload,
+			keys: record ? Object.keys(record).slice(0, 12) : [],
+			assetType: typeof record?.asset,
+			periodType: typeof record?.period,
+			historyType: Array.isArray(history) ? "array" : typeof history,
+			historyLength: Array.isArray(history) ? history.length : null,
+			firstRowLength: Array.isArray(history) && Array.isArray(history[0]) ? history[0].length : null
+		}));
+		return;
+	}
+	const clockOffsetSeconds = pocketServerClockOffsetSeconds;
+	if (clockOffsetSeconds === null) {
+		console.warn("[pocket-fast-history-unusable]", JSON.stringify({
+			symbol: update.asset,
+			reason: "clock-not-synced",
+			tickCount: update.ticks.length
+		}));
+		return;
+	}
+	const ticks = [];
+	for (const tick of update.ticks) {
+		const rawTime = tick.time >= 0xe8d4a51000 ? tick.time / 1e3 : tick.time;
+		ticks.push({
+			time: (rawTime - clockOffsetSeconds) * 1e3,
+			price: tick.price
+		});
+	}
+	if (ticks.length === 0) return;
+	const state = pairMarketData.get(update.asset) ?? {
+		ticks: [],
+		history: [],
+		historyPeriodSeconds: null
+	};
+	const byTime = new Map(state.ticks.map((tick) => [tick.time, tick]));
+	for (const tick of ticks) byTime.set(tick.time, tick);
+	state.ticks = [...byTime.values()].sort((left, right) => left.time - right.time).slice(-2e3);
+	pairMarketData.set(update.asset, state);
+	console.info("[pocket-fast-history]", JSON.stringify({
+		symbol: update.asset,
+		periodSeconds: update.periodSeconds,
+		tickCount: ticks.length,
+		oldestTickTime: Math.floor(Math.min(...ticks.map((tick) => tick.time)) / 1e3),
+		newestTickAgeMs: Math.max(0, Date.now() - Math.max(...ticks.map((tick) => tick.time)))
+	}));
+}
 function rememberTicks(message, frameFormat = "split-array") {
 	try {
 		const parsed = JSON.parse(message);
@@ -1200,6 +1306,10 @@ function handleMessage(current, message) {
 				clockSynced: pocketServerClockOffsetSeconds !== null
 			});
 		}
+		return;
+	}
+	if (socketEvent?.name === "updateHistoryNewFast") {
+		rememberFastHistory(socketEvent.payload);
 		return;
 	}
 	if (message.includes("updateAssets")) {
@@ -1489,12 +1599,22 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 		if (collected.size === previousSize || oldestTime <= 0 || oldestTime >= cursor) break;
 		cursor = oldestTime - 1;
 	}
-	const candles = [...collected.values()].sort((a, b) => a.time - b.time).slice(-30);
+	let candles = [...collected.values()].sort((a, b) => a.time - b.time).slice(-30);
 	const state = pairMarketData.get(symbol) ?? {
 		ticks: [],
 		history: [],
 		historyPeriodSeconds: null
 	};
+	const beforeRealtime = candles.at(-1)?.time ?? null;
+	candles = appendCoveredFastCandles(candles, state.ticks, seconds, Date.now());
+	const latest = candles.at(-1)?.time ?? null;
+	if (latest !== beforeRealtime) console.info("[pocket-history-reconciled]", JSON.stringify({
+		symbol,
+		periodSeconds: seconds,
+		appendedCandles: candles.length - collected.size,
+		latestCandleTime: latest,
+		latestCandleAgeSeconds: latest === null ? null : Math.max(0, Math.floor(Date.now() / 1e3) - latest - seconds)
+	}));
 	state.history = candles;
 	state.historyPeriodSeconds = seconds;
 	pairMarketData.set(symbol, state);
