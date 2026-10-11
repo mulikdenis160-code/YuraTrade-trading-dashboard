@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B3gwMeMi.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B0x618nt.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -810,6 +810,18 @@ function parsePocketOptionHistory(data) {
 		rejectedRows: data.length - candles.length
 	};
 }
+var MAX_SERVER_CLOCK_OFFSET_SECONDS = 50400;
+function estimatePocketServerClockOffsetSeconds(rawServerTime, receivedAtMs) {
+	if (!Number.isFinite(rawServerTime) || rawServerTime <= 0 || !Number.isFinite(receivedAtMs)) return null;
+	const offsetSeconds = (rawServerTime >= 0xe8d4a51000 ? rawServerTime / 1e3 : rawServerTime) - receivedAtMs / 1e3;
+	if (Math.abs(offsetSeconds) > MAX_SERVER_CLOCK_OFFSET_SECONDS) return null;
+	return Math.round(offsetSeconds);
+}
+function pocketHistoryRequestTime(nowMs, serverClockOffsetSeconds, periodSeconds) {
+	if (!Number.isFinite(nowMs) || !Number.isFinite(serverClockOffsetSeconds) || !Number.isInteger(periodSeconds) || periodSeconds <= 0) throw new Error("Некорректное время для запроса истории Pocket Option.");
+	const serverTimeSeconds = nowMs / 1e3 + serverClockOffsetSeconds;
+	return Math.floor(serverTimeSeconds / periodSeconds) * periodSeconds;
+}
 var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
 var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
@@ -833,6 +845,7 @@ var retryAfter = 0;
 var expectAssets = false;
 var expectBalance = false;
 var lastPocketMessageAt = 0;
+var pocketServerClockOffsetSeconds = null;
 var quotes = /* @__PURE__ */ new Map();
 var selectSignalCandidates = createRotatingCandidateSelector(SIGNAL_CANDIDATES_PER_SEARCH);
 var expectStream = false;
@@ -913,13 +926,19 @@ function rememberTicks(message) {
 	try {
 		const rows = JSON.parse(message);
 		if (!Array.isArray(rows)) return;
+		const receivedAtMs = Date.now();
 		for (const row of rows) {
 			if (!Array.isArray(row) || row.length < 3) continue;
+			const offsetSeconds = estimatePocketServerClockOffsetSeconds(Number(row[1]), receivedAtMs);
+			if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
+				pocketServerClockOffsetSeconds = offsetSeconds;
+				console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds }));
+			}
 			const price = Number(row[2]);
 			if (!Number.isFinite(price)) continue;
 			quotes.set(String(row[0]), {
 				price,
-				at: Date.now()
+				at: receivedAtMs
 			});
 		}
 	} catch {}
@@ -1106,6 +1125,7 @@ function connect() {
 		} catch {}
 	}
 	connectionError = "";
+	pocketServerClockOffsetSeconds = null;
 	const next = new wrapper_default(FEED_URL, {
 		headers: {
 			Origin: "https://pocketoption.com",
@@ -1126,9 +1146,13 @@ function connect() {
 	});
 	socket = next;
 	next.on("message", (data) => handleMessage(next, textOf(data)));
-	next.on("close", () => {
+	next.on("close", (code, reason) => {
 		if (socket !== next) return;
-		console.warn("[pocket-feed-closed]", JSON.stringify({ socketReadyState: next.readyState }));
+		console.warn("[pocket-feed-closed]", JSON.stringify({
+			socketReadyState: next.readyState,
+			closeCode: code,
+			closeReasonLength: reason.length
+		}));
 		socket = null;
 		retryAfter = Date.now() + 2e3;
 		if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
@@ -1190,19 +1214,39 @@ async function feedNextPair(excludedSymbols = []) {
 		group: "fx"
 	};
 }
-async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
+async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsServerNative = false) {
 	return runHistoryRequest(symbol, async () => {
 		await ensureFeed();
 		if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
 		if (!socket || socket.readyState !== wrapper_default.OPEN) throw new Error("Котировки сейчас недоступны.");
+		const clockDeadline = Date.now() + Math.min(timeoutMs, 2e3);
+		while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
+			subscribe(symbol);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		const clockOffsetSeconds = pocketServerClockOffsetSeconds;
+		if (clockOffsetSeconds === null) {
+			console.warn("[pocket-history-clock-unsynced]", JSON.stringify({
+				symbol,
+				periodSeconds: seconds,
+				socketReadyState: socket?.readyState ?? null,
+				pairAvailable: pairs.has(symbol)
+			}));
+			throw new Error("Время потока Pocket Option не синхронизировано; история не запрашивалась.");
+		}
 		const current = socket;
+		if (!current || current.readyState !== wrapper_default.OPEN) throw new Error("Соединение с Pocket Option прервалось перед запросом истории.");
 		return new Promise((resolve, reject) => {
 			let request;
+			const requestTime = pocketHistoryRequestTime(time * 1e3, timeIsServerNative ? 0 : clockOffsetSeconds, seconds);
 			const timer = setTimeout(() => {
 				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
 				console.warn("[pocket-history-timeout]", JSON.stringify({
 					symbol,
 					periodSeconds: seconds,
+					requestTime,
+					serverClockOffsetSeconds: clockOffsetSeconds,
+					timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
 					timeoutMs,
 					socketReadyState: socket?.readyState ?? null,
 					pairAvailable: pairs.has(symbol),
@@ -1219,6 +1263,14 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 			};
 			pendingHistory.set(symbol, request);
 			try {
+				console.info("[pocket-history-request]", JSON.stringify({
+					symbol,
+					periodSeconds: seconds,
+					requestTime,
+					serverClockOffsetSeconds: clockOffsetSeconds,
+					timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
+					socketReadyState: current.readyState
+				}));
 				current.send("42" + JSON.stringify(["changeSymbol", {
 					asset: symbol,
 					period: seconds
@@ -1226,7 +1278,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 				current.send("42" + JSON.stringify(["loadHistoryPeriod", {
 					asset: symbol,
 					index: 7e3 + Math.floor(Math.random() * 2e3),
-					time,
+					time: requestTime,
 					offset: seconds * HISTORY_PAGE_CANDLES,
 					period: seconds
 				}]));
@@ -1245,7 +1297,7 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 	let cursor = Math.floor(Date.now() / 1e3);
 	const maxPages = pageLimit ?? Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
 	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
-		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
+		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs, page > 0);
 		rejectedRows += history.rejectedRows;
 		const candles = history.candles;
 		if (candles.length === 0) break;

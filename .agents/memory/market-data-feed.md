@@ -20,3 +20,9 @@ A live OHLC-shape and candle-cadence check confirms only row structure and inter
 **Why:** a feed can return complete, regularly spaced candles while the user still observes different chart values or indicator readings.
 
 **How to apply:** when investigating a reported chart or indicator mismatch, ask for an exact pair, timeframe, candle timestamp, and values from both the bot and the chart after checking feed structure and cadence.
+
+History requests must use Pocket Option server-native time aligned down to the candle period. Derive the clock offset from valid stream timestamps; do not silently fall back to local UTC when no sync sample exists.
+
+**Why:** production logs showed a healthy socket and populated asset catalog but timed-out history requests. Current third-party clients for the same Socket.IO protocol sync server time before requesting candles and round timestamps to interval boundaries.
+
+**How to apply:** verify a stream timestamp and computed offset before sending `loadHistoryPeriod`; log the offset and aligned request time, never the authorization payload or raw market frames.

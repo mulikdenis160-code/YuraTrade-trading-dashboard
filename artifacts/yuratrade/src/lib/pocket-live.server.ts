@@ -30,6 +30,10 @@ import {
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
+import {
+  estimatePocketServerClockOffsetSeconds,
+  pocketHistoryRequestTime,
+} from "./pocket-server-time";
 import { nextCandleEntryWindow } from "./signal-entry-window";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import { signalReleaseAt } from "./signal-release-time";
@@ -110,6 +114,7 @@ let retryAfter = 0;
 let expectAssets = false;
 let expectBalance = false;
 let lastPocketMessageAt = 0;
+let pocketServerClockOffsetSeconds: number | null = null;
 const quotes = new Map<string, { price: number; at: number }>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
@@ -201,11 +206,20 @@ function rememberTicks(message: string) {
   try {
     const rows = JSON.parse(message) as unknown[];
     if (!Array.isArray(rows)) return;
+    const receivedAtMs = Date.now();
     for (const row of rows) {
       if (!Array.isArray(row) || row.length < 3) continue;
+      const offsetSeconds = estimatePocketServerClockOffsetSeconds(
+        Number(row[1]),
+        receivedAtMs,
+      );
+      if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
+        pocketServerClockOffsetSeconds = offsetSeconds;
+        console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds }));
+      }
       const price = Number(row[2]);
       if (!Number.isFinite(price)) continue;
-      quotes.set(String(row[0]), { price, at: Date.now() });
+      quotes.set(String(row[0]), { price, at: receivedAtMs });
     }
   } catch {
     /* ignore a bad tick frame */
@@ -419,6 +433,7 @@ function connect() {
     }
   }
   connectionError = "";
+  pocketServerClockOffsetSeconds = null;
   const next = new WebSocket(FEED_URL, {
     headers: {
       Origin: "https://pocketoption.com",
@@ -440,9 +455,16 @@ function connect() {
   });
   socket = next;
   next.on("message", (data) => handleMessage(next, textOf(data)));
-  next.on("close", () => {
+  const closeEventSocket = next as unknown as {
+    on: (event: "close", listener: (code: number, reason: Buffer) => void) => unknown;
+  };
+  closeEventSocket.on("close", (code, reason) => {
     if (socket !== next) return;
-    console.warn("[pocket-feed-closed]", JSON.stringify({ socketReadyState: next.readyState }));
+    console.warn("[pocket-feed-closed]", JSON.stringify({
+      socketReadyState: next.readyState,
+      closeCode: code,
+      closeReasonLength: reason.length,
+    }));
     socket = null;
     retryAfter = Date.now() + 2000;
     if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
@@ -523,19 +545,46 @@ async function loadHistoryPage(
   seconds: number,
   time: number,
   timeoutMs = 12_000,
+  timeIsServerNative = false,
 ): Promise<ParsedHistoryPage> {
   return runHistoryRequest(symbol, async () => {
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
+    const clockDeadline = Date.now() + Math.min(timeoutMs, 2000);
+    while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
+      subscribe(symbol);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const clockOffsetSeconds = pocketServerClockOffsetSeconds;
+    if (clockOffsetSeconds === null) {
+      console.warn("[pocket-history-clock-unsynced]", JSON.stringify({
+        symbol,
+        periodSeconds: seconds,
+        socketReadyState: socket?.readyState ?? null,
+        pairAvailable: pairs.has(symbol),
+      }));
+      throw new Error("Время потока Pocket Option не синхронизировано; история не запрашивалась.");
+    }
     const current = socket;
+    if (!current || current.readyState !== WebSocket.OPEN) {
+      throw new Error("Соединение с Pocket Option прервалось перед запросом истории.");
+    }
     return new Promise<ParsedHistoryPage>((resolve, reject) => {
       let request: Pending;
+      const requestTime = pocketHistoryRequestTime(
+        time * 1000,
+        timeIsServerNative ? 0 : clockOffsetSeconds,
+        seconds,
+      );
       const timer = setTimeout(() => {
         if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
         console.warn("[pocket-history-timeout]", JSON.stringify({
           symbol,
           periodSeconds: seconds,
+          requestTime,
+          serverClockOffsetSeconds: clockOffsetSeconds,
+          timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
           timeoutMs,
           socketReadyState: socket?.readyState ?? null,
           pairAvailable: pairs.has(symbol),
@@ -547,6 +596,14 @@ async function loadHistoryPage(
       request = { asset: symbol, resolve, reject, timer };
       pendingHistory.set(symbol, request);
       try {
+        console.info("[pocket-history-request]", JSON.stringify({
+          symbol,
+          periodSeconds: seconds,
+          requestTime,
+          serverClockOffsetSeconds: clockOffsetSeconds,
+          timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
+          socketReadyState: current.readyState,
+        }));
         current.send("42" + JSON.stringify(["changeSymbol", { asset: symbol, period: seconds }]));
         current.send(
           "42" +
@@ -555,7 +612,7 @@ async function loadHistoryPage(
               {
                 asset: symbol,
                 index: 7000 + Math.floor(Math.random() * 2000),
-                time,
+                time: requestTime,
                 offset: seconds * HISTORY_PAGE_CANDLES,
                 period: seconds,
               },
@@ -583,7 +640,13 @@ async function loadCandles(
   const maxPages = pageLimit
     ?? Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
   for (let page = 0; page < maxPages && collected.size < DIRECT_AI_HISTORY_CANDLES; page += 1) {
-    const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
+    const history = await loadHistoryPage(
+      symbol,
+      seconds,
+      cursor,
+      pageTimeoutMs,
+      page > 0,
+    );
     rejectedRows += history.rejectedRows;
     const candles = history.candles;
     if (candles.length === 0) break;
