@@ -115,6 +115,8 @@ let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
 let connectionError = "";
+let pocketAuthAccepted = false;
+let pocketAuthSentAt = 0;
 let retryAfter = 0;
 let expectAssets = false;
 let expectBalance = false;
@@ -417,10 +419,24 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   if (message.startsWith("40") && message.includes("sid")) {
+    pocketAuthAccepted = false;
+    pocketAuthSentAt = Date.now();
     current.send(FEED_AUTH);
+    console.info("[pocket-feed-auth-sent]");
     return;
   }
+  const eventName = parsePocketSocketIoEvent(message)?.name.toLowerCase();
+  if (
+    eventName === "successauth" ||
+    eventName === "authenticated" ||
+    message.toLowerCase().includes("successauth")
+  ) {
+    pocketAuthAccepted = true;
+    connectionError = "";
+    console.info("[pocket-feed-auth-accepted]", JSON.stringify({ socketReadyState: current.readyState }));
+  }
   if (message.includes("NotAuthorized")) {
+    pocketAuthAccepted = false;
     connectionError = AUTH_REJECTED_MESSAGE;
     console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
     failPending(new Error(connectionError));
@@ -558,6 +574,8 @@ function connect() {
     }
   }
   connectionError = "";
+  pocketAuthAccepted = false;
+  pocketAuthSentAt = 0;
   pocketServerClockOffsetSeconds = null;
   subscribedAt.clear();
   const next = new WebSocket(FEED_URL, {
@@ -619,16 +637,42 @@ function connect() {
 }
 
 function ensureFeed() {
-  if (pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) return Promise.resolve();
+  if (
+    pocketAuthAccepted &&
+    pairs.size > 0 &&
+    socket &&
+    socket.readyState === WebSocket.OPEN
+  ) {
+    return Promise.resolve();
+  }
   if (ready) return ready;
   connect();
   ready = new Promise<void>((resolve, reject) => {
     const started = Date.now();
     const timer = setInterval(() => {
-      if (pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
+      if (
+        pocketAuthAccepted &&
+        pairs.size > 0 &&
+        socket &&
+        socket.readyState === WebSocket.OPEN
+      ) {
         clearInterval(timer);
         ready = null;
         resolve();
+        return;
+      }
+      if (
+        pairs.size > 0 &&
+        socket?.readyState === WebSocket.OPEN &&
+        pocketAuthSentAt > 0 &&
+        !pocketAuthAccepted &&
+        Date.now() - pocketAuthSentAt >= 6000
+      ) {
+        clearInterval(timer);
+        ready = null;
+        connectionError =
+          "Pocket Option не подтвердил авторизацию сессии. Обновите POCKET_OPTION_FEED_AUTH.";
+        reject(new Error(connectionError));
         return;
       }
       if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) connect();
