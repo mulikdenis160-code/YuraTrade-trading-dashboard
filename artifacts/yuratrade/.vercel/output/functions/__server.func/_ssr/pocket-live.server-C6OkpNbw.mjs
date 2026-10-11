@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B47jKAn0.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-C6OkpNbw.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -960,13 +960,16 @@ function buildDirectAiSignal(candles, expirySeconds, analysisSeconds, name, payo
 		])
 	};
 }
-function rememberTickRows(rows) {
-	if (!Array.isArray(rows)) return 0;
+function rememberTickRows(rows, frameFormat) {
+	if (!Array.isArray(rows)) return;
 	const receivedAtMs = Date.now();
 	let quoteRows = 0;
+	let epochLikeTimestamps = 0;
 	for (const row of rows) {
 		if (!Array.isArray(row) || row.length < 3 || typeof row[0] !== "string") continue;
-		const offsetSeconds = estimatePocketServerClockOffsetSeconds(Number(row[1]), receivedAtMs);
+		const rawTimestamp = Number(row[1]);
+		if (Number.isFinite(rawTimestamp) && Math.abs(rawTimestamp) >= 1e9) epochLikeTimestamps += 1;
+		const offsetSeconds = estimatePocketServerClockOffsetSeconds(rawTimestamp, receivedAtMs);
 		if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
 			pocketServerClockOffsetSeconds = offsetSeconds;
 			console.info("[pocket-feed-clock-synced]", JSON.stringify({
@@ -982,12 +985,31 @@ function rememberTickRows(rows) {
 		});
 		quoteRows += 1;
 	}
-	return quoteRows;
+	logStreamDiagnostic("info", {
+		frameFormat,
+		receivedRows: rows.length,
+		quoteRows,
+		epochLikeTimestamps,
+		clockSynced: pocketServerClockOffsetSeconds !== null
+	});
 }
-function rememberTicks(message) {
+function rememberTicks(message, frameFormat = "split-array") {
 	try {
-		rememberTickRows(JSON.parse(message));
-	} catch {}
+		const parsed = JSON.parse(message);
+		const rows = findPocketRows(parsed, (row) => typeof row[0] === "string" && row.length >= 3);
+		if (rows) rememberTickRows(rows, frameFormat);
+		else logStreamDiagnostic("warn", {
+			frameFormat,
+			payloadType: Array.isArray(parsed) ? "array" : typeof parsed,
+			topLevelLength: Array.isArray(parsed) ? parsed.length : null,
+			clockSynced: pocketServerClockOffsetSeconds !== null
+		});
+	} catch {
+		logStreamDiagnostic("warn", {
+			frameFormat,
+			payloadType: "invalid-json"
+		});
+	}
 }
 var subscribedAt = /* @__PURE__ */ new Map();
 function subscribe(symbol) {
@@ -1113,13 +1135,7 @@ function handleMessage(current, message) {
 		const rows = findPocketRows(socketEvent.payload, (row) => typeof row[0] === "string" && row.length >= 3);
 		if (rows) {
 			expectStream = false;
-			const quoteRows = rememberTickRows(rows);
-			logStreamDiagnostic("info", {
-				frameFormat: "socket.io-inline",
-				receivedRows: rows.length,
-				quoteRows,
-				clockSynced: pocketServerClockOffsetSeconds !== null
-			});
+			rememberTickRows(rows, "socket.io-inline");
 		} else {
 			expectStream = true;
 			logStreamDiagnostic("warn", {
@@ -1208,6 +1224,7 @@ function connect() {
 	}
 	connectionError = "";
 	pocketServerClockOffsetSeconds = null;
+	subscribedAt.clear();
 	const next = new wrapper_default(FEED_URL, {
 		headers: {
 			Origin: "https://pocketoption.com",
