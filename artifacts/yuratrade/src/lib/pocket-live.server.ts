@@ -213,14 +213,19 @@ function buildDirectAiSignal(
   };
 }
 
-function rememberTickRows(rows: unknown) {
-  if (!Array.isArray(rows)) return 0;
+function rememberTickRows(rows: unknown, frameFormat: string) {
+  if (!Array.isArray(rows)) return;
   const receivedAtMs = Date.now();
   let quoteRows = 0;
+  let epochLikeTimestamps = 0;
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 3 || typeof row[0] !== "string") continue;
+    const rawTimestamp = Number(row[1]);
+    if (Number.isFinite(rawTimestamp) && Math.abs(rawTimestamp) >= 1_000_000_000) {
+      epochLikeTimestamps += 1;
+    }
     const offsetSeconds = estimatePocketServerClockOffsetSeconds(
-      Number(row[1]),
+      rawTimestamp,
       receivedAtMs,
     );
     if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
@@ -232,14 +237,34 @@ function rememberTickRows(rows: unknown) {
     quotes.set(String(row[0]), { price, at: receivedAtMs });
     quoteRows += 1;
   }
-  return quoteRows;
+  logStreamDiagnostic("info", {
+    frameFormat,
+    receivedRows: rows.length,
+    quoteRows,
+    epochLikeTimestamps,
+    clockSynced: pocketServerClockOffsetSeconds !== null,
+  });
 }
 
-function rememberTicks(message: string) {
+function rememberTicks(message: string, frameFormat = "split-array") {
   try {
-    rememberTickRows(JSON.parse(message) as unknown);
+    const parsed: unknown = JSON.parse(message);
+    const rows = findPocketRows(
+      parsed,
+      (row) => typeof row[0] === "string" && row.length >= 3,
+    );
+    if (rows) {
+      rememberTickRows(rows, frameFormat);
+    } else {
+      logStreamDiagnostic("warn", {
+        frameFormat,
+        payloadType: Array.isArray(parsed) ? "array" : typeof parsed,
+        topLevelLength: Array.isArray(parsed) ? parsed.length : null,
+        clockSynced: pocketServerClockOffsetSeconds !== null,
+      });
+    }
   } catch {
-    /* ignore a bad tick frame */
+    logStreamDiagnostic("warn", { frameFormat, payloadType: "invalid-json" });
   }
 }
 
@@ -395,13 +420,7 @@ function handleMessage(current: WebSocket, message: string) {
     );
     if (rows) {
       expectStream = false;
-      const quoteRows = rememberTickRows(rows);
-      logStreamDiagnostic("info", {
-        frameFormat: "socket.io-inline",
-        receivedRows: rows.length,
-        quoteRows,
-        clockSynced: pocketServerClockOffsetSeconds !== null,
-      });
+      rememberTickRows(rows, "socket.io-inline");
     } else {
       expectStream = true;
       logStreamDiagnostic("warn", {
@@ -495,6 +514,7 @@ function connect() {
   }
   connectionError = "";
   pocketServerClockOffsetSeconds = null;
+  subscribedAt.clear();
   const next = new WebSocket(FEED_URL, {
     headers: {
       Origin: "https://pocketoption.com",
