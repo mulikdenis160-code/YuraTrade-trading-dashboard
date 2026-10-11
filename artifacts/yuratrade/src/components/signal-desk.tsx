@@ -277,17 +277,25 @@ export function SignalDesk() {
             <p className="text-sm font-semibold text-fg">{t("signal.expiry")}</p>
             <p className="text-sm font-bold text-blue-soft">{expiryLabel(expirySeconds)}</p>
           </div>
-          <select
-            value={expirySeconds}
-            onChange={(event) => setExpirySeconds(Number(event.target.value))}
-            disabled={phase !== "idle"}
-            aria-label={t("signal.expiry")}
-            className="mt-3 min-h-11 w-full rounded-xl border border-white/10 bg-[#111723] px-3 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-blue-soft disabled:opacity-60"
-          >
+          <div className="mt-3 grid grid-cols-4 gap-2">
             {EXPIRY_OPTIONS_SECONDS.map((seconds) => (
-              <option key={seconds} value={seconds}>{expiryLabel(seconds)}</option>
+              <button
+                key={seconds}
+                type="button"
+                aria-pressed={expirySeconds === seconds}
+                aria-label={`${t("signal.expiry")}: ${expiryLabel(seconds)}`}
+                disabled={phase !== "idle"}
+                onClick={() => setExpirySeconds(seconds)}
+                className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition disabled:opacity-60 ${
+                  expirySeconds === seconds
+                    ? "border-blue/40 bg-blue/12 text-blue-soft"
+                    : "border-white/10 bg-white/4 text-muted hover:bg-white/8"
+                }`}
+              >
+                {expiryLabel(seconds)}
+              </button>
             ))}
-          </select>
+          </div>
           <p className="mt-2 text-xs leading-relaxed text-dim" aria-live="polite">
             {t("signal.analyzed", { period: expiryLabel(analysisSeconds) })}
           </p>

@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CbPuviEe.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-BzKDz4mS.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -1582,11 +1582,15 @@ async function feedSignal(symbol, expirySeconds) {
 	const historyMs = Math.round(performance.now() - historyStartedAt);
 	const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
 	const candles = history.candles;
+	const latestCandle = candles.at(-1);
+	const historyAgeSeconds = latestCandle ? Math.round(Date.now() / 1e3 - (latestCandle.time + analysisSeconds)) : null;
 	console.info("[signal-history]", JSON.stringify({
 		symbol,
 		candleCount: candles.length,
 		rejectedRows: history.rejectedRows,
 		expectedCandleSeconds: analysisSeconds,
+		latestClosedAgeSeconds: historyAgeSeconds,
+		freshForAnalysis: historyAgeSeconds !== null && historyAgeSeconds <= analysisSeconds * 3,
 		firstCandle: candles[0] ?? null,
 		lastReceivedCandle: candles.at(-1) ?? null,
 		...summarizeCandleCadence([candles], analysisSeconds)

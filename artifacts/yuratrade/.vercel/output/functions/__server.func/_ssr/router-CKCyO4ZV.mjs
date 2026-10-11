@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-BkJke8h5.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-CKCyO4ZV.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -961,9 +961,9 @@ var copy = {
 		"Test series {current}/{total}"
 	],
 	"signal.analyzed": [
-		"Интервал свечи {period}; прямой анализ ИИ использует до 128 последних свечей.",
-		"Інтервал свічки {period}; прямий аналіз ШІ використовує до 128 останніх свічок.",
-		"Candle interval {period}; direct AI analysis uses up to the latest 128 candles."
+		"Свечи {period}; индикаторы учитывают до 128 закрытых свечей, ИИ получает до 30 последних.",
+		"Свічки {period}; індикатори враховують до 128 закритих свічок, ШІ отримує до 30 останніх.",
+		"Candles {period}; indicators use up to 128 closed candles and the AI receives the latest 30."
 	],
 	"signal.checking": [
 		"Проверяем пары…",
@@ -981,9 +981,9 @@ var copy = {
 		"Search again"
 	],
 	"signal.noSignalAtExpiry": [
-		"На экспирации {expiry} ИИ не нашёл достаточно ясного сигнала. Направление не выдумываем.",
-		"На експірації {expiry} ШІ не знайшов достатньо чіткого сигналу. Напрямок не вигадуємо.",
-		"The AI found no clear signal for the {expiry} expiry. No direction was guessed."
+		"Сигнал на экспирацию {expiry} не подготовлен: не удалось подтвердить свежие данные или направление. Направление не выдумываем.",
+		"Сигнал на експірацію {expiry} не підготовлено: не вдалося підтвердити свіжі дані або напрямок. Напрямок не вигадуємо.",
+		"No signal was prepared for the {expiry} expiry because fresh data or a valid direction could not be confirmed."
 	],
 	"signal.reason": [
 		"Почему сигнал не выдан",
@@ -2667,7 +2667,7 @@ function Shell({ children }) {
 		]
 	});
 }
-var styles_default = "/assets/styles-zDTlrPN4.css";
+var styles_default = "/assets/styles-Dqco7d6D.css";
 var Route$7 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -2730,15 +2730,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-Cnh2oAxA.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-CIDpFhKP.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-BG4XE4oM.mjs");
+var $$splitComponentImporter$3 = () => import("./history-BtnBB2Ho.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-BdFKyHe3.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-Byf-6nPp.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-DjjjtIND.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-Dv7u3odm.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-hMXpmpb_.mjs");
+var $$splitComponentImporter = () => import("./signal-ByKcZcgN.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2801,7 +2801,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	}
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-CbPuviEe.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-BzKDz4mS.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2843,7 +2843,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-D-lWQOIT.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-DzOANbsr.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

@@ -942,11 +942,17 @@ export async function feedSignal(
   const historyMs = Math.round(performance.now() - historyStartedAt);
   const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
   const candles = history.candles;
+  const latestCandle = candles.at(-1);
+  const historyAgeSeconds = latestCandle
+    ? Math.round(Date.now() / 1000 - (latestCandle.time + analysisSeconds))
+    : null;
   console.info("[signal-history]", JSON.stringify({
     symbol,
     candleCount: candles.length,
     rejectedRows: history.rejectedRows,
     expectedCandleSeconds: analysisSeconds,
+    latestClosedAgeSeconds: historyAgeSeconds,
+    freshForAnalysis: historyAgeSeconds !== null && historyAgeSeconds <= analysisSeconds * 3,
     firstCandle: candles[0] ?? null,
     lastReceivedCandle: candles.at(-1) ?? null,
     ...summarizeCandleCadence([candles], analysisSeconds),

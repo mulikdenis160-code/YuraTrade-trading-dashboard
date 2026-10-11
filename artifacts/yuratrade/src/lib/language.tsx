@@ -290,17 +290,17 @@ const copy = {
   ],
   "batch.series": ["Тестовая серия {current}/{total}", "Тестова серія {current}/{total}", "Test series {current}/{total}"],
   "signal.analyzed": [
-    "Интервал свечи {period}; прямой анализ ИИ использует до 128 последних свечей.",
-    "Інтервал свічки {period}; прямий аналіз ШІ використовує до 128 останніх свічок.",
-    "Candle interval {period}; direct AI analysis uses up to the latest 128 candles.",
+    "Свечи {period}; индикаторы учитывают до 128 закрытых свечей, ИИ получает до 30 последних.",
+    "Свічки {period}; індикатори враховують до 128 закритих свічок, ШІ отримує до 30 останніх.",
+    "Candles {period}; indicators use up to 128 closed candles and the AI receives the latest 30.",
   ],
   "signal.checking": ["Проверяем пары…", "Перевіряємо пари…", "Checking pairs…"],
   "signal.searchFailed": ["Не удалось завершить поиск", "Не вдалося завершити пошук", "Signal search could not be completed"],
   "signal.tryAgain": ["Искать ещё раз", "Шукати ще раз", "Search again"],
   "signal.noSignalAtExpiry": [
-    "На экспирации {expiry} ИИ не нашёл достаточно ясного сигнала. Направление не выдумываем.",
-    "На експірації {expiry} ШІ не знайшов достатньо чіткого сигналу. Напрямок не вигадуємо.",
-    "The AI found no clear signal for the {expiry} expiry. No direction was guessed.",
+    "Сигнал на экспирацию {expiry} не подготовлен: не удалось подтвердить свежие данные или направление. Направление не выдумываем.",
+    "Сигнал на експірацію {expiry} не підготовлено: не вдалося підтвердити свіжі дані або напрямок. Напрямок не вигадуємо.",
+    "No signal was prepared for the {expiry} expiry because fresh data or a valid direction could not be confirmed.",
   ],
   "signal.reason": ["Почему сигнал не выдан", "Чому сигнал не надано", "Why no signal was issued"],
   "signal.alternativeSearchKicker": [

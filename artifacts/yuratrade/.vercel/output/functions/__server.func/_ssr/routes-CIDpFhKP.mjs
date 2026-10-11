@@ -3,11 +3,11 @@ import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Li
 import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-DqGlDVU6.mjs";
 import { t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-BkJke8h5.mjs";
-import { t as StatRow } from "./stats-B6-cPypp.mjs";
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-CKCyO4ZV.mjs";
+import { t as StatRow } from "./stats-CQMtIrRJ.mjs";
 import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DXaFUgGS.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-DynMx0yV.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Cnh2oAxA.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BIO1HjYM.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CIDpFhKP.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -129,7 +129,7 @@ function SignalDesk() {
 			let selected = null;
 			let prepared = null;
 			let lastReason = "";
-			for (let index = 0; index < 4; index += 1) {
+			for (let index = 0; index < 20; index += 1) {
 				const candidateBudgetMs = preparationDeadlineAtMs - Date.now();
 				if (candidateBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
 				const candidate = await waitForSignalRequest(settleSignalRequest(chooseSignalPair({ data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] } })), candidateBudgetMs, t("signal.analysisTimeout"));
@@ -224,14 +224,15 @@ function SignalDesk() {
 									children: expiryLabel(expirySeconds)
 								})]
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-								value: expirySeconds,
-								onChange: (event) => setExpirySeconds(Number(event.target.value)),
-								disabled: phase !== "idle",
-								"aria-label": t("signal.expiry"),
-								className: "mt-3 min-h-11 w-full rounded-xl border border-white/10 bg-[#111723] px-3 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-blue-soft disabled:opacity-60",
-								children: EXPIRY_OPTIONS_SECONDS.map((seconds) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-									value: seconds,
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-3 grid grid-cols-4 gap-2",
+								children: EXPIRY_OPTIONS_SECONDS.map((seconds) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									"aria-pressed": expirySeconds === seconds,
+									"aria-label": `${t("signal.expiry")}: ${expiryLabel(seconds)}`,
+									disabled: phase !== "idle",
+									onClick: () => setExpirySeconds(seconds),
+									className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition disabled:opacity-60 ${expirySeconds === seconds ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"}`,
 									children: expiryLabel(seconds)
 								}, seconds))
 							}),
