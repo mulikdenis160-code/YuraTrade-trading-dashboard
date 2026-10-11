@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B0x618nt.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-B47jKAn0.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -810,6 +810,35 @@ function parsePocketOptionHistory(data) {
 		rejectedRows: data.length - candles.length
 	};
 }
+function parsePocketSocketIoEvent(message) {
+	if (!message.startsWith("42")) return null;
+	try {
+		const packet = JSON.parse(message.slice(2));
+		if (!Array.isArray(packet) || typeof packet[0] !== "string") return null;
+		return {
+			name: packet[0],
+			payload: packet[1]
+		};
+	} catch {
+		return null;
+	}
+}
+function findPocketRows(value, isRow, depth = 0) {
+	if (depth > 6) return null;
+	if (Array.isArray(value)) {
+		if (isRow(value)) return [value];
+		const rows = value.filter(Array.isArray);
+		if (rows.some(isRow)) return rows;
+		for (const child of value) {
+			const found = findPocketRows(child, isRow, depth + 1);
+			if (found) return found;
+		}
+	} else if (value && typeof value === "object") for (const child of Object.values(value)) {
+		const found = findPocketRows(child, isRow, depth + 1);
+		if (found) return found;
+	}
+	return null;
+}
 var MAX_SERVER_CLOCK_OFFSET_SECONDS = 50400;
 function estimatePocketServerClockOffsetSeconds(rawServerTime, receivedAtMs) {
 	if (!Number.isFinite(rawServerTime) || rawServerTime <= 0 || !Number.isFinite(receivedAtMs)) return null;
@@ -850,6 +879,15 @@ var quotes = /* @__PURE__ */ new Map();
 var selectSignalCandidates = createRotatingCandidateSelector(SIGNAL_CANDIDATES_PER_SEARCH);
 var expectStream = false;
 var pendingHistory = /* @__PURE__ */ new Map();
+var lastStreamDiagnosticAt = 0;
+function logStreamDiagnostic(level, details) {
+	const now = Date.now();
+	if (now - lastStreamDiagnosticAt < 15e3) return;
+	lastStreamDiagnosticAt = now;
+	const entry = JSON.stringify(details);
+	if (level === "warn") console.warn("[pocket-feed-stream]", entry);
+	else console.info("[pocket-feed-stream]", entry);
+}
 function textOf(data) {
 	if (typeof data === "string") return data;
 	if (Buffer.isBuffer(data)) return data.toString("utf8");
@@ -922,25 +960,33 @@ function buildDirectAiSignal(candles, expirySeconds, analysisSeconds, name, payo
 		])
 	};
 }
+function rememberTickRows(rows) {
+	if (!Array.isArray(rows)) return 0;
+	const receivedAtMs = Date.now();
+	let quoteRows = 0;
+	for (const row of rows) {
+		if (!Array.isArray(row) || row.length < 3 || typeof row[0] !== "string") continue;
+		const offsetSeconds = estimatePocketServerClockOffsetSeconds(Number(row[1]), receivedAtMs);
+		if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
+			pocketServerClockOffsetSeconds = offsetSeconds;
+			console.info("[pocket-feed-clock-synced]", JSON.stringify({
+				offsetSeconds,
+				source: "updateStream"
+			}));
+		}
+		const price = Number(row[2]);
+		if (!Number.isFinite(price)) continue;
+		quotes.set(String(row[0]), {
+			price,
+			at: receivedAtMs
+		});
+		quoteRows += 1;
+	}
+	return quoteRows;
+}
 function rememberTicks(message) {
 	try {
-		const rows = JSON.parse(message);
-		if (!Array.isArray(rows)) return;
-		const receivedAtMs = Date.now();
-		for (const row of rows) {
-			if (!Array.isArray(row) || row.length < 3) continue;
-			const offsetSeconds = estimatePocketServerClockOffsetSeconds(Number(row[1]), receivedAtMs);
-			if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
-				pocketServerClockOffsetSeconds = offsetSeconds;
-				console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds }));
-			}
-			const price = Number(row[2]);
-			if (!Number.isFinite(price)) continue;
-			quotes.set(String(row[0]), {
-				price,
-				at: receivedAtMs
-			});
-		}
+		rememberTickRows(JSON.parse(message));
 	} catch {}
 }
 var subscribedAt = /* @__PURE__ */ new Map();
@@ -1047,6 +1093,42 @@ function handleMessage(current, message) {
 		try {
 			current.close();
 		} catch {}
+		return;
+	}
+	const socketEvent = parsePocketSocketIoEvent(message);
+	if (socketEvent?.name === "updateAssets") {
+		const rows = findPocketRows(socketEvent.payload, (row) => row.length >= 15 && row[14] === true && row[9] === 1);
+		if (rows) {
+			storeAssets(rows);
+			console.info("[pocket-feed-assets]", JSON.stringify({
+				receivedRows: rows.length,
+				activePairs: pairs.size,
+				socketReadyState: current.readyState,
+				frameFormat: "socket.io-inline"
+			}));
+		} else expectAssets = true;
+		return;
+	}
+	if (socketEvent?.name === "updateStream") {
+		const rows = findPocketRows(socketEvent.payload, (row) => typeof row[0] === "string" && row.length >= 3);
+		if (rows) {
+			expectStream = false;
+			const quoteRows = rememberTickRows(rows);
+			logStreamDiagnostic("info", {
+				frameFormat: "socket.io-inline",
+				receivedRows: rows.length,
+				quoteRows,
+				clockSynced: pocketServerClockOffsetSeconds !== null
+			});
+		} else {
+			expectStream = true;
+			logStreamDiagnostic("warn", {
+				payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
+				topLevelLength: Array.isArray(socketEvent.payload) ? socketEvent.payload.length : null,
+				frameFormat: "socket.io-inline",
+				clockSynced: pocketServerClockOffsetSeconds !== null
+			});
+		}
 		return;
 	}
 	if (message.includes("updateAssets")) {

@@ -1,6 +1,6 @@
 import { g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { k as useLanguage } from "./router-NpNSgEtO.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/learn-C7lK6dKu.js
+import { k as useLanguage } from "./router-CKfdc4M4.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/learn-BdSwmWy6.js
 var import_jsx_runtime = require_jsx_runtime();
 var trendCards = [
 	{

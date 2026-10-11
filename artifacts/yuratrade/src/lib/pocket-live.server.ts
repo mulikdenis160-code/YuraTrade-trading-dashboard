@@ -30,6 +30,7 @@ import {
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
+import { findPocketRows, parsePocketSocketIoEvent } from "./pocket-feed-frame";
 import {
   estimatePocketServerClockOffsetSeconds,
   pocketHistoryRequestTime,
@@ -119,6 +120,16 @@ const quotes = new Map<string, { price: number; at: number }>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
 const pendingHistory = new Map<string, Pending>();
+let lastStreamDiagnosticAt = 0;
+
+function logStreamDiagnostic(level: "info" | "warn", details: Record<string, unknown>) {
+  const now = Date.now();
+  if (now - lastStreamDiagnosticAt < 15_000) return;
+  lastStreamDiagnosticAt = now;
+  const entry = JSON.stringify(details);
+  if (level === "warn") console.warn("[pocket-feed-stream]", entry);
+  else console.info("[pocket-feed-stream]", entry);
+}
 
 function textOf(data: WebSocket.RawData) {
   if (typeof data === "string") return data;
@@ -202,25 +213,31 @@ function buildDirectAiSignal(
   };
 }
 
+function rememberTickRows(rows: unknown) {
+  if (!Array.isArray(rows)) return 0;
+  const receivedAtMs = Date.now();
+  let quoteRows = 0;
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 3 || typeof row[0] !== "string") continue;
+    const offsetSeconds = estimatePocketServerClockOffsetSeconds(
+      Number(row[1]),
+      receivedAtMs,
+    );
+    if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
+      pocketServerClockOffsetSeconds = offsetSeconds;
+      console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds, source: "updateStream" }));
+    }
+    const price = Number(row[2]);
+    if (!Number.isFinite(price)) continue;
+    quotes.set(String(row[0]), { price, at: receivedAtMs });
+    quoteRows += 1;
+  }
+  return quoteRows;
+}
+
 function rememberTicks(message: string) {
   try {
-    const rows = JSON.parse(message) as unknown[];
-    if (!Array.isArray(rows)) return;
-    const receivedAtMs = Date.now();
-    for (const row of rows) {
-      if (!Array.isArray(row) || row.length < 3) continue;
-      const offsetSeconds = estimatePocketServerClockOffsetSeconds(
-        Number(row[1]),
-        receivedAtMs,
-      );
-      if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
-        pocketServerClockOffsetSeconds = offsetSeconds;
-        console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds }));
-      }
-      const price = Number(row[2]);
-      if (!Number.isFinite(price)) continue;
-      quotes.set(String(row[0]), { price, at: receivedAtMs });
-    }
+    rememberTickRows(JSON.parse(message) as unknown);
   } catch {
     /* ignore a bad tick frame */
   }
@@ -349,6 +366,50 @@ function handleMessage(current: WebSocket, message: string) {
       current.close();
     } catch {
       /* already closed */
+    }
+    return;
+  }
+  const socketEvent = parsePocketSocketIoEvent(message);
+  if (socketEvent?.name === "updateAssets") {
+    const rows = findPocketRows(
+      socketEvent.payload,
+      (row) => row.length >= 15 && row[14] === true && row[9] === 1,
+    );
+    if (rows) {
+      storeAssets(rows);
+      console.info("[pocket-feed-assets]", JSON.stringify({
+        receivedRows: rows.length,
+        activePairs: pairs.size,
+        socketReadyState: current.readyState,
+        frameFormat: "socket.io-inline",
+      }));
+    } else {
+      expectAssets = true;
+    }
+    return;
+  }
+  if (socketEvent?.name === "updateStream") {
+    const rows = findPocketRows(
+      socketEvent.payload,
+      (row) => typeof row[0] === "string" && row.length >= 3,
+    );
+    if (rows) {
+      expectStream = false;
+      const quoteRows = rememberTickRows(rows);
+      logStreamDiagnostic("info", {
+        frameFormat: "socket.io-inline",
+        receivedRows: rows.length,
+        quoteRows,
+        clockSynced: pocketServerClockOffsetSeconds !== null,
+      });
+    } else {
+      expectStream = true;
+      logStreamDiagnostic("warn", {
+        payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
+        topLevelLength: Array.isArray(socketEvent.payload) ? socketEvent.payload.length : null,
+        frameFormat: "socket.io-inline",
+        clockSynced: pocketServerClockOffsetSeconds !== null,
+      });
     }
     return;
   }

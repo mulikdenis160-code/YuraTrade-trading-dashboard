@@ -8,7 +8,7 @@
     "build": "node scripts/with-app-env.mjs vite build --config vite.config.ts",
     "serve": "node scripts/with-app-env.mjs vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test src/lib/signal-journal.test.ts src/lib/signal-batch.test.ts src/lib/daily-signal-stats.test.ts src/lib/signal-model.server.test.ts src/lib/market-ai.server.test.ts src/lib/market-analysis-context.server.test.ts src/lib/signal-candidate-pool.test.ts src/lib/pocket-option-history.test.ts src/lib/pocket-server-time.test.ts src/lib/expiry.test.ts src/lib/signal-entry-window.test.ts src/lib/signal-release-time.test.ts src/lib/signal-config.test.ts src/lib/pair-clipboard.test.ts src/lib/telegram-init-data.server.test.ts src/lib/pocket-partner-status.test.ts src/lib/pocket-gate-policy.test.ts src/lib/telegram-bot.test.ts"
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test src/lib/signal-journal.test.ts src/lib/signal-batch.test.ts src/lib/daily-signal-stats.test.ts src/lib/signal-model.server.test.ts src/lib/market-ai.server.test.ts src/lib/market-analysis-context.server.test.ts src/lib/signal-candidate-pool.test.ts src/lib/pocket-option-history.test.ts src/lib/pocket-server-time.test.ts src/lib/pocket-feed-frame.test.ts src/lib/expiry.test.ts src/lib/signal-entry-window.test.ts src/lib/signal-release-time.test.ts src/lib/signal-config.test.ts src/lib/pair-clipboard.test.ts src/lib/telegram-init-data.server.test.ts src/lib/pocket-partner-status.test.ts src/lib/pocket-gate-policy.test.ts src/lib/telegram-bot.test.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",

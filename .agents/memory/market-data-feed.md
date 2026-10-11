@@ -21,8 +21,8 @@ A live OHLC-shape and candle-cadence check confirms only row structure and inter
 
 **How to apply:** when investigating a reported chart or indicator mismatch, ask for an exact pair, timeframe, candle timestamp, and values from both the bot and the chart after checking feed structure and cadence.
 
-History requests must use Pocket Option server-native time aligned down to the candle period. Derive the clock offset from valid stream timestamps; do not silently fall back to local UTC when no sync sample exists.
+Pocket Option Socket.IO events can carry `updateStream` and its data in one `42` frame; parsing only a following standalone array drops live ticks. Handle inline event payloads as well as split frames.
 
-**Why:** production logs showed a healthy socket and populated asset catalog but timed-out history requests. Current third-party clients for the same Socket.IO protocol sync server time before requesting candles and round timestamps to interval boundaries.
+**Why:** production logs showed an open socket and populated asset catalog, but no stream clock sample. The prior handler returned as soon as it saw `updateStream`, assuming the payload would arrive as another WebSocket frame.
 
-**How to apply:** verify a stream timestamp and computed offset before sending `loadHistoryPeriod`; log the offset and aligned request time, never the authorization payload or raw market frames.
+**How to apply:** parse Socket.IO event envelopes and inspect their inline payload before using the legacy split-frame path. Then use a valid stream timestamp to align history requests to the candle period; never log authorization data or raw market frames.
