@@ -1,5 +1,27 @@
 export type SocketIoEvent = { name: string; payload: unknown };
 
+export function pocketFeedUrlForAuth(auth: string): string | null {
+  const frame = auth.trim();
+  if (!frame.startsWith("42")) return null;
+
+  try {
+    const packet: unknown = JSON.parse(frame.slice(2));
+    if (!Array.isArray(packet) || packet[0] !== "auth" || !packet[1] || typeof packet[1] !== "object") {
+      return null;
+    }
+    const isDemo = (packet[1] as Record<string, unknown>).isDemo;
+    if (isDemo === true || isDemo === 1 || isDemo === "1") {
+      return "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket";
+    }
+    if (isDemo === false || isDemo === 0 || isDemo === "0") {
+      return "wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket";
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function buildPocketSubscriptionFrames(
   symbol: string,
   periodSeconds: number,

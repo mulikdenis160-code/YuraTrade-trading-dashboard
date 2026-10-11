@@ -31,3 +31,13 @@ export function pocketHistoryRequestTime(
   const serverTimeSeconds = nowMs / 1000 + serverClockOffsetSeconds;
   return Math.floor(serverTimeSeconds / periodSeconds) * periodSeconds;
 }
+
+export function pocketHistoryCandleLocalTime(
+  serverTimeSeconds: number,
+  serverClockOffsetSeconds: number,
+): number {
+  if (!Number.isFinite(serverTimeSeconds) || !Number.isFinite(serverClockOffsetSeconds)) {
+    throw new Error("Некорректное время свечи Pocket Option.");
+  }
+  return serverTimeSeconds - serverClockOffsetSeconds;
+}

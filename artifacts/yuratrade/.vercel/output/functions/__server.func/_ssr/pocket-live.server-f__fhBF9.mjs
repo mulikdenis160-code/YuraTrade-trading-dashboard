@@ -2,7 +2,7 @@ import { a as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, l as formatExpiry, o as SIGNAL_PRE
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-BwXoMN_N.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-D3a7B15Z.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-f__fhBF9.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -810,6 +810,20 @@ function parsePocketOptionHistory(data) {
 		rejectedRows: data.length - candles.length
 	};
 }
+function pocketFeedUrlForAuth(auth) {
+	const frame = auth.trim();
+	if (!frame.startsWith("42")) return null;
+	try {
+		const packet = JSON.parse(frame.slice(2));
+		if (!Array.isArray(packet) || packet[0] !== "auth" || !packet[1] || typeof packet[1] !== "object") return null;
+		const isDemo = packet[1].isDemo;
+		if (isDemo === true || isDemo === 1 || isDemo === "1") return "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket";
+		if (isDemo === false || isDemo === 0 || isDemo === "0") return "wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket";
+	} catch {
+		return null;
+	}
+	return null;
+}
 function buildPocketSubscriptionFrames(symbol, periodSeconds) {
 	return [
 		`42${JSON.stringify(["subscribeSymbol", symbol])}`,
@@ -861,8 +875,11 @@ function pocketHistoryRequestTime(nowMs, serverClockOffsetSeconds, periodSeconds
 	const serverTimeSeconds = nowMs / 1e3 + serverClockOffsetSeconds;
 	return Math.floor(serverTimeSeconds / periodSeconds) * periodSeconds;
 }
-var FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
-var FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
+function pocketHistoryCandleLocalTime(serverTimeSeconds, serverClockOffsetSeconds) {
+	if (!Number.isFinite(serverTimeSeconds) || !Number.isFinite(serverClockOffsetSeconds)) throw new Error("Некорректное время свечи Pocket Option.");
+	return serverTimeSeconds - serverClockOffsetSeconds;
+}
+var FEED_AUTH = (process.env.POCKET_OPTION_FEED_AUTH ?? "").trim();
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 var AUTH_REJECTED_MESSAGE = "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
 var HISTORY_PAGE_CANDLES = 150;
@@ -1215,7 +1232,19 @@ function handleMessage(current, message) {
 				if (request) {
 					clearTimeout(request.timer);
 					pendingHistory.delete(parsed.asset);
-					const history = parsePocketOptionHistory(parsed.data);
+					const serverClockOffsetSeconds = pocketServerClockOffsetSeconds;
+					if (serverClockOffsetSeconds === null) {
+						request.reject(/* @__PURE__ */ new Error("Время потока Pocket Option не синхронизировано."));
+						return;
+					}
+					const parsedHistory = parsePocketOptionHistory(parsed.data);
+					const history = {
+						...parsedHistory,
+						candles: parsedHistory.candles.map((candle) => ({
+							...candle,
+							time: pocketHistoryCandleLocalTime(candle.time, serverClockOffsetSeconds)
+						}))
+					};
 					const state = pairMarketData.get(parsed.asset) ?? {
 						ticks: [],
 						history: [],
@@ -1259,6 +1288,12 @@ function connect() {
 		console.error("[pocket-feed-auth-missing]");
 		throw new Error(connectionError);
 	}
+	const feedUrl = pocketFeedUrlForAuth(FEED_AUTH);
+	if (!feedUrl) {
+		connectionError = "Неверный формат авторизации Pocket Option: нужен полный кадр 42[\"auth\",…] с полем isDemo.";
+		console.error("[pocket-feed-auth-format-invalid]");
+		throw new Error(connectionError);
+	}
 	if (socket && (socket.readyState === wrapper_default.OPEN || socket.readyState === 0)) return;
 	if (socket) {
 		const old = socket;
@@ -1271,7 +1306,11 @@ function connect() {
 	connectionError = "";
 	pocketServerClockOffsetSeconds = null;
 	subscribedAt.clear();
-	const next = new wrapper_default(FEED_URL, {
+	console.info("[pocket-feed-region-selected]", JSON.stringify({
+		account: feedUrl.includes("demo-api-") ? "demo" : "real",
+		region: "eu"
+	}));
+	const next = new wrapper_default(feedUrl, {
 		headers: {
 			Origin: "https://pocketoption.com",
 			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0"
@@ -1359,7 +1398,7 @@ async function feedNextPair(excludedSymbols = []) {
 		group: "fx"
 	};
 }
-async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsServerNative = false) {
+async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 	return runHistoryRequest(symbol, async () => {
 		await ensureFeed();
 		if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
@@ -1383,7 +1422,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsSe
 		if (!current || current.readyState !== wrapper_default.OPEN) throw new Error("Соединение с Pocket Option прервалось перед запросом истории.");
 		return new Promise((resolve, reject) => {
 			let request;
-			const requestTime = pocketHistoryRequestTime(time * 1e3, timeIsServerNative ? 0 : clockOffsetSeconds, seconds);
+			const requestTime = pocketHistoryRequestTime(time * 1e3, clockOffsetSeconds, seconds);
 			const timer = setTimeout(() => {
 				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
 				console.warn("[pocket-history-timeout]", JSON.stringify({
@@ -1391,7 +1430,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsSe
 					periodSeconds: seconds,
 					requestTime,
 					serverClockOffsetSeconds: clockOffsetSeconds,
-					timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
+					timeBasis: "local-plus-feed-offset",
 					timeoutMs,
 					socketReadyState: socket?.readyState ?? null,
 					pairAvailable: pairs.has(symbol),
@@ -1414,7 +1453,7 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3, timeIsSe
 					periodSeconds: seconds,
 					requestTime,
 					serverClockOffsetSeconds: clockOffsetSeconds,
-					timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
+					timeBasis: "local-plus-feed-offset",
 					socketReadyState: current.readyState
 				}));
 				sendPocketSubscription(current, symbol, seconds);
@@ -1440,7 +1479,7 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 	let cursor = Math.floor(Date.now() / 1e3);
 	const maxPages = pageLimit ?? Math.ceil(30 / HISTORY_PAGE_CANDLES) + 1;
 	for (let page = 0; page < maxPages && collected.size < 30; page += 1) {
-		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs, page > 0);
+		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
 		rejectedRows += history.rejectedRows;
 		const candles = history.candles;
 		if (candles.length === 0) break;

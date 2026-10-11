@@ -32,3 +32,9 @@ The live subscription sequence is `subscribeSymbol(asset)`, `changeSymbol({asset
 **Why:** a production test received the asset catalog but no auth success, ticks, or candle history. Sending only `changeSymbol`/`subfor` was insufficient, and the provider later explicitly rejected the configured session.
 
 **How to apply:** distinguish transport, authentication, subscription, and history failures in diagnostics. Never bypass Pocket Option authentication or log the session payload; if `NotAuthorized` arrives, request a fresh full auth frame through Replit Secrets.
+
+Choose the Pocket Option WebSocket endpoint from the auth frame's `isDemo` value: demo sessions use the demo EU endpoint, and real sessions use the live EU endpoint. Convert history candle timestamps from server time to local epoch using the same stream clock offset before entry-window checks.
+
+**Why:** a demo session sent to the fixed Moscow endpoint was rejected, and unconverted server timestamps made valid candles appear two hours in the future.
+
+**How to apply:** keep request cursors in local epoch, add the stream offset when requesting provider history, and subtract it from returned candle times before comparing against local time.

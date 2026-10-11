@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   estimatePocketServerClockOffsetSeconds,
+  pocketHistoryCandleLocalTime,
   pocketHistoryRequestTime,
 } from "./pocket-server-time.ts";
 
@@ -29,6 +30,10 @@ test("invalid and implausibly distant feed timestamps are not used for clock syn
 test("history request timestamps use server time rounded down to the candle boundary", () => {
   assert.equal(pocketHistoryRequestTime(1_800_000_123_000, 7200, 60), 1_800_007_320);
   assert.equal(pocketHistoryRequestTime(1_800_000_123_000, 7200, 300), 1_800_007_200);
+});
+
+test("history candle times are converted back from server clock to local epoch time", () => {
+  assert.equal(pocketHistoryCandleLocalTime(1_800_007_200, 7200), 1_800_000_000);
 });
 
 test("history request timestamps reject invalid periods", () => {

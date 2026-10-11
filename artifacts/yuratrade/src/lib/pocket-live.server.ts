@@ -32,17 +32,18 @@ import {
   buildPocketSubscriptionFrames,
   findPocketRows,
   parsePocketSocketIoEvent,
+  pocketFeedUrlForAuth,
 } from "./pocket-feed-frame";
 import {
   estimatePocketServerClockOffsetSeconds,
+  pocketHistoryCandleLocalTime,
   pocketHistoryRequestTime,
 } from "./pocket-server-time";
 import { nextCandleEntryWindow } from "./signal-entry-window";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import { signalReleaseAt } from "./signal-release-time";
 
-const FEED_URL = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
-const FEED_AUTH = process.env.POCKET_OPTION_FEED_AUTH ?? "";
+const FEED_AUTH = (process.env.POCKET_OPTION_FEED_AUTH ?? "").trim();
 const AUTH_MISSING_MESSAGE =
   "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 const AUTH_REJECTED_MESSAGE =
@@ -513,7 +514,19 @@ function handleMessage(current: WebSocket, message: string) {
         if (request) {
           clearTimeout(request.timer);
           pendingHistory.delete(parsed.asset);
-          const history = parsePocketOptionHistory(parsed.data);
+          const serverClockOffsetSeconds = pocketServerClockOffsetSeconds;
+          if (serverClockOffsetSeconds === null) {
+            request.reject(new Error("Время потока Pocket Option не синхронизировано."));
+            return;
+          }
+          const parsedHistory = parsePocketOptionHistory(parsed.data);
+          const history: ParsedHistoryPage = {
+            ...parsedHistory,
+            candles: parsedHistory.candles.map((candle) => ({
+              ...candle,
+              time: pocketHistoryCandleLocalTime(candle.time, serverClockOffsetSeconds),
+            })),
+          };
             const state = pairMarketData.get(parsed.asset) ?? {
               ticks: [],
               history: [],
@@ -560,6 +573,13 @@ function connect() {
     console.error("[pocket-feed-auth-missing]");
     throw new Error(connectionError);
   }
+  const feedUrl = pocketFeedUrlForAuth(FEED_AUTH);
+  if (!feedUrl) {
+    connectionError =
+      "Неверный формат авторизации Pocket Option: нужен полный кадр 42[\"auth\",…] с полем isDemo.";
+    console.error("[pocket-feed-auth-format-invalid]");
+    throw new Error(connectionError);
+  }
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === 0)) return;
   if (socket) {
     const old = socket;
@@ -574,7 +594,11 @@ function connect() {
   connectionError = "";
   pocketServerClockOffsetSeconds = null;
   subscribedAt.clear();
-  const next = new WebSocket(FEED_URL, {
+  console.info("[pocket-feed-region-selected]", JSON.stringify({
+    account: feedUrl.includes("demo-api-") ? "demo" : "real",
+    region: "eu",
+  }));
+  const next = new WebSocket(feedUrl, {
     headers: {
       Origin: "https://pocketoption.com",
       "User-Agent":
@@ -685,7 +709,6 @@ async function loadHistoryPage(
   seconds: number,
   time: number,
   timeoutMs = 12_000,
-  timeIsServerNative = false,
 ): Promise<ParsedHistoryPage> {
   return runHistoryRequest(symbol, async () => {
     await ensureFeed();
@@ -714,7 +737,7 @@ async function loadHistoryPage(
       let request: Pending;
       const requestTime = pocketHistoryRequestTime(
         time * 1000,
-        timeIsServerNative ? 0 : clockOffsetSeconds,
+        clockOffsetSeconds,
         seconds,
       );
       const timer = setTimeout(() => {
@@ -724,7 +747,7 @@ async function loadHistoryPage(
           periodSeconds: seconds,
           requestTime,
           serverClockOffsetSeconds: clockOffsetSeconds,
-          timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
+          timeBasis: "local-plus-feed-offset",
           timeoutMs,
           socketReadyState: socket?.readyState ?? null,
           pairAvailable: pairs.has(symbol),
@@ -741,7 +764,7 @@ async function loadHistoryPage(
           periodSeconds: seconds,
           requestTime,
           serverClockOffsetSeconds: clockOffsetSeconds,
-          timeBasis: timeIsServerNative ? "history-response" : "local-plus-feed-offset",
+          timeBasis: "local-plus-feed-offset",
           socketReadyState: current.readyState,
         }));
         sendPocketSubscription(current, symbol, seconds);
@@ -785,7 +808,6 @@ async function loadCandles(
       seconds,
       cursor,
       pageTimeoutMs,
-      page > 0,
     );
     rejectedRows += history.rejectedRows;
     const candles = history.candles;

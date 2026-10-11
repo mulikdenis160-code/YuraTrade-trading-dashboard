@@ -4,7 +4,25 @@ import {
   buildPocketSubscriptionFrames,
   findPocketRows,
   parsePocketSocketIoEvent,
+  pocketFeedUrlForAuth,
 } from "./pocket-feed-frame.ts";
+
+test("selects the demo endpoint for demo auth and the live endpoint for real auth", () => {
+  assert.equal(
+    pocketFeedUrlForAuth('42["auth",{"session":"redacted","isDemo":1,"uid":123,"platform":2}]'),
+    "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket",
+  );
+  assert.equal(
+    pocketFeedUrlForAuth('42["auth",{"session":"redacted","isDemo":0,"uid":123,"platform":2}]'),
+    "wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket",
+  );
+});
+
+test("rejects malformed or non-auth frames when selecting Pocket Option region", () => {
+  assert.equal(pocketFeedUrlForAuth('42["updateAssets",[]]'), null);
+  assert.equal(pocketFeedUrlForAuth('42["auth",{"session":"redacted"}]'), null);
+  assert.equal(pocketFeedUrlForAuth("not an auth frame"), null);
+});
 
 test("builds both Pocket Option market stream subscription frames", () => {
   assert.deepEqual(buildPocketSubscriptionFrames("AUDNZD_otc", 60), [
