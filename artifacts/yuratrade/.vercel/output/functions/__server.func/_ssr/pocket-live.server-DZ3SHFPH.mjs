@@ -1,8 +1,8 @@
-import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-pth9pe_b.mjs";
+import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-Bcn89o9Z.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
-import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-BaB1SHa2.mjs";
+import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-Dtcg5-Fq.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CYGnIpDt.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DZ3SHFPH.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -818,7 +818,7 @@ var HISTORY_PAGE_CANDLES = 150;
 var SIGNAL_CANDIDATES_PER_SEARCH = 1;
 var MAX_ELIGIBLE_PAIRS = 20;
 var MIN_SIGNAL_PAYOUT = 92;
-var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
+var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 8e3;
 var SIGNAL_PREPARATION_TIMEOUT_MESSAGE = "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 var runHistoryRequest = createKeyedAsyncQueue();
 function waitForSignalPreparation(request, deadlineAtMs) {
@@ -832,6 +832,7 @@ var connectionError = "";
 var retryAfter = 0;
 var expectAssets = false;
 var expectBalance = false;
+var lastPocketMessageAt = 0;
 var quotes = /* @__PURE__ */ new Map();
 var selectSignalCandidates = createRotatingCandidateSelector(SIGNAL_CANDIDATES_PER_SEARCH);
 var expectStream = false;
@@ -1007,6 +1008,7 @@ function failPending(error) {
 	pendingHistory.clear();
 }
 function handleMessage(current, message) {
+	lastPocketMessageAt = Date.now();
 	if (message.startsWith("0") && message.includes("sid")) {
 		current.send("40");
 		return;
@@ -1021,6 +1023,7 @@ function handleMessage(current, message) {
 	}
 	if (message.includes("NotAuthorized")) {
 		connectionError = AUTH_REJECTED_MESSAGE;
+		console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
 		failPending(new Error(connectionError));
 		try {
 			current.close();
@@ -1034,8 +1037,19 @@ function handleMessage(current, message) {
 	if (expectAssets && message.startsWith("[")) {
 		expectAssets = false;
 		try {
-			storeAssets(JSON.parse(message));
-		} catch {}
+			const rows = JSON.parse(message);
+			storeAssets(rows);
+			console.info("[pocket-feed-assets]", JSON.stringify({
+				receivedRows: rows.length,
+				activePairs: pairs.size,
+				socketReadyState: current.readyState
+			}));
+		} catch {
+			console.warn("[pocket-feed-assets-parse-failed]", JSON.stringify({
+				socketReadyState: current.readyState,
+				frameLength: message.length
+			}));
+		}
 		return;
 	}
 	if (message.startsWith("{")) {
@@ -1046,7 +1060,14 @@ function handleMessage(current, message) {
 				if (request) {
 					clearTimeout(request.timer);
 					pendingHistory.delete(parsed.asset);
-					request.resolve(parsePocketOptionHistory(parsed.data));
+					const history = parsePocketOptionHistory(parsed.data);
+					console.info("[pocket-history-response]", JSON.stringify({
+						symbol: parsed.asset,
+						receivedRows: parsed.data.length,
+						validCandles: history.candles.length,
+						rejectedRows: history.rejectedRows
+					}));
+					request.resolve(history);
 					return;
 				}
 			}
@@ -1072,6 +1093,7 @@ function handleMessage(current, message) {
 function connect() {
 	if (!FEED_AUTH.trim()) {
 		connectionError = AUTH_MISSING_MESSAGE;
+		console.error("[pocket-feed-auth-missing]");
 		throw new Error(connectionError);
 	}
 	if (socket && (socket.readyState === wrapper_default.OPEN || socket.readyState === 0)) return;
@@ -1091,8 +1113,12 @@ function connect() {
 		},
 		handshakeTimeout: 8e3
 	});
-	next.on("error", () => {
+	next.on("error", (error) => {
 		if (socket !== next) return;
+		console.error("[pocket-feed-error]", JSON.stringify({
+			errorName: error.name,
+			socketReadyState: next.readyState
+		}));
 		socket = null;
 		retryAfter = Date.now() + 2e3;
 		connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
@@ -1102,6 +1128,7 @@ function connect() {
 	next.on("message", (data) => handleMessage(next, textOf(data)));
 	next.on("close", () => {
 		if (socket !== next) return;
+		console.warn("[pocket-feed-closed]", JSON.stringify({ socketReadyState: next.readyState }));
 		socket = null;
 		retryAfter = Date.now() + 2e3;
 		if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
@@ -1173,6 +1200,15 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 12e3) {
 			let request;
 			const timer = setTimeout(() => {
 				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+				console.warn("[pocket-history-timeout]", JSON.stringify({
+					symbol,
+					periodSeconds: seconds,
+					timeoutMs,
+					socketReadyState: socket?.readyState ?? null,
+					pairAvailable: pairs.has(symbol),
+					connectionError: connectionError || null,
+					lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null
+				}));
 				reject(/* @__PURE__ */ new Error(`История свечей не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
 			}, timeoutMs);
 			request = {

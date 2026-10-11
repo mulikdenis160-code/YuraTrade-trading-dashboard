@@ -427,27 +427,19 @@ function connect() {
     },
     handshakeTimeout: 8000,
   });
-  next.on("error", () => {
-    if (socket !== next) return;
-    socket = null;
-    retryAfter = Date.now() + 2000;
-    connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
-    failPending(new Error(connectionError));
-  });
-  socket = next;
-  next.on("open", () => {
-    if (socket === next) {
-      console.info("[pocket-feed-open]", JSON.stringify({ socketReadyState: next.readyState }));
-    }
-  });
-  next.on("message", (data) => handleMessage(next, textOf(data)));
   next.on("error", (error) => {
     if (socket !== next) return;
     console.error("[pocket-feed-error]", JSON.stringify({
       errorName: error.name,
       socketReadyState: next.readyState,
     }));
+    socket = null;
+    retryAfter = Date.now() + 2000;
+    connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
+    failPending(new Error(connectionError));
   });
+  socket = next;
+  next.on("message", (data) => handleMessage(next, textOf(data)));
   next.on("close", () => {
     if (socket !== next) return;
     console.warn("[pocket-feed-closed]", JSON.stringify({ socketReadyState: next.readyState }));

@@ -14,3 +14,7 @@ Complete candidate selection and signal preparation within a 20-second total dea
 **Why:** AUDNZD OTC quote acquisition timed out at the same 2-second interval used to throttle resubscription, so a retry could be blocked until the wait had already expired.
 
 **How to apply:** keep the quote wait above the resubscribe throttle and inside the overall preparation deadline; do not lower the freshness validation to mask delayed feeds.
+
+**Why:** A history timeout can occur after the feed has loaded its pair catalog; startup logs alone cannot distinguish a delayed provider response from an unrecognized history frame.
+
+**How to apply:** log feed/auth outcome, catalog readiness, history request/response shape, and timeout socket state without logging credentials, raw frames, or quote values. Keep data validation separate from transport waiting.
