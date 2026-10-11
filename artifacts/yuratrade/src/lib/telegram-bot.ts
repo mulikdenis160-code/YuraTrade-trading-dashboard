@@ -218,6 +218,19 @@ export function isTelegramPocketIdPromptReply(
     Object.values(messages).some((copy) => copy.askId === replyTo.text);
 }
 
+export function pocketOptionIdFromTelegramMessage(
+  text: unknown,
+  replyTo: { text?: unknown; from?: { is_bot?: unknown } } | undefined,
+): string | null {
+  if (typeof text !== "string") return null;
+  const input = text.trim();
+  if (isTelegramPocketIdPromptReply(replyTo)) {
+    return /^[\d -]+$/.test(input) ? input.replace(/[ -]/g, "") : input;
+  }
+  if (!/^[\d -]+$/.test(input)) return null;
+  return input.replace(/[ -]/g, "");
+}
+
 export function formatTelegramVerificationReply(
   result: PocketGateVerification,
   languageCode?: string,

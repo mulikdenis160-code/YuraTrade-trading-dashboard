@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-D3IH-mrb.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-BZLQogcS.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -2730,15 +2730,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-BEP9rEu_.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-CEkHu12e.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-DSKfdieh.mjs");
+var $$splitComponentImporter$3 = () => import("./history-aJtMrLu3.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-wOqK4quX.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-BRu46zQk.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-CfRiCGEX.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-BfYLST2O.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-CaQXAbc4.mjs");
+var $$splitComponentImporter = () => import("./signal-C60tGU_Q.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2843,7 +2843,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-CcmYvfex.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-o2cdH59x.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

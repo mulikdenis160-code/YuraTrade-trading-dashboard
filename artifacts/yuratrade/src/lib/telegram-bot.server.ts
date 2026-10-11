@@ -14,8 +14,8 @@ import {
   buildTelegramPocketIdPrompt,
   buildTelegramStartReply,
   formatTelegramVerificationReply,
-  isTelegramPocketIdPromptReply,
   isTelegramStartCommand,
+  pocketOptionIdFromTelegramMessage,
   parseTelegramLocaleCallbackData,
   telegramLocale,
   TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
@@ -238,9 +238,12 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
     return;
   }
 
+  const pocketOptionId = pocketOptionIdFromTelegramMessage(
+    message.text,
+    message.reply_to_message,
+  );
   if (
-    !isTelegramPocketIdPromptReply(message.reply_to_message) ||
-    typeof message.text !== "string" ||
+    pocketOptionId === null ||
     typeof message.from?.id !== "number" ||
     !Number.isSafeInteger(message.from.id)
   ) {
@@ -248,7 +251,7 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
   }
 
   const result = await verifyPocketAccountForTelegramUser(
-    message.text.trim(),
+    pocketOptionId,
     String(message.from.id),
   );
   const reply = formatTelegramVerificationReply(
