@@ -1,8 +1,8 @@
-import { a as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, l as formatExpiry, o as SIGNAL_PREPARATION_TIMEOUT_MS, r as SIGNAL_ANALYSIS_TIMEOUT_MS, s as SIGNAL_QUOTE_WAIT_MS } from "./pocket-gate.middleware-DUmnshuu.mjs";
+import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-DqGlDVU6.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
-import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-BwXoMN_N.mjs";
+import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-f__fhBF9.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-CbPuviEe.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -309,10 +309,10 @@ var passReviewSchema = object({
 });
 discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
 var DIRECT_AI_SYSTEM_PROMPT = [
-	"Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых минутных OHLC-свечей и краткая серия close.",
+	"Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых OHLC-свечей выбранного интервала и краткая серия close.",
 	"Используй dataQuality для оценки полноты и свежести. Времена свечей заданы в Unix-секундах; null означает, что показатель недоступен, а не ноль. Значения с суффиксом Bps заданы в базисных пунктах.",
 	"Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
-	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
+	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Подстраивай прогноз под expirySeconds из входных данных; candleSeconds — это интервал свечей, а не срок сделки.",
 	"Поле trend сравнивает последнее закрытие с закрытием четырьмя свечами ранее; используй его вместе с индикаторами, а не как единственное основание.",
 	"При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
 	"Верни только один компактный JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"одно короткое предложение на русском, не более 160 символов\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
@@ -690,7 +690,7 @@ async function analyzeMarketCandidates(expirySeconds, candleSeconds, candidates,
 			technicalIndicators: candidate.context.higherTimeframe.technicalIndicators
 		} : null,
 		trend: {
-			comparison: "последний закрытый close против close четыре минутные свечи назад",
+			comparison: "последний закрытый close против close четыре свечи назад",
 			direction: trend,
 			latestClose,
 			closeFourCandlesEarlier,
@@ -1568,14 +1568,14 @@ function summarizeCandleCadence(series, expectedSeconds) {
 	};
 }
 async function feedSignal(symbol, expirySeconds) {
-	if (expirySeconds !== 120) throw new Error("Для сигналов PRIME BOT используется экспирация 120 секунд.");
+	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
 	const pipelineStartedAt = performance.now();
 	const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 	await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
 	const pair = pairs.get(symbol);
 	if (!pair || pair.group !== "fx" || !pair.symbol.toLowerCase().includes("otc") || pair.payout < MIN_SIGNAL_PAYOUT) throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
 	subscribe(symbol);
-	const analysisSeconds = 60;
+	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 	const historyStartedAt = performance.now();
 	const inputQuoteStartedAt = historyStartedAt;
 	const [history, inputQuote] = await waitForSignalPreparation(Promise.all([loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1), waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS)]), preparationDeadlineAtMs);
@@ -1689,12 +1689,12 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		}));
 	};
 	try {
-		if (expirySeconds !== 120) throw new Error("Для сигналов PRIME BOT используется экспирация 120 секунд.");
+		if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
 		stage = "feed";
 		const feedStartedAt = performance.now();
 		await ensureFeed();
 		feedMs = performance.now() - feedStartedAt;
-		const analysisSeconds = 60;
+		const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 		expectedCandleSeconds = analysisSeconds;
 		const ranked = rankedSignalPairs();
 		if (ranked.length === 0) throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");

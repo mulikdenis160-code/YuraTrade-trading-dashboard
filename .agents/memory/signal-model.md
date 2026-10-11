@@ -3,9 +3,9 @@ name: Signal model
 description: Scope and safeguards for PRIME BOT's WebSocket-candle direction model.
 ---
 
-The current PRIME BOT signal strategy uses a fixed 120-second expiry and one-minute candles. Use 15–30 verified, closed candles; compare close[-1] with close[-5] for trend and compute standard deviation over the last 12 closes. Require a fresh quote no older than 20 seconds. Send these values to the provisioned Replit Gemini AI Integrations proxy and validate its JSON direction/explanation. Settle from a fresh quote after 120 seconds; retain verified local-journal and draw/overlay rules. Do not ask the user for a direct Google API key.
+The user can select a PRIME BOT expiry from 30 seconds through 4 hours; default to 120 seconds. Send the chosen expiry to Gemini and choose the analysis candle interval with `analysisPeriodForExpiry`: 60-second candles through 3-minute expiry, 5-minute candles through 30 minutes, and 15-minute candles for longer expiries. Use 15–30 verified, closed candles; compare close[-1] with close[-5] for trend and compute standard deviation over the last 12 closes. Require a fresh quote no older than 20 seconds. Validate Gemini's JSON direction/explanation and settle from a fresh quote after the selected expiry. Do not ask the user for a direct Google API key.
 
-**Why:** the user specified this exact bot-only signal workflow and confirmed a fixed two-minute outcome check. A model confidence score is subjective, not a measured win rate.
+**Why:** the user asked to restore the earlier per-signal expiry selection. A model confidence score is subjective, not a measured win rate.
 
 **How to apply:** use the configured proxy; analyze one OTC currency pair per request. Preserve the independent data-quality and one-minute entry-window checks (at least 15 seconds remaining). Keep the feed read-only and never open trades automatically. Do not treat live OHLC/cadence checks as proof that prices match the chart.
 

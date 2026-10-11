@@ -1,5 +1,5 @@
 import { t as createMiddleware } from "./ssr.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-DUmnshuu.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-DqGlDVU6.js
 var MIN_ENTRY_BUFFER_MS = 15e3;
 var SIGNAL_COPY_DELAY_MS = 1e4;
 var SIGNAL_ANALYSIS_TIMEOUT_MS = 19e3;
@@ -11,7 +11,7 @@ var ANALYSIS_PERIODS_SECONDS = [
 	300,
 	900
 ];
-[...[
+var EXPIRY_OPTIONS_SECONDS = [30, ...[
 	1,
 	2,
 	3,
@@ -61,4 +61,4 @@ var pocketGateMiddleware = createMiddleware({ type: "function" }).client(async (
 	return next({ context: { pocketGateIdentity: await requireVerifiedPocketAccess(context.pocketGateInitData) } });
 });
 //#endregion
-export { SIGNAL_HISTORY_PAGE_TIMEOUT_MS as a, analysisPeriodForExpiry as c, initializeTelegramWebApp as d, isValidExpirySeconds as f, SIGNAL_COPY_DELAY_MS as i, formatExpiry as l, MIN_ENTRY_BUFFER_MS as n, SIGNAL_PREPARATION_TIMEOUT_MS as o, pocketGateMiddleware as p, SIGNAL_ANALYSIS_TIMEOUT_MS as r, SIGNAL_QUOTE_WAIT_MS as s, ANALYSIS_PERIODS_SECONDS as t, getTelegramInitData as u };
+export { SIGNAL_COPY_DELAY_MS as a, SIGNAL_QUOTE_WAIT_MS as c, getTelegramInitData as d, initializeTelegramWebApp as f, SIGNAL_ANALYSIS_TIMEOUT_MS as i, analysisPeriodForExpiry as l, pocketGateMiddleware as m, EXPIRY_OPTIONS_SECONDS as n, SIGNAL_HISTORY_PAGE_TIMEOUT_MS as o, isValidExpirySeconds as p, MIN_ENTRY_BUFFER_MS as r, SIGNAL_PREPARATION_TIMEOUT_MS as s, ANALYSIS_PERIODS_SECONDS as t, formatExpiry as u };

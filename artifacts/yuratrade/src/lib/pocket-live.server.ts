@@ -7,7 +7,7 @@ import {
   MIN_DIRECT_AI_CANDLES,
   type MarketAiReview,
 } from "./market-ai.server";
-import { formatExpiry } from "./expiry";
+import { analysisPeriodForExpiry, formatExpiry, isValidExpirySeconds } from "./expiry";
 import { createKeyedAsyncQueue } from "./async-keyed-queue";
 import {
   createRotatingCandidateSelector,
@@ -19,7 +19,6 @@ import {
   type ParsedHistoryPage,
 } from "./pocket-option-history.ts";
 import {
-  BOT_SIGNAL_EXPIRY_SECONDS,
   MAX_QUOTE_AGE_MS,
   MIN_ENTRY_BUFFER_MS,
   SIGNAL_CANDLE_SECONDS,
@@ -914,8 +913,8 @@ export async function feedSignal(
   symbol: string,
   expirySeconds: number,
 ): Promise<FeedSignalResult> {
-  if (expirySeconds !== BOT_SIGNAL_EXPIRY_SECONDS) {
-    throw new Error("Для сигналов PRIME BOT используется экспирация 120 секунд.");
+  if (!isValidExpirySeconds(expirySeconds)) {
+    throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
   }
   const pipelineStartedAt = performance.now();
   const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
@@ -930,7 +929,7 @@ export async function feedSignal(
     throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
   }
   subscribe(symbol);
-  const analysisSeconds = SIGNAL_CANDLE_SECONDS;
+  const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const historyStartedAt = performance.now();
   const inputQuoteStartedAt = historyStartedAt;
   const [history, inputQuote] = await waitForSignalPreparation(
@@ -1084,14 +1083,14 @@ export async function feedBest(
   };
 
   try {
-    if (expirySeconds !== BOT_SIGNAL_EXPIRY_SECONDS) {
-      throw new Error("Для сигналов PRIME BOT используется экспирация 120 секунд.");
+    if (!isValidExpirySeconds(expirySeconds)) {
+      throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
     }
     stage = "feed";
     const feedStartedAt = performance.now();
     await ensureFeed();
     feedMs = performance.now() - feedStartedAt;
-    const analysisSeconds = SIGNAL_CANDLE_SECONDS;
+    const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
     expectedCandleSeconds = analysisSeconds;
     const ranked = rankedSignalPairs();
     if (ranked.length === 0) {

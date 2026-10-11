@@ -14,13 +14,13 @@ import {
 import { AnalysisModal } from "@/components/analysis-modal";
 import { copyPairName } from "@/lib/pair-clipboard";
 import {
-  BOT_SIGNAL_EXPIRY_SECONDS,
+  DEFAULT_SIGNAL_EXPIRY_SECONDS,
   SIGNAL_PAIR_SEARCH_LIMIT,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
-import { analysisPeriodForExpiry } from "@/lib/expiry";
+import { analysisPeriodForExpiry, EXPIRY_OPTIONS_SECONDS } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
 import { visibleSignalReleaseAt } from "@/lib/signal-release-time";
 
@@ -40,6 +40,7 @@ export function SignalDesk() {
   const { language, t } = useLanguage();
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
+  const [expirySeconds, setExpirySeconds] = useState(DEFAULT_SIGNAL_EXPIRY_SECONDS);
   const [feedStatus, setFeedStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [phase, setPhase] = useState<"idle" | "choosing" | "copy" | "analysis">("idle");
   const [feedError, setFeedError] = useState("");
@@ -106,7 +107,6 @@ export function SignalDesk() {
   }, []);
 
   const level = levelForBalance(depositAmount);
-  const expirySeconds = BOT_SIGNAL_EXPIRY_SECONDS;
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const cap = admin ? null : level ? level.daily : 0;
   const left = cap === null ? null : Math.max(0, cap - used);
@@ -277,25 +277,17 @@ export function SignalDesk() {
             <p className="text-sm font-semibold text-fg">{t("signal.expiry")}</p>
             <p className="text-sm font-bold text-blue-soft">{expiryLabel(expirySeconds)}</p>
           </div>
-          <div className="mt-3 grid grid-cols-4 gap-2">
-            {[BOT_SIGNAL_EXPIRY_SECONDS].map((seconds) => {
-              const selected = expirySeconds === seconds;
-              const label = expiryLabel(seconds);
-              return (
-                <span
-                  key={seconds}
-                  aria-label={`${t("signal.expiry")}: ${label}`}
-                  className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${
-                    selected
-                      ? "border-blue/40 bg-blue/12 text-blue-soft"
-                      : "border-white/10 bg-white/4 text-muted hover:bg-white/8"
-                  }`}
-                >
-                  {label}
-                </span>
-              );
-            })}
-          </div>
+          <select
+            value={expirySeconds}
+            onChange={(event) => setExpirySeconds(Number(event.target.value))}
+            disabled={phase !== "idle"}
+            aria-label={t("signal.expiry")}
+            className="mt-3 min-h-11 w-full rounded-xl border border-white/10 bg-[#111723] px-3 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-blue-soft disabled:opacity-60"
+          >
+            {EXPIRY_OPTIONS_SECONDS.map((seconds) => (
+              <option key={seconds} value={seconds}>{expiryLabel(seconds)}</option>
+            ))}
+          </select>
           <p className="mt-2 text-xs leading-relaxed text-dim" aria-live="polite">
             {t("signal.analyzed", { period: expiryLabel(analysisSeconds) })}
           </p>

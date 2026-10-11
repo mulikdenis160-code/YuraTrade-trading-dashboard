@@ -21,6 +21,7 @@ import {
 } from "@/lib/expiry";
 import {
   MAX_OVERLAYS,
+  DEFAULT_SIGNAL_EXPIRY_SECONDS,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
@@ -118,7 +119,7 @@ export const Route = createFileRoute("/signal")({
     const direction = search.direction === "put" ? "put" : "call";
     const parsedSeconds = Number(search.seconds);
     const parsedConfidence = Number(search.aiConfidence);
-    const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : 120;
+    const seconds = isValidExpirySeconds(parsedSeconds) ? parsedSeconds : DEFAULT_SIGNAL_EXPIRY_SECONDS;
     return {
       symbol: validGroup && typeof search.symbol === "string" ? search.symbol : "",
       name: validGroup && typeof search.name === "string" ? search.name : "",
