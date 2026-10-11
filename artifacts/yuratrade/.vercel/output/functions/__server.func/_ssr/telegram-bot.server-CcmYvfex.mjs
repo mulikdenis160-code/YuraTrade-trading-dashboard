@@ -1,8 +1,8 @@
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
-import { A as levelForBalance } from "./router-BAgXgugP.mjs";
+import { A as levelForBalance } from "./router-D3IH-mrb.mjs";
 import { readTelegramLocale, saveTelegramLocale, verifyLinkedPocketAccountForTelegramUser, verifyPocketAccountForTelegramUser } from "./pocket-gate.server-eoJOoUVz.mjs";
 import { createHash, timingSafeEqual } from "node:crypto";
-//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-UCVO_8Hn.js
+//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-CcmYvfex.js
 var POCKET_OPTION_REFERRAL_URL = "https://po-ru4.click/register?utm_campaign=857649&utm_source=affiliate&utm_medium=sr&a=iRpVNOoIijYLHF&al=1788919&ac=ftd&cid=974710&code=50START";
 var ALREADY_REGISTERED_CALLBACK_DATA = "already_registered";
 var messages = {
@@ -188,13 +188,6 @@ function buildTelegramPocketIdPrompt(languageCode) {
 function isTelegramPocketIdPromptReply(replyTo) {
 	return replyTo?.from?.is_bot === true && Object.values(messages).some((copy) => copy.askId === replyTo.text);
 }
-function pocketOptionIdFromTelegramMessage(text, replyTo) {
-	if (typeof text !== "string") return null;
-	const input = text.trim();
-	if (isTelegramPocketIdPromptReply(replyTo)) return /^[\d -]+$/.test(input) ? input.replace(/[ -]/g, "") : input;
-	if (!/^[\d -]+$/.test(input)) return null;
-	return input.replace(/[ -]/g, "");
-}
 function formatTelegramVerificationReply(result, languageCode, telegramUserId) {
 	const copy = messages[telegramLocale(languageCode)];
 	if (result.status !== "verified") return {
@@ -323,9 +316,8 @@ async function handleMessage(message) {
 		await sendTelegramMessage(chat.id, reply.text, reply.reply_markup);
 		return;
 	}
-	const pocketOptionId = pocketOptionIdFromTelegramMessage(message.text, message.reply_to_message);
-	if (pocketOptionId === null || typeof message.from?.id !== "number" || !Number.isSafeInteger(message.from.id)) return;
-	const result = await verifyPocketAccountForTelegramUser(pocketOptionId, String(message.from.id));
+	if (!isTelegramPocketIdPromptReply(message.reply_to_message) || typeof message.text !== "string" || typeof message.from?.id !== "number" || !Number.isSafeInteger(message.from.id)) return;
+	const result = await verifyPocketAccountForTelegramUser(message.text.trim(), String(message.from.id));
 	const reply = formatTelegramVerificationReply(result, message.from.language_code, message.from.id);
 	const locale = await readTelegramLocale(String(message.from.id)) ?? telegramLocale(message.from.language_code);
 	await sendTelegramMessage(chat.id, reply.text, result.status === "verified" ? buildTelegramMainMenuMarkup(locale) : void 0);

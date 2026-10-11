@@ -20,15 +20,3 @@ A live OHLC-shape and candle-cadence check confirms only row structure and inter
 **Why:** a feed can return complete, regularly spaced candles while the user still observes different chart values or indicator readings.
 
 **How to apply:** when investigating a reported chart or indicator mismatch, ask for an exact pair, timeframe, candle timestamp, and values from both the bot and the chart after checking feed structure and cadence.
-
-Signal preparation may wait up to 6 seconds for a live quote within its 20-second overall deadline; preserve the existing maximum quote-age and entry-window checks.
-
-**Why:** a 2-second wait can expire before a rate-limited resubscription produces an OTC tick, even while the feed itself remains connected.
-
-**How to apply:** tune quote acquisition timeouts to absorb feed latency, but never substitute a stale cached price or weaken the signal's freshness validation.
-
-Live signal history pages may wait up to 12 seconds, within the existing 20-second total preparation deadline. Do not automatically retry a timed-out request for the same symbol until responses can be correlated safely.
-
-**Why:** Pocket Option history responses have no unique request ID; a late response to the first request could be mistaken for the retry's response.
-
-**How to apply:** keep same-symbol history requests serialized, and use a bounded page wait rather than issuing overlapping retries.

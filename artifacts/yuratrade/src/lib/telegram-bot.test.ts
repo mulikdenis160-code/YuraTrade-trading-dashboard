@@ -12,7 +12,6 @@ import {
   isTelegramStartCommand,
   parseTelegramLocale,
   parseTelegramLocaleCallbackData,
-  pocketOptionIdFromTelegramMessage,
   TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
   TELEGRAM_LANGUAGE_CALLBACK_DATA,
   telegramLocaleCallbackData,
@@ -94,20 +93,6 @@ test("the already-registered button asks for the Pocket Option ID in the user's 
     text: "Any bot message",
     from: { is_bot: true },
   }), false);
-});
-
-test("Pocket Option IDs are accepted as replies or standalone numeric messages", () => {
-  const englishPrompt = {
-    text: buildTelegramPocketIdPrompt("en"),
-    from: { is_bot: true },
-  };
-
-  assert.equal(pocketOptionIdFromTelegramMessage("123456789", undefined), "123456789");
-  assert.equal(pocketOptionIdFromTelegramMessage(" 123 456-789 ", undefined), "123456789");
-  assert.equal(pocketOptionIdFromTelegramMessage("123456789", englishPrompt), "123456789");
-  assert.equal(pocketOptionIdFromTelegramMessage("12345678", undefined), "12345678");
-  assert.equal(pocketOptionIdFromTelegramMessage("hello", undefined), null);
-  assert.equal(pocketOptionIdFromTelegramMessage("not an ID", englishPrompt), "not an ID");
 });
 
 test("verification replies report the same tier limits as the website", () => {
