@@ -9,6 +9,7 @@ import {
   SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
   SIGNAL_PAIR_SEARCH_LIMIT,
   SIGNAL_PREPARATION_TIMEOUT_MS,
+  SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config.ts";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import {
@@ -61,6 +62,7 @@ test("Gemini and full signal preparation fit within a twenty-second search budge
   assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 19_000);
   assert.equal(SIGNAL_PREPARATION_TIMEOUT_MS, 20_000);
   assert.equal(SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 5_000);
+  assert.equal(SIGNAL_QUOTE_WAIT_MS, 6_000);
   assert.equal(SIGNAL_PAIR_SEARCH_LIMIT, 4);
   const request = settleSignalRequest(Promise.resolve("ready"));
   assert.equal(

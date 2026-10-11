@@ -20,3 +20,9 @@ A live OHLC-shape and candle-cadence check confirms only row structure and inter
 **Why:** a feed can return complete, regularly spaced candles while the user still observes different chart values or indicator readings.
 
 **How to apply:** when investigating a reported chart or indicator mismatch, ask for an exact pair, timeframe, candle timestamp, and values from both the bot and the chart after checking feed structure and cadence.
+
+Signal preparation may wait up to 6 seconds for a live quote within its 20-second overall deadline; preserve the existing maximum quote-age and entry-window checks.
+
+**Why:** a 2-second wait can expire before a rate-limited resubscription produces an OTC tick, even while the feed itself remains connected.
+
+**How to apply:** tune quote acquisition timeouts to absorb feed latency, but never substitute a stale cached price or weaken the signal's freshness validation.

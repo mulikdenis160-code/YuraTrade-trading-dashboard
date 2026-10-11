@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, n as require_react_dom } from "../_libs/@tanstack/react-router+[...].mjs";
-import { k as useLanguage } from "./router-BZLQogcS.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pair-clipboard-Df0bLiUN.js
+import { k as useLanguage } from "./router-Dtmio3lV.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/pair-clipboard-B0elu-qn.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var import_react_dom = require_react_dom();
