@@ -2,7 +2,7 @@ import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analys
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
 import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-BzKDz4mS.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-yNqzWlBe.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -1138,7 +1138,7 @@ function entryWindowFailure(candles, nowMs = Date.now()) {
 	};
 	if (!window.canEnter) return {
 		decision: "pass",
-		reason: window.remainingMs < 15e3 ? "До закрытия текущей минутной свечи осталось меньше 15 секунд. Запросите сигнал в начале следующей минуты." : "Следующая минутная свеча ещё не открылась. Сигнал не выдан."
+		reason: window.remainingMs < 15e3 ? "Не удалось подтвердить безопасное минутное окно. Свежая свеча не подтверждена, сигнал не выдан." : "Следующая минутная свеча ещё не открылась. Сигнал не выдан."
 	};
 	return null;
 }
@@ -1503,6 +1503,25 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 		rejectedRows
 	};
 }
+async function waitForSafeEntryHistory(symbol, initial) {
+	if (!entryWindowFailure(initial.candles)) return { history: initial };
+	const window = nextCandleEntryWindow(initial.candles, Date.now());
+	if (!window || window.remainingMs <= 0 || window.remainingMs >= 15e3) return { failure: {
+		decision: "pass",
+		reason: "Не удалось подтвердить безопасное минутное окно. Свежая свеча не подтверждена, сигнал не выдан."
+	} };
+	await new Promise((resolve) => setTimeout(resolve, Math.max(0, window.remainingMs) + 250));
+	const deadline = Date.now() + 8e3;
+	while (Date.now() < deadline) {
+		const history = await loadCandles(symbol, 60, Math.min(2e3, Math.max(500, deadline - Date.now())), 1);
+		if (!entryWindowFailure(history.candles)) return { history };
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	}
+	return { failure: {
+		decision: "pass",
+		reason: "Новая минутная свеча ещё не поступила от Pocket Option. Сигнал не выдан."
+	} };
+}
 function followQuote(symbol) {
 	if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) feedSnapshot().catch(() => {});
 	const current = latestPairQuote(symbol);
@@ -1647,12 +1666,15 @@ async function feedConfirmSignalEntry(symbol) {
 	await ensureFeed();
 	const pair = pairs.get(symbol);
 	if (!pair || pair.group !== "fx" || !pair.symbol.toLowerCase().includes("otc") || pair.payout < MIN_SIGNAL_PAYOUT) throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
-	const history = await loadCandles(symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
-	const initialWindowFailure = entryWindowFailure(history.candles);
-	if (initialWindowFailure) throw new Error(initialWindowFailure.reason);
-	const quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
-	const finalWindowFailure = entryWindowFailure(history.candles);
-	if (finalWindowFailure) throw new Error(finalWindowFailure.reason);
+	const safeHistory = await waitForSafeEntryHistory(symbol, await loadCandles(symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1));
+	if (safeHistory.failure) throw new Error(safeHistory.failure.reason);
+	let quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+	const verificationHistory = await loadCandles(symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+	if (entryWindowFailure(verificationHistory.candles)) {
+		const rechecked = await waitForSafeEntryHistory(symbol, verificationHistory);
+		if (rechecked.failure) throw new Error(rechecked.failure.reason);
+		quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+	}
 	return { openPrice: quote.price };
 }
 async function feedBest(expirySeconds, excludedSymbols = []) {
@@ -1741,11 +1763,12 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		}
 		const candidate = candidates[0];
 		if (!candidate) throw new Error("Не удалось подготовить данные выбранной пары.");
-		const initialWindowFailure = entryWindowFailure((await loadCandles(candidate.pair.symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1)).candles);
-		if (initialWindowFailure) {
+		const initialEntryHistory = await loadCandles(candidate.pair.symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+		const safeInitialHistory = await waitForSafeEntryHistory(candidate.pair.symbol, initialEntryHistory);
+		if (safeInitialHistory.failure) {
 			stage = "entry-window";
 			logTiming("pass");
-			return initialWindowFailure;
+			return safeInitialHistory.failure;
 		}
 		stage = "fresh-quote";
 		const inputQuoteStartedAt = performance.now();
@@ -1780,17 +1803,28 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 			};
 		}
 		const finalEntryHistory = await loadCandles(best.pair.symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
-		const analysisWindowFailure = entryWindowFailure(finalEntryHistory.candles);
-		if (analysisWindowFailure) {
+		const safeFinalHistory = await waitForSafeEntryHistory(best.pair.symbol, finalEntryHistory);
+		if (safeFinalHistory.failure) {
 			stage = "entry-window";
 			logTiming("pass");
-			return analysisWindowFailure;
+			return safeFinalHistory.failure;
 		}
 		stage = "fresh-quote";
 		const quoteStartedAt = performance.now();
-		const entryQuote = await waitFreshQuote(best.pair.symbol);
+		let entryQuote = await waitFreshQuote(best.pair.symbol);
 		quoteMs += performance.now() - quoteStartedAt;
-		const finalWindowFailure = entryWindowFailure(finalEntryHistory.candles);
+		let verificationHistory = await loadCandles(best.pair.symbol, 60, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS, 1);
+		if (entryWindowFailure(verificationHistory.candles)) {
+			const rechecked = await waitForSafeEntryHistory(best.pair.symbol, verificationHistory);
+			if (rechecked.failure) {
+				stage = "entry-window";
+				logTiming("pass");
+				return rechecked.failure;
+			}
+			verificationHistory = rechecked.history;
+			entryQuote = await waitFreshQuote(best.pair.symbol);
+		}
+		const finalWindowFailure = entryWindowFailure(verificationHistory.candles);
 		if (finalWindowFailure) {
 			stage = "entry-window";
 			logTiming("pass");
