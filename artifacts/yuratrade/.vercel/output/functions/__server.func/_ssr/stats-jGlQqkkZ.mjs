@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { k as useLanguage, p as subscribeToSignalJournal, s as readSignalJournalTotals } from "./router-DTYIOf5o.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/stats-cG6IjDS-.js
+import { k as useLanguage, p as subscribeToSignalJournal, s as readSignalJournalTotals } from "./router-DLv3laRz.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/stats-jGlQqkkZ.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var DAILY_SIGNAL_STATS_STORAGE_KEY = "vprime_daily_signal_stats_v1";

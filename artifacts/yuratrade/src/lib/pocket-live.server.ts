@@ -255,11 +255,18 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
       console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds, source: "updateStream" }));
     }
     const price = Number(row[2]);
-    if (!Number.isFinite(price) || price <= 0 || offsetSeconds === null) continue;
+    const clockOffsetSeconds = pocketServerClockOffsetSeconds ?? offsetSeconds;
+    if (
+      !Number.isFinite(rawTimestamp) ||
+      rawTimestamp <= 0 ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      clockOffsetSeconds === null
+    ) continue;
     const symbol = String(row[0]);
     const tickTime = Math.min(
       receivedAtMs,
-      serverTimeMs - (pocketServerClockOffsetSeconds ?? offsetSeconds) * 1000,
+      serverTimeMs - clockOffsetSeconds * 1000,
     );
     const state = pairMarketData.get(symbol) ?? {
       ticks: [],
@@ -789,12 +796,18 @@ async function loadCandles(
     if (collected.size === previousSize || oldestTime <= 0 || oldestTime >= cursor) break;
     cursor = oldestTime - 1;
   }
-  return {
-    candles: [...collected.values()]
-      .sort((a, b) => a.time - b.time)
-      .slice(-DIRECT_AI_HISTORY_CANDLES),
-    rejectedRows,
+  const candles = [...collected.values()]
+    .sort((a, b) => a.time - b.time)
+    .slice(-DIRECT_AI_HISTORY_CANDLES);
+  const state = pairMarketData.get(symbol) ?? {
+    ticks: [],
+    history: [],
+    historyPeriodSeconds: null,
   };
+  state.history = candles;
+  state.historyPeriodSeconds = seconds;
+  pairMarketData.set(symbol, state);
+  return { candles: state.history, rejectedRows };
 }
 
 export function followQuote(symbol: string) {
