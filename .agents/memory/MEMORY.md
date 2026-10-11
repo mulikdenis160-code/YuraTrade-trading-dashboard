@@ -1,4 +1,4 @@
-- [Market data feed](market-data-feed.md) — Pocket Option history pages cap near 150 candles; paginate read-only and keep authorization in Secrets.
+- [Market data feed](market-data-feed.md) — page history; require `successauth` and subscribe with `subscribeSymbol`/`changeSymbol`/`subfor`.
 - [Signal preparation flow](signal-preparation.md) — show the pair countdown only after a signal is ready; recheck the minute-entry window and quote before issuing.
 - [Signal model](signal-model.md) — use expiry-matched candle intervals and treat ADX as context, not an automatic no-signal cutoff.
 - [Rotating signal candidates](signal-candidate-rotation.md) — rotate one pair at a time through the 20 highest-payout eligible OTC currency pairs.

@@ -26,3 +26,9 @@ Pocket Option Socket.IO events can carry `updateStream` and its data in one `42`
 **Why:** production logs showed an open socket and populated asset catalog, but no stream clock sample. The prior handler returned as soon as it saw `updateStream`, assuming the payload would arrive as another WebSocket frame.
 
 **How to apply:** parse Socket.IO event envelopes and inspect their inline payload before using the legacy split-frame path. Then use a valid stream timestamp to align history requests to the candle period; never log authorization data or raw market frames.
+
+The live subscription sequence is `subscribeSymbol(asset)`, `changeSymbol({asset, period})`, then `subfor(asset)`. An open socket and `updateAssets` only prove transport/catalog delivery; wait for `successauth` before treating the feed as authorized, then verify `updateStream` and a history response. The WebSocket HTTP `Date` header can seed clock synchronization, with stream timestamps refining it.
+
+**Why:** a production test received the asset catalog but no auth success, ticks, or candle history. Sending only `changeSymbol`/`subfor` was insufficient, and the provider later explicitly rejected the configured session.
+
+**How to apply:** distinguish transport, authentication, subscription, and history failures in diagnostics. Never bypass Pocket Option authentication or log the session payload; if `NotAuthorized` arrives, request a fresh full auth frame through Replit Secrets.
