@@ -8,7 +8,7 @@ export const DIRECT_AI_MODEL = "gemini-3.6-flash";
 export const DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
 export const PROXY_AI_MODEL = "gemini-2.5-flash";
 export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
-export const DIRECT_AI_HISTORY_CANDLES = 128;
+export const DIRECT_AI_HISTORY_CANDLES = 30;
 export const MIN_DIRECT_AI_CANDLES = 15;
 export const GEMINI_MAX_OUTPUT_TOKENS = 8_192;
 export const GEMINI_THINKING_BUDGET = 2_048;
@@ -55,7 +55,7 @@ const reviewSchema = z.discriminatedUnion("decision", [
 export type MarketAiReview = z.infer<typeof reviewSchema>;
 
 export const DIRECT_AI_SYSTEM_PROMPT = [
-  "Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых OHLC-свечей, до 24 полностью собранных свечей старшего таймфрейма, до 128 проверенных закрытых свечей для расчёта индикаторов и краткая серия close.",
+  "Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых минутных OHLC-свечей и краткая серия close.",
   "Используй dataQuality для оценки полноты и свежести. Времена свечей заданы в Unix-секундах; null означает, что показатель недоступен, а не ноль. Значения с суффиксом Bps заданы в базисных пунктах.",
   "Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
   "Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",

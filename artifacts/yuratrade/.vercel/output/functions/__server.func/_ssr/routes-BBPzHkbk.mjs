@@ -1,13 +1,13 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { l as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, s as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-DqGlDVU6.mjs";
+import { c as analysisPeriodForExpiry, o as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-DUmnshuu.mjs";
 import { t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-B0F2hKW2.mjs";
-import { t as StatRow } from "./stats-BfQiRriG.mjs";
-import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DXaFUgGS.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-B7jmJTMS.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-CUI2kyC6.js
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-DTYIOf5o.mjs";
+import { t as StatRow } from "./stats-cG6IjDS-.mjs";
+import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-BwXoMN_N.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-Bdqto_w6.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BBPzHkbk.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -25,7 +25,6 @@ function SignalDesk() {
 	const [copyRemaining, setCopyRemaining] = (0, import_react.useState)(10);
 	const [copiedPair, setCopiedPair] = (0, import_react.useState)(false);
 	const [used, setUsed] = (0, import_react.useState)(0);
-	const [selectedExpirySeconds, setSelectedExpirySeconds] = (0, import_react.useState)(120);
 	const attemptRef = (0, import_react.useRef)(0);
 	(0, import_react.useEffect)(() => () => {
 		attemptRef.current += 1;
@@ -71,7 +70,7 @@ function SignalDesk() {
 		requestSignalBatchStop(hasActiveSeries);
 	}, []);
 	const level = levelForBalance(depositAmount);
-	const expirySeconds = selectedExpirySeconds;
+	const expirySeconds = 120;
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 	const cap = admin ? null : level ? level.daily : 0;
 	const left = cap === null ? null : Math.max(0, cap - used);
@@ -227,16 +226,12 @@ function SignalDesk() {
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "mt-3 grid grid-cols-4 gap-2",
-								children: EXPIRY_OPTIONS_SECONDS.map((seconds) => {
+								children: [120].map((seconds) => {
 									const selected = expirySeconds === seconds;
 									const label = expiryLabel(seconds);
-									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										type: "button",
-										disabled: phase !== "idle",
-										"aria-pressed": selected,
-										title: expiryLabel(seconds),
-										onClick: () => setSelectedExpirySeconds(seconds),
-										className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"} disabled:cursor-not-allowed disabled:opacity-50`,
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										"aria-label": `${t("signal.expiry")}: ${label}`,
+										className: `min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition ${selected ? "border-blue/40 bg-blue/12 text-blue-soft" : "border-white/10 bg-white/4 text-muted hover:bg-white/8"}`,
 										children: label
 									}, seconds);
 								})

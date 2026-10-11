@@ -1,8 +1,8 @@
-import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-DqGlDVU6.mjs";
+import { a as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, l as formatExpiry, o as SIGNAL_PREPARATION_TIMEOUT_MS, r as SIGNAL_ANALYSIS_TIMEOUT_MS, s as SIGNAL_QUOTE_WAIT_MS } from "./pocket-gate.middleware-DUmnshuu.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
-import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DXaFUgGS.mjs";
+import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-BwXoMN_N.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-DuqX8zHf.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-N88ENXte.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -309,7 +309,7 @@ var passReviewSchema = object({
 });
 discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
 var DIRECT_AI_SYSTEM_PROMPT = [
-	"Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых OHLC-свечей, до 24 полностью собранных свечей старшего таймфрейма, до 128 проверенных закрытых свечей для расчёта индикаторов и краткая серия close.",
+	"Ты анализируешь одну OTC-валютную пару. В данных есть свежая цена, до 30 последних закрытых минутных OHLC-свечей и краткая серия close.",
 	"Используй dataQuality для оценки полноты и свежести. Времена свечей заданы в Unix-секундах; null означает, что показатель недоступен, а не ноль. Значения с суффиксом Bps заданы в базисных пунктах.",
 	"Учитывай EMA 9/21/50 и наклоны, RSI 14, MACD-гистограмму, Bollinger z-score, ATR и его отношение, недавние доходности, расстояния до прошлых максимумов/минимумов, а также ADX 14 и +DI/-DI. ADX оценивает силу, а не направление тренда; сравнивай +DI с -DI и проверяй согласованность с EMA, старшим таймфреймом и реальными OHLC-свечами.",
 	"Не называй движение выраженным трендом, если ADX слабый или индикаторы и старший таймфрейм противоречат друг другу. Не выдумывай OHLC, индикаторы, новости или цены. Учитывай срок экспирации из входных данных; по умолчанию это 120 секунд.",
@@ -880,8 +880,6 @@ var balance = null;
 var socket = null;
 var ready = null;
 var connectionError = "";
-var pocketAuthAccepted = false;
-var pocketAuthSentAt = 0;
 var retryAfter = 0;
 var expectAssets = false;
 var expectBalance = false;
@@ -1024,28 +1022,6 @@ function rememberTicks(message, frameFormat = "split-array") {
 	}
 }
 var subscribedAt = /* @__PURE__ */ new Map();
-var seenSocketEventNames = /* @__PURE__ */ new Set();
-var loggedPocketEventMarkers = /* @__PURE__ */ new Set();
-function logPocketEventMarker(message, current) {
-	for (const name of [
-		"successauth",
-		"successAuth",
-		"NotAuthorized",
-		"updateAssets",
-		"updateStream",
-		"updateHistoryNewFast",
-		"loadHistoryPeriod",
-		"history"
-	]) {
-		if (!message.includes(name) || loggedPocketEventMarkers.has(name)) continue;
-		loggedPocketEventMarkers.add(name);
-		console.info("[pocket-feed-event-marker]", JSON.stringify({
-			name,
-			frameLength: message.length,
-			socketReadyState: current.readyState
-		}));
-	}
-}
 function sendPocketSubscription(target, symbol, periodSeconds) {
 	for (const frame of buildPocketSubscriptionFrames(symbol, periodSeconds)) target.send(frame);
 	console.info("[pocket-feed-subscribe]", JSON.stringify({
@@ -1136,7 +1112,6 @@ function failPending(error) {
 }
 function handleMessage(current, message) {
 	lastPocketMessageAt = Date.now();
-	logPocketEventMarker(message, current);
 	if (message.startsWith("0") && message.includes("sid")) {
 		current.send("40");
 		return;
@@ -1146,20 +1121,10 @@ function handleMessage(current, message) {
 		return;
 	}
 	if (message.startsWith("40") && message.includes("sid")) {
-		pocketAuthAccepted = false;
-		pocketAuthSentAt = Date.now();
 		current.send(FEED_AUTH);
-		console.info("[pocket-feed-auth-sent]");
 		return;
 	}
-	const eventName = parsePocketSocketIoEvent(message)?.name.toLowerCase();
-	if (eventName === "successauth" || eventName === "authenticated" || message.toLowerCase().includes("successauth")) {
-		pocketAuthAccepted = true;
-		connectionError = "";
-		console.info("[pocket-feed-auth-accepted]", JSON.stringify({ socketReadyState: current.readyState }));
-	}
 	if (message.includes("NotAuthorized")) {
-		pocketAuthAccepted = false;
 		connectionError = AUTH_REJECTED_MESSAGE;
 		console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
 		failPending(new Error(connectionError));
@@ -1169,14 +1134,6 @@ function handleMessage(current, message) {
 		return;
 	}
 	const socketEvent = parsePocketSocketIoEvent(message);
-	if (socketEvent && !seenSocketEventNames.has(socketEvent.name)) {
-		seenSocketEventNames.add(socketEvent.name);
-		console.info("[pocket-socket-event]", JSON.stringify({
-			name: socketEvent.name,
-			payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
-			socketReadyState: current.readyState
-		}));
-	}
 	if (socketEvent?.name === "updateAssets") {
 		const rows = findPocketRows(socketEvent.payload, (row) => row.length >= 15 && row[14] === true && row[9] === 1);
 		if (rows) {
@@ -1282,8 +1239,6 @@ function connect() {
 		} catch {}
 	}
 	connectionError = "";
-	pocketAuthAccepted = false;
-	pocketAuthSentAt = 0;
 	pocketServerClockOffsetSeconds = null;
 	subscribedAt.clear();
 	const next = new wrapper_default(FEED_URL, {
@@ -1305,20 +1260,6 @@ function connect() {
 		failPending(new Error(connectionError));
 	});
 	socket = next;
-	next.on("upgrade", (response) => {
-		const dateHeader = response.headers.date;
-		const dateValue = Array.isArray(dateHeader) ? dateHeader[0] : dateHeader;
-		if (!dateValue) return;
-		const serverTimeMs = Date.parse(dateValue);
-		if (!Number.isFinite(serverTimeMs)) return;
-		const offsetSeconds = estimatePocketServerClockOffsetSeconds(serverTimeMs, Date.now());
-		if (offsetSeconds === null) return;
-		pocketServerClockOffsetSeconds = offsetSeconds;
-		console.info("[pocket-feed-clock]", JSON.stringify({
-			source: "websocket-upgrade-date",
-			offsetSeconds
-		}));
-	});
 	next.on("message", (data) => handleMessage(next, textOf(data)));
 	next.on("close", (code, reason) => {
 		if (socket !== next) return;
@@ -1334,23 +1275,16 @@ function connect() {
 	});
 }
 function ensureFeed() {
-	if (pocketAuthAccepted && pairs.size > 0 && socket && socket.readyState === wrapper_default.OPEN) return Promise.resolve();
+	if (pairs.size > 0 && socket && socket.readyState === wrapper_default.OPEN) return Promise.resolve();
 	if (ready) return ready;
 	connect();
 	ready = new Promise((resolve, reject) => {
 		const started = Date.now();
 		const timer = setInterval(() => {
-			if (pocketAuthAccepted && pairs.size > 0 && socket && socket.readyState === wrapper_default.OPEN) {
+			if (pairs.size > 0 && socket && socket.readyState === wrapper_default.OPEN) {
 				clearInterval(timer);
 				ready = null;
 				resolve();
-				return;
-			}
-			if (pairs.size > 0 && socket?.readyState === wrapper_default.OPEN && pocketAuthSentAt > 0 && !pocketAuthAccepted && Date.now() - pocketAuthSentAt >= 6e3) {
-				clearInterval(timer);
-				ready = null;
-				connectionError = "Pocket Option не подтвердил авторизацию сессии. Обновите POCKET_OPTION_FEED_AUTH.";
-				reject(new Error(connectionError));
 				return;
 			}
 			if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) connect();
@@ -1473,8 +1407,8 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 	const collected = /* @__PURE__ */ new Map();
 	let rejectedRows = 0;
 	let cursor = Math.floor(Date.now() / 1e3);
-	const maxPages = pageLimit ?? Math.ceil(128 / HISTORY_PAGE_CANDLES) + 1;
-	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
+	const maxPages = pageLimit ?? Math.ceil(30 / HISTORY_PAGE_CANDLES) + 1;
+	for (let page = 0; page < maxPages && collected.size < 30; page += 1) {
 		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs, page > 0);
 		rejectedRows += history.rejectedRows;
 		const candles = history.candles;
@@ -1486,7 +1420,7 @@ async function loadCandles(symbol, seconds, pageTimeoutMs = 12e3, pageLimit) {
 		cursor = oldestTime - 1;
 	}
 	return {
-		candles: [...collected.values()].sort((a, b) => a.time - b.time).slice(-128),
+		candles: [...collected.values()].sort((a, b) => a.time - b.time).slice(-30),
 		rejectedRows
 	};
 }
@@ -1555,14 +1489,14 @@ function summarizeCandleCadence(series, expectedSeconds) {
 	};
 }
 async function feedSignal(symbol, expirySeconds) {
-	if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
+	if (expirySeconds !== 120) throw new Error("Для сигналов PRIME BOT используется экспирация 120 секунд.");
 	const pipelineStartedAt = performance.now();
 	const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 	await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
 	const pair = pairs.get(symbol);
 	if (!pair || pair.group !== "fx" || !pair.symbol.toLowerCase().includes("otc") || pair.payout < MIN_SIGNAL_PAYOUT) throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
 	subscribe(symbol);
-	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+	const analysisSeconds = 60;
 	const historyStartedAt = performance.now();
 	const inputQuoteStartedAt = historyStartedAt;
 	const [history, inputQuote] = await waitForSignalPreparation(Promise.all([loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1), waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS)]), preparationDeadlineAtMs);
@@ -1676,12 +1610,12 @@ async function feedBest(expirySeconds, excludedSymbols = []) {
 		}));
 	};
 	try {
-		if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
+		if (expirySeconds !== 120) throw new Error("Для сигналов PRIME BOT используется экспирация 120 секунд.");
 		stage = "feed";
 		const feedStartedAt = performance.now();
 		await ensureFeed();
 		feedMs = performance.now() - feedStartedAt;
-		const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
+		const analysisSeconds = 60;
 		expectedCandleSeconds = analysisSeconds;
 		const ranked = rankedSignalPairs();
 		if (ranked.length === 0) throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");

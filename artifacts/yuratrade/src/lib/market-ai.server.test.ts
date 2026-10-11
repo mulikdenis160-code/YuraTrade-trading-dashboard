@@ -145,14 +145,14 @@ test("a direct AI signal uses the AI decision without a confidence threshold or 
 
 test("Gemini receives one pair, technical context, and no abstention option or confidence threshold", () => {
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /одну OTC-валютную пару/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 128 проверенных закрытых свечей/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 30 последних закрытых минутных OHLC-свечей/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /ADX 14 и \+DI\/-DI/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /старшим таймфреймом/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /четырьмя свечами ранее/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /выбери направление вверх или вниз/);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /\bpass\b|abstain|no_signal/i);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /порог уверенности/);
-  assert.equal(DIRECT_AI_HISTORY_CANDLES, 128);
+  assert.equal(DIRECT_AI_HISTORY_CANDLES, 30);
 });
 
 test("analysis request transfers verified OHLC, indicators, quality, higher timeframe, and quote context", async () => {
