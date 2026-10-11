@@ -36,15 +36,6 @@ type PendingPair = PairChoice & {
   copyUntil: number;
 };
 
-function isCandidateQuoteUnavailable(error: unknown, symbol: string) {
-  const message = error instanceof Error ? error.message : "";
-  return (
-    message.includes(`Цена по паре ${symbol} не пришла`) ||
-    message.includes(`Не удалось получить живую котировку по паре ${symbol}`) ||
-    message.includes(`Котировка по паре ${symbol} старше`)
-  );
-}
-
 export function SignalDesk() {
   const navigate = useNavigate();
   const { id, depositAmount } = usePocket();
@@ -175,25 +166,17 @@ export function SignalDesk() {
     }
   };
 
-  const ask: (
-    previouslyUnavailableSymbols?: string[],
-    quoteRetries?: number,
-  ) => Promise<void> = async (previouslyUnavailableSymbols = [], quoteRetries = 0) => {
+  const ask = async () => {
     if (phase !== "idle" || blocked || !ready) return;
     const requestedExpiry = expirySeconds;
     const attempt = ++attemptRef.current;
-    let preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+    const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
     setPhase("choosing");
     setSearchError("");
     setNotice("");
     setPendingPair(null);
     try {
-      const excludedSymbols = [
-        ...new Set([
-          ...recentlyUsedSignalSymbols(readSignalJournal()),
-          ...previouslyUnavailableSymbols,
-        ]),
-      ];
+      const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
       const checkedSymbols = new Set<string>();
       let selected: PendingPair | null = null;
       let prepared: Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }> | null = null;
@@ -215,20 +198,13 @@ export function SignalDesk() {
 
         const signalBudgetMs = preparationDeadlineAtMs - Date.now();
         if (signalBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
-        let result: Awaited<ReturnType<typeof takeSignal>>;
-        try {
-          result = await waitForSignalRequest(
-            settleSignalRequest(takeSignal({
-              data: { symbol: candidate.symbol, expirySeconds: requestedExpiry },
-            })),
-            signalBudgetMs,
-            t("signal.analysisTimeout"),
-          );
-        } catch (cause) {
-          if (!isCandidateQuoteUnavailable(cause, candidate.symbol)) throw cause;
-          lastReason = cause instanceof Error ? `${cause.message} Пара пропущена.` : "";
-          continue;
-        }
+        const result = await waitForSignalRequest(
+          settleSignalRequest(takeSignal({
+            data: { symbol: candidate.symbol, expirySeconds: requestedExpiry },
+          })),
+          signalBudgetMs,
+          t("signal.analysisTimeout"),
+        );
         if (attemptRef.current !== attempt) return;
         if (result.decision === "pass") {
           lastReason = result.reason;
@@ -260,29 +236,7 @@ export function SignalDesk() {
       });
       if (attemptRef.current !== attempt) return;
       setPhase("analysis");
-      let entry: Awaited<ReturnType<typeof confirmSignalEntry>>;
-      try {
-        entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
-      } catch (cause) {
-        if (!isCandidateQuoteUnavailable(cause, readyPair.symbol)) throw cause;
-        const reason = cause instanceof Error
-          ? `${cause.message} Пара пропущена.`
-          : `По паре ${readyPair.symbol} нет свежей котировки. Пара пропущена.`;
-        if (quoteRetries >= 1) {
-          setPendingPair(null);
-          setNotice(reason);
-          setPhase("idle");
-          return;
-        }
-        setPendingPair(null);
-        setNotice(reason);
-        setPhase("idle");
-        await ask(
-          [...new Set([...excludedSymbols, ...checkedSymbols, readyPair.symbol])],
-          quoteRetries + 1,
-        );
-        return;
-      }
+      const entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
       if (attemptRef.current !== attempt) return;
       await openSignal(
         { ...prepared, openPrice: entry.openPrice, symbol: readyPair.symbol, group: readyPair.group, seconds: readyPair.seconds },

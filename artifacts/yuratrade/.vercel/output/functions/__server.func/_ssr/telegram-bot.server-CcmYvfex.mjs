@@ -1,8 +1,8 @@
 import { t as isAdminId } from "./pocket-admin-BdE5Pnii.mjs";
-import { A as levelForBalance } from "./router-5ewOZK5l.mjs";
+import { A as levelForBalance } from "./router-D3IH-mrb.mjs";
 import { readTelegramLocale, saveTelegramLocale, verifyLinkedPocketAccountForTelegramUser, verifyPocketAccountForTelegramUser } from "./pocket-gate.server-eoJOoUVz.mjs";
 import { createHash, timingSafeEqual } from "node:crypto";
-//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-DcoegHza.js
+//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-CcmYvfex.js
 var POCKET_OPTION_REFERRAL_URL = "https://po-ru4.click/register?utm_campaign=857649&utm_source=affiliate&utm_medium=sr&a=iRpVNOoIijYLHF&al=1788919&ac=ftd&cid=974710&code=50START";
 var ALREADY_REGISTERED_CALLBACK_DATA = "already_registered";
 var messages = {

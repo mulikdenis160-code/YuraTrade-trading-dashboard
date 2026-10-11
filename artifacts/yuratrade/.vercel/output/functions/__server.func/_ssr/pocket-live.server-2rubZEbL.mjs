@@ -1,8 +1,8 @@
-import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-D1HaauJE.mjs";
+import { c as SIGNAL_QUOTE_WAIT_MS, i as SIGNAL_ANALYSIS_TIMEOUT_MS, l as analysisPeriodForExpiry, o as SIGNAL_HISTORY_PAGE_TIMEOUT_MS, p as isValidExpirySeconds, s as SIGNAL_PREPARATION_TIMEOUT_MS, u as formatExpiry } from "./pocket-gate.middleware-yFUUqodX.mjs";
 import { a as object, i as number, n as discriminatedUnion, o as string, r as literal, t as _enum } from "../_libs/zod.mjs";
-import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-P3sWukjI.mjs";
+import { a as waitForSignalRequest, n as settleSignalRequest, r as signalReleaseAt, t as nextCandleEntryWindow } from "./signal-release-time-DX0PuQUM.mjs";
 import { n as wrapper_default, t as GoogleGenAI } from "../_libs/@google/genai.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-Cn8FQMlh.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live.server-2rubZEbL.js
 function higherTimeframeForAnalysis(candleSeconds) {
 	switch (candleSeconds) {
 		case 60: return 300;
@@ -821,12 +821,6 @@ var MIN_SIGNAL_PAYOUT = 92;
 var CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4500;
 var SIGNAL_PREPARATION_TIMEOUT_MESSAGE = "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 var runHistoryRequest = createKeyedAsyncQueue();
-var CandidateQuoteUnavailableError = class extends Error {
-	constructor(message) {
-		super(message);
-		this.name = "CandidateQuoteUnavailableError";
-	}
-};
 function waitForSignalPreparation(request, deadlineAtMs) {
 	return waitForSignalRequest(settleSignalRequest(request), Math.max(0, deadlineAtMs - Date.now()), SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
 }
@@ -975,15 +969,15 @@ function waitQuote(symbol, timeoutMs = 12e3) {
 			clearTimers();
 			const quote = quotes.get(symbol);
 			if (quote && Date.now() - quote.at <= 2e3) resolve(quote.price);
-			else reject(new CandidateQuoteUnavailableError(`Цена по паре ${symbol} не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
+			else reject(/* @__PURE__ */ new Error(`Цена по паре ${symbol} не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
 		}, timeoutMs);
 	});
 }
 function freshQuoteFromCache(symbol) {
 	const quote = quotes.get(symbol);
-	if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) throw new CandidateQuoteUnavailableError(`Не удалось получить живую котировку по паре ${symbol}.`);
+	if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) throw new Error(`Не удалось получить живую котировку по паре ${symbol}.`);
 	const ageMs = Date.now() - quote.at;
-	if (ageMs < 0 || ageMs > 2e4) throw new CandidateQuoteUnavailableError(`Котировка по паре ${symbol} старше 20 секунд.`);
+	if (ageMs < 0 || ageMs > 2e4) throw new Error(`Котировка по паре ${symbol} старше 20 секунд. Сигнал не выдан.`);
 	return {
 		price: quote.price,
 		ageMs
@@ -1305,28 +1299,7 @@ async function feedSignal(symbol, expirySeconds) {
 	const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
 	const historyStartedAt = performance.now();
 	const inputQuoteStartedAt = historyStartedAt;
-	const quoteRequest = waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS).then((quote) => ({
-		available: true,
-		quote
-	}), (error) => {
-		if (error instanceof CandidateQuoteUnavailableError) return {
-			available: false,
-			error
-		};
-		throw error;
-	});
-	const [history, quoteResult] = await waitForSignalPreparation(Promise.all([loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1), quoteRequest]), preparationDeadlineAtMs);
-	if (!quoteResult.available) {
-		console.info("[signal-candidate-skip]", JSON.stringify({
-			symbol,
-			reason: "quote-unavailable"
-		}));
-		return {
-			decision: "pass",
-			reason: `${quoteResult.error.message} Пара пропущена.`
-		};
-	}
-	const inputQuote = quoteResult.quote;
+	const [history, inputQuote] = await waitForSignalPreparation(Promise.all([loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1), waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS)]), preparationDeadlineAtMs);
 	const historyMs = Math.round(performance.now() - historyStartedAt);
 	const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
 	const candles = history.candles;

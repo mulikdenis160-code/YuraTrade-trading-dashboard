@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-DfoF6sW9.js
+//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-CLNnD-14.js
 var tsrStartManifest = () => ({ routes: {
 	__root__: {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/__root.tsx",
@@ -12,7 +12,7 @@ var tsrStartManifest = () => ({ routes: {
 			"/telegram/webhook"
 		],
 		preloads: [
-			"/assets/index-Dw7s3Bhu.js",
+			"/assets/index-Do9aU3kD.js",
 			"/assets/language-B8B_CP4f.js",
 			"/assets/pocket-live-DAxn8Sxc.js",
 			"/assets/telegram-webapp-Buc5pZOE.js",
@@ -22,14 +22,14 @@ var tsrStartManifest = () => ({ routes: {
 		scripts: [{ attrs: {
 			type: "module",
 			async: !0,
-			src: "/assets/index-Dw7s3Bhu.js"
+			src: "/assets/index-Do9aU3kD.js"
 		} }]
 	},
 	"/": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/index.tsx",
 		children: void 0,
 		preloads: [
-			"/assets/routes-Dq1wAZ4O.js",
+			"/assets/routes-9UETOyOU.js",
 			"/assets/stats-DcUenEXq.js",
 			"/assets/signal-release-time-CRACnf3h.js"
 		]
@@ -37,7 +37,7 @@ var tsrStartManifest = () => ({ routes: {
 	"/history": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/history.tsx",
 		children: void 0,
-		preloads: ["/assets/history-CGQ2LhnQ.js", "/assets/stats-DcUenEXq.js"]
+		preloads: ["/assets/history-Co7XYuTA.js", "/assets/stats-DcUenEXq.js"]
 	},
 	"/learn": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/learn.tsx",
@@ -47,12 +47,12 @@ var tsrStartManifest = () => ({ routes: {
 	"/profile": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/profile.tsx",
 		children: void 0,
-		preloads: ["/assets/profile-CrsLDZhc.js"]
+		preloads: ["/assets/profile-Ncy7drVG.js"]
 	},
 	"/signal": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/signal.tsx",
 		children: void 0,
-		preloads: ["/assets/signal-DST9N7ws.js", "/assets/signal-release-time-CRACnf3h.js"]
+		preloads: ["/assets/signal-DLe9rs6N.js", "/assets/signal-release-time-CRACnf3h.js"]
 	}
 } });
 //#endregion
