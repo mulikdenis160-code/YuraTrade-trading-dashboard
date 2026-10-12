@@ -1,4 +1,5 @@
 import {
+  MAX_SIGNAL_COUNTDOWN_MS,
   MIN_ENTRY_BUFFER_MS,
   SIGNAL_CANDLE_SECONDS,
   SIGNAL_COPY_DELAY_MS,
@@ -36,5 +37,7 @@ export function signalReleaseAt(
 }
 
 export function visibleSignalReleaseAt(releaseAtMs: number, nowMs: number): number {
-  return Math.max(releaseAtMs, nowMs + SIGNAL_COPY_DELAY_MS);
+  const minimumReleaseAt = nowMs + SIGNAL_COPY_DELAY_MS;
+  const maximumReleaseAt = nowMs + MAX_SIGNAL_COUNTDOWN_MS;
+  return Math.min(Math.max(releaseAtMs, minimumReleaseAt), maximumReleaseAt);
 }

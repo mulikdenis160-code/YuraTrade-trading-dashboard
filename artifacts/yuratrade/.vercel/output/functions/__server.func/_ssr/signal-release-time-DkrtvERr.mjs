@@ -1,5 +1,5 @@
-import { a as SIGNAL_COPY_DELAY_MS, c as SIGNAL_QUOTE_WAIT_MS, r as MIN_ENTRY_BUFFER_MS } from "./pocket-gate.middleware-DqGlDVU6.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-release-time-DXaFUgGS.js
+import { i as MIN_ENTRY_BUFFER_MS, l as SIGNAL_QUOTE_WAIT_MS, o as SIGNAL_COPY_DELAY_MS, r as MAX_SIGNAL_COUNTDOWN_MS } from "./pocket-gate.middleware-BndXO9TO.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-release-time-DkrtvERr.js
 function nextCandleEntryWindow(candles, nowMs) {
 	const candleMs = 6e4;
 	const lastClosed = candles.reduce((latest, candle) => {
@@ -51,7 +51,9 @@ function signalReleaseAt(candles, nowMs) {
 	return countdownStartsAt + SIGNAL_COPY_DELAY_MS;
 }
 function visibleSignalReleaseAt(releaseAtMs, nowMs) {
-	return Math.max(releaseAtMs, nowMs + SIGNAL_COPY_DELAY_MS);
+	const minimumReleaseAt = nowMs + SIGNAL_COPY_DELAY_MS;
+	const maximumReleaseAt = nowMs + MAX_SIGNAL_COUNTDOWN_MS;
+	return Math.min(Math.max(releaseAtMs, minimumReleaseAt), maximumReleaseAt);
 }
 //#endregion
 export { waitForSignalRequest as a, visibleSignalReleaseAt as i, settleSignalRequest as n, signalReleaseAt as r, nextCandleEntryWindow as t };

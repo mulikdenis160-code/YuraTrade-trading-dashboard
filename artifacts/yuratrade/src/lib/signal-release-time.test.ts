@@ -41,6 +41,10 @@ test("signal countdown remains visible for the full copy delay after preparation
   );
   assert.equal(
     visibleSignalReleaseAt(nowMs + 60_000, nowMs),
-    nowMs + 60_000,
+    nowMs + 25_000,
+  );
+  assert.equal(
+    visibleSignalReleaseAt(nowMs + 70_000, nowMs),
+    nowMs + 25_000,
   );
 });
