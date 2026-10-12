@@ -422,7 +422,7 @@ export function buildMarketAnalysisContext(
       missingIntervals: countMissingIntervals(candles, candleSeconds),
       latestClosedCandleTime: latest?.time ?? null,
       latestClosedAgeSeconds,
-      isFresh: latestClosedAgeSeconds !== null && latestClosedAgeSeconds <= candleSeconds * 3,
+      isFresh: latestClosedAgeSeconds !== null && latestClosedAgeSeconds <= candleSeconds + 5,
     },
     technicalIndicators: technicalIndicators(candles),
     higherTimeframe: higherSeconds
