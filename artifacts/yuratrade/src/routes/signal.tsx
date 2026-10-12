@@ -22,6 +22,8 @@ import {
 import {
   MAX_OVERLAYS,
   DEFAULT_SIGNAL_EXPIRY_SECONDS,
+  RECOVERY_HISTORY_RETRY_MS,
+  RECOVERY_HISTORY_WAIT_MS,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
@@ -440,38 +442,53 @@ function SignalCard({ search }: { search: Search }) {
   useEffect(() => {
     if (phase !== "preparing-recovery") return;
     let stop = false;
-    void waitForSignalRequest(
-      settleSignalRequest(takeSignal({
-        data: { symbol: search.symbol, expirySeconds: search.seconds },
-      })),
-      SIGNAL_PREPARATION_TIMEOUT_MS,
-      t("signal.analysisTimeout"),
-    )
-      .then((result) => {
-        if (result.decision === "pass") {
-          if (stop) return;
-          setPhase("no-signal");
-          setError(result.reason);
-          if (search.batchRunId) {
-            pauseSignalBatch(search.batchRunId, "Не удалось подтвердить сигнал для следующей попытки.");
-          }
-          return;
-        }
+    void (async () => {
+      const deadline = Date.now() + RECOVERY_HISTORY_WAIT_MS;
+      let result: Awaited<ReturnType<typeof takeSignal>> | undefined;
+      while (!stop && Date.now() < deadline) {
+        const remainingMs = deadline - Date.now();
+        result = await waitForSignalRequest(
+          settleSignalRequest(takeSignal({
+            data: { symbol: search.symbol, expirySeconds: search.seconds },
+          })),
+          Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, remainingMs),
+          t("signal.analysisTimeout"),
+        );
         if (stop) return;
-        setPreparedRecovery(result);
-        const visibleReleaseAt = visibleSignalReleaseAt(result.releaseAtMs, Date.now());
-        setCopyUntil(visibleReleaseAt);
-        setCopyRemaining(Math.max(0, Math.ceil((visibleReleaseAt - Date.now()) / 1000)));
-        setPhase("copy");
-      })
-      .catch((cause: unknown) => {
-        if (stop) return;
+        const historyIsStale =
+          result.decision === "pass" &&
+          result.reason.includes("Последняя закрытая свеча слишком старая");
+        if (!historyIsStale) break;
+        const retryDelay = Math.min(RECOVERY_HISTORY_RETRY_MS, deadline - Date.now());
+        if (retryDelay <= 0) break;
+        await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
+      }
+      if (stop || !result) return;
+      if (result.decision === "pass") {
         setPhase("no-signal");
-        setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
+        setError(
+          result.reason.includes("Последняя закрытая свеча слишком старая")
+            ? "Pocket Option не обновил свечи за 90 секунд. Перекрытие не выдано по устаревшим данным."
+            : result.reason,
+        );
         if (search.batchRunId) {
-          pauseSignalBatch(search.batchRunId, "Не удалось подготовить подтверждённое перекрытие.");
+          pauseSignalBatch(search.batchRunId, "Не удалось подтвердить сигнал для следующей попытки.");
         }
-      });
+        return;
+      }
+      setPreparedRecovery(result);
+      const visibleReleaseAt = visibleSignalReleaseAt(result.releaseAtMs, Date.now());
+      setCopyUntil(visibleReleaseAt);
+      setCopyRemaining(Math.max(0, Math.ceil((visibleReleaseAt - Date.now()) / 1000)));
+      setPhase("copy");
+    })().catch((cause: unknown) => {
+      if (stop) return;
+      setPhase("no-signal");
+      setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
+      if (search.batchRunId) {
+        pauseSignalBatch(search.batchRunId, "Не удалось подготовить подтверждённое перекрытие.");
+      }
+    });
     return () => {
       stop = true;
     };

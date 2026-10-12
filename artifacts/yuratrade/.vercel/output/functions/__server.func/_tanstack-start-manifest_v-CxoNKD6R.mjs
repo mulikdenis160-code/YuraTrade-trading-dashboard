@@ -1,4 +1,4 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-BPuR9Xdm.js
+//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-CxoNKD6R.js
 var tsrStartManifest = () => ({ routes: {
 	__root__: {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/__root.tsx",
@@ -12,32 +12,32 @@ var tsrStartManifest = () => ({ routes: {
 			"/telegram/webhook"
 		],
 		preloads: [
-			"/assets/index-DyqG-Uvz.js",
+			"/assets/index-BqKd0Yn0.js",
 			"/assets/language-zXGV6sTv.js",
-			"/assets/pocket-live-OjJAOh1q.js",
+			"/assets/pocket-live-D9IPNlBY.js",
 			"/assets/telegram-webapp-Buc5pZOE.js",
-			"/assets/signal-journal-saD4R6gZ.js",
+			"/assets/signal-journal-SSguHazT.js",
 			"/assets/createLucideIcon-CsD3cWbo.js"
 		],
 		scripts: [{ attrs: {
 			type: "module",
 			async: !0,
-			src: "/assets/index-DyqG-Uvz.js"
+			src: "/assets/index-BqKd0Yn0.js"
 		} }]
 	},
 	"/": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/index.tsx",
 		children: void 0,
 		preloads: [
-			"/assets/routes-CibZpF1c.js",
-			"/assets/stats-CZ8o9sB2.js",
-			"/assets/signal-release-time-Bf64tBZX.js"
+			"/assets/routes-BonNiXsx.js",
+			"/assets/stats-CatyKYZM.js",
+			"/assets/signal-release-time-CSMl188I.js"
 		]
 	},
 	"/history": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/history.tsx",
 		children: void 0,
-		preloads: ["/assets/history-BK0bVMV_.js", "/assets/stats-CZ8o9sB2.js"]
+		preloads: ["/assets/history-CGKqWX0U.js", "/assets/stats-CatyKYZM.js"]
 	},
 	"/learn": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/learn.tsx",
@@ -47,12 +47,12 @@ var tsrStartManifest = () => ({ routes: {
 	"/profile": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/profile.tsx",
 		children: void 0,
-		preloads: ["/assets/profile-CdsDUcs6.js"]
+		preloads: ["/assets/profile-DnMvmLND.js"]
 	},
 	"/signal": {
 		filePath: "/home/runner/workspace/artifacts/yuratrade/src/routes/signal.tsx",
 		children: void 0,
-		preloads: ["/assets/signal-yQ7GGkQ4.js", "/assets/signal-release-time-Bf64tBZX.js"]
+		preloads: ["/assets/signal-dFy2QPaF.js", "/assets/signal-release-time-CSMl188I.js"]
 	}
 } });
 //#endregion

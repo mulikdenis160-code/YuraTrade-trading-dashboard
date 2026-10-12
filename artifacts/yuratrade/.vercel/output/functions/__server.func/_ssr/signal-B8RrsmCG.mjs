@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { c as SIGNAL_PREPARATION_TIMEOUT_MS, f as getTelegramInitData } from "./pocket-gate.middleware-BndXO9TO.mjs";
-import { C as confirmSignalEntry, E as takeSignal, O as formatExpiryForLanguage, T as readClose, _ as pauseSignalBatch, a as markSignalUnverified, f as signalRecordId, g as completeSignalBatchAttempt, k as useLanguage, l as recordSignalOutcome, n as Route$2, o as readSignalJournal, r as classifySignalAttempt, u as recordSignalStarted } from "./router-CQRe_zA3.mjs";
-import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-DmZPP6vk.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-CLwxAmPy.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-N869LRPK.js
+import { a as RECOVERY_HISTORY_RETRY_MS, m as getTelegramInitData, o as RECOVERY_HISTORY_WAIT_MS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
+import { C as confirmSignalEntry, E as takeSignal, O as formatExpiryForLanguage, T as readClose, _ as pauseSignalBatch, a as markSignalUnverified, f as signalRecordId, g as completeSignalBatchAttempt, k as useLanguage, l as recordSignalOutcome, n as Route$2, o as readSignalJournal, r as classifySignalAttempt, u as recordSignalStarted } from "./router-Tl8GheUd.mjs";
+import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-BGTHns6S.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BTotOMiN.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-B8RrsmCG.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -558,24 +558,34 @@ function SignalCard({ search }) {
 	(0, import_react.useEffect)(() => {
 		if (phase !== "preparing-recovery") return;
 		let stop = false;
-		waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
-			symbol: search.symbol,
-			expirySeconds: search.seconds
-		} })), SIGNAL_PREPARATION_TIMEOUT_MS, t("signal.analysisTimeout")).then((result) => {
-			if (result.decision === "pass") {
+		(async () => {
+			const deadline = Date.now() + RECOVERY_HISTORY_WAIT_MS;
+			let result;
+			while (!stop && Date.now() < deadline) {
+				const remainingMs = deadline - Date.now();
+				result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
+					symbol: search.symbol,
+					expirySeconds: search.seconds
+				} })), Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, remainingMs), t("signal.analysisTimeout"));
 				if (stop) return;
+				if (!(result.decision === "pass" && result.reason.includes("Последняя закрытая свеча слишком старая"))) break;
+				const retryDelay = Math.min(RECOVERY_HISTORY_RETRY_MS, deadline - Date.now());
+				if (retryDelay <= 0) break;
+				await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
+			}
+			if (stop || !result) return;
+			if (result.decision === "pass") {
 				setPhase("no-signal");
-				setError(result.reason);
+				setError(result.reason.includes("Последняя закрытая свеча слишком старая") ? "Pocket Option не обновил свечи за 90 секунд. Перекрытие не выдано по устаревшим данным." : result.reason);
 				if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось подтвердить сигнал для следующей попытки.");
 				return;
 			}
-			if (stop) return;
 			setPreparedRecovery(result);
 			const visibleReleaseAt = visibleSignalReleaseAt(result.releaseAtMs, Date.now());
 			setCopyUntil(visibleReleaseAt);
 			setCopyRemaining(Math.max(0, Math.ceil((visibleReleaseAt - Date.now()) / 1e3)));
 			setPhase("copy");
-		}).catch((cause) => {
+		})().catch((cause) => {
 			if (stop) return;
 			setPhase("no-signal");
 			setError(cause instanceof Error ? cause.message : "Не удалось подготовить перекрытие.");
