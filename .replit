@@ -25,4 +25,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-POCKET_OPTION_FEED_DISABLED = "true"
+POCKET_OPTION_FEED_DISABLED = "false"
