@@ -125,6 +125,7 @@ const pairMarketData = new Map<string, PairMarketData>();
 let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
+let isAuthorized = false;
 let connectionError = "";
 let retryAfter = 0;
 let expectAssets = false;
@@ -454,7 +455,7 @@ function freshQuoteFromCache(symbol: string) {
   }
   const ageMs = Date.now() - quote.at;
   if (ageMs < 0 || ageMs > MAX_QUOTE_AGE_MS) {
-    throw new Error(`Котировка по паре ${symbol} старше 20 секунд. Сигнал не выдан.`);
+    throw new Error(`Текущий тик по паре ${symbol} старше 2 секунд. Сигнал не выдан.`);
   }
   return {
     price: quote.price,
@@ -568,6 +569,7 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   if (message.includes("NotAuthorized")) {
+    isAuthorized = false;
     connectionError = AUTH_REJECTED_MESSAGE;
     console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
     failPending(new Error(connectionError));
@@ -579,6 +581,15 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   const socketEvent = parsePocketSocketIoEvent(message);
+  if (socketEvent?.name === "successauth" || message.includes("successauth")) {
+    isAuthorized = true;
+    connectionError = "";
+    console.info("[pocket-feed-authenticated]", JSON.stringify({
+      socketReadyState: current.readyState,
+      activePairs: pairs.size,
+    }));
+    return;
+  }
   if (socketEvent?.name === "updateAssets") {
     const rows = findPocketRows(
       socketEvent.payload,
@@ -673,9 +684,20 @@ function handleMessage(current: WebSocket, message: string) {
             pairMarketData.set(parsed.asset, state);
           console.info("[pocket-history-response]", JSON.stringify({
             symbol: parsed.asset,
+            periodSeconds: request.periodSeconds,
             receivedRows: parsed.data.length,
             validCandles: history.candles.length,
             rejectedRows: history.rejectedRows,
+            latestClosedAgeSeconds: history.candles
+              .filter((candle) => candle.time + request.periodSeconds <= Date.now() / 1000)
+              .at(-1)
+              ? Math.round(Date.now() / 1000 - (
+                  history.candles
+                    .filter((candle) => candle.time + request.periodSeconds <= Date.now() / 1000)
+                    .at(-1)!.time + request.periodSeconds
+                ))
+              : null,
+            candleTimestampBasis: "open",
           }));
           request.resolve(history);
           return;
@@ -728,6 +750,7 @@ function connect() {
     }
   }
   connectionError = "";
+  isAuthorized = false;
   pocketServerClockOffsetSeconds = null;
   subscribedAt.clear();
   console.info("[pocket-feed-region-selected]", JSON.stringify({
@@ -749,6 +772,7 @@ function connect() {
       socketReadyState: next.readyState,
     }));
     socket = null;
+    isAuthorized = false;
     retryAfter = Date.now() + 2000;
     connectionError = "Не удалось подключиться к потоку Pocket Option. Повторяем подключение.";
     failPending(new Error(connectionError));
@@ -766,6 +790,7 @@ function connect() {
       closeReasonLength: reason.length,
     }));
     socket = null;
+    isAuthorized = false;
     retryAfter = Date.now() + 2000;
     if (!connectionError) connectionError = "Соединение с Pocket Option прервано. Повторяем подключение.";
     failPending(new Error(connectionError));
@@ -773,13 +798,15 @@ function connect() {
 }
 
 function ensureFeed() {
-  if (pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) return Promise.resolve();
+  if (isAuthorized && pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
+    return Promise.resolve();
+  }
   if (ready) return ready;
   connect();
   ready = new Promise<void>((resolve, reject) => {
     const started = Date.now();
     const timer = setInterval(() => {
-      if (pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
+      if (isAuthorized && pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
         clearInterval(timer);
         ready = null;
         resolve();
@@ -1054,49 +1081,6 @@ async function freshSignalHistory(symbol: string, seconds: number) {
     throw new Error("После обновления история свечей остаётся устаревшей. Сигнал не выдан.");
   }
   return { ...refreshed, candles };
-}
-
-async function waitForSafeEntryHistory(
-  symbol: string,
-  initial: Awaited<ReturnType<typeof loadCandles>>,
-) {
-  if (!entryWindowFailure(initial.candles)) return { history: initial } as const;
-
-  const window = nextCandleEntryWindow(initial.candles, Date.now());
-  if (
-    !window ||
-    window.remainingMs <= 0 ||
-    window.remainingMs >= MIN_ENTRY_BUFFER_MS
-  ) {
-    return {
-      failure: {
-        decision: "pass",
-        reason: "Не удалось подтвердить безопасное минутное окно. Свежая свеча не подтверждена, сигнал не выдан.",
-      } satisfies PassResult,
-    } as const;
-  }
-
-  await new Promise((resolve) =>
-    setTimeout(resolve, Math.max(0, window.remainingMs) + 250),
-  );
-  const deadline = Date.now() + 8_000;
-  while (Date.now() < deadline) {
-    const history = await loadCandles(
-      symbol,
-      SIGNAL_CANDLE_SECONDS,
-      Math.min(2_000, Math.max(500, deadline - Date.now())),
-      1,
-    );
-    if (!entryWindowFailure(history.candles)) return { history } as const;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  return {
-    failure: {
-      decision: "pass",
-      reason: "Новая минутная свеча ещё не поступила от Pocket Option. Сигнал не выдан.",
-    } satisfies PassResult,
-  } as const;
 }
 
 export function followQuote(symbol: string) {

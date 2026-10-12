@@ -1,3 +1,4 @@
+/** `time` is the candle's Unix opening time; its close is `time + periodSeconds`. */
 export type HistoricalCandle = {
   time: number;
   open: number;
