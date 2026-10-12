@@ -1,15 +1,55 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { a as RECOVERY_HISTORY_RETRY_MS, f as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, o as RECOVERY_HISTORY_WAIT_MS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
+import { f as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-Cu79IwpA.mjs";
 import { t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-Wy8v7YAW.mjs";
-import { t as StatRow } from "./stats-n0-7B2v_.mjs";
-import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-BGTHns6S.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BG8_-GZp.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-M-s0wBxp.js
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-CneoqEyh.mjs";
+import { t as StatRow } from "./stats-ZggnQHgU.mjs";
+import { a as signalEntryIsLive, c as waitForSignalRequest, r as settleSignalRequest, s as visibleSignalReleaseAt } from "./signal-release-time-BcVuf_gw.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-CvOdI3ga.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DbV_z76v.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
+/** Keep pair fallback within one budget; a provider failure stops the search. */
+async function searchSignalPairs(options) {
+	const now = options.now ?? Date.now;
+	const checked = /* @__PURE__ */ new Set();
+	let last = {
+		decision: "pass",
+		reason: "Сигнал не найден."
+	};
+	function budget() {
+		if (options.cancelled?.()) throw new DOMException("Signal search cancelled", "AbortError");
+		const remaining = options.deadlineAtMs - now();
+		if (remaining <= 0) throw new Error(options.timeoutMessage);
+		return remaining;
+	}
+	for (let index = 0; index < options.maxPairs; index += 1) {
+		const chooseBudget = budget();
+		const pair = await waitForSignalRequest(settleSignalRequest(options.choose([...options.excluded, ...checked])), chooseBudget, options.timeoutMessage);
+		budget();
+		if (checked.has(pair.symbol)) break;
+		checked.add(pair.symbol);
+		let result;
+		try {
+			const prepareBudget = budget();
+			result = await waitForSignalRequest(settleSignalRequest(options.prepare(pair)), prepareBudget, options.timeoutMessage);
+		} catch (error) {
+			budget();
+			throw error;
+		}
+		budget();
+		if (result.decision === "signal") return {
+			decision: "signal",
+			pair,
+			prepared: result
+		};
+		last = result;
+		if (result.retryAcrossPairs === false) return result;
+		options.onSkip?.(pair.symbol, result.reason);
+	}
+	return last;
+}
 function SignalDesk() {
 	const navigate = useNavigate();
 	const { id, depositAmount } = usePocket();
@@ -26,6 +66,16 @@ function SignalDesk() {
 	const [copyRemaining, setCopyRemaining] = (0, import_react.useState)(10);
 	const [copiedPair, setCopiedPair] = (0, import_react.useState)(false);
 	const [used, setUsed] = (0, import_react.useState)(0);
+	const [retryUntil, setRetryUntil] = (0, import_react.useState)(0);
+	const [retryRemaining, setRetryRemaining] = (0, import_react.useState)(0);
+	const retryLabel = retryRemaining >= 60 ? t("signal.retryCooldownTimer", { time: `${Math.floor(retryRemaining / 60)}:${String(retryRemaining % 60).padStart(2, "0")}` }) : t("signal.retryCooldownSeconds", { seconds: retryRemaining });
+	(0, import_react.useEffect)(() => {
+		const update = () => setRetryRemaining(Math.max(0, Math.ceil((retryUntil - Date.now()) / 1e3)));
+		update();
+		if (retryUntil <= Date.now()) return;
+		const timer = window.setInterval(update, 500);
+		return () => window.clearInterval(timer);
+	}, [retryUntil]);
 	const attemptRef = (0, import_react.useRef)(0);
 	(0, import_react.useEffect)(() => () => {
 		attemptRef.current += 1;
@@ -115,75 +165,49 @@ function SignalDesk() {
 		}
 	};
 	const ask = async () => {
-		if (phase !== "idle" || blocked || !ready) return;
+		if (phase !== "idle" || blocked || !ready || Date.now() < retryUntil) return;
 		const requestedExpiry = expirySeconds;
 		const attempt = ++attemptRef.current;
-		let preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
-		let staleHistoryDeadlineAtMs = null;
-		let extendedForStaleHistory = false;
+		const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 		setPhase("choosing");
 		setSearchError("");
 		setNotice("");
 		setPendingPair(null);
 		try {
-			const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
-			const checkedSymbols = /* @__PURE__ */ new Set();
-			let selected = null;
-			let prepared = null;
-			let lastReason = "";
-			for (let index = 0; index < 20; index += 1) {
-				const candidateBudgetMs = preparationDeadlineAtMs - Date.now();
-				if (candidateBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
-				const candidate = await waitForSignalRequest(settleSignalRequest(chooseSignalPair({ data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] } })), candidateBudgetMs, t("signal.analysisTimeout"));
-				if (attemptRef.current !== attempt) return;
-				if (checkedSymbols.has(candidate.symbol)) break;
-				checkedSymbols.add(candidate.symbol);
-				let result;
-				while (true) {
-					const signalBudgetMs = preparationDeadlineAtMs - Date.now();
-					if (signalBudgetMs <= 0) throw new Error(lastReason || t("signal.analysisTimeout"));
-					result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
-						symbol: candidate.symbol,
-						expirySeconds: requestedExpiry
-					} })), Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, signalBudgetMs), t("signal.analysisTimeout"));
-					if (attemptRef.current !== attempt) return;
-					if (result.decision !== "pass") break;
-					if (!result.reason.includes("Последняя закрытая свеча слишком старая")) break;
-					lastReason = result.reason;
-					if (staleHistoryDeadlineAtMs === null) {
-						staleHistoryDeadlineAtMs = Date.now() + RECOVERY_HISTORY_WAIT_MS;
-						if (!extendedForStaleHistory) {
-							preparationDeadlineAtMs += RECOVERY_HISTORY_WAIT_MS;
-							extendedForStaleHistory = true;
-						}
-					}
-					const retryDelay = Math.min(RECOVERY_HISTORY_RETRY_MS, staleHistoryDeadlineAtMs - Date.now());
-					if (retryDelay <= 0) {
-						staleHistoryDeadlineAtMs = null;
-						break;
-					}
-					await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
-					if (attemptRef.current !== attempt) return;
-				}
-				if (result.decision === "pass") {
-					lastReason = result.reason;
-					continue;
-				}
-				prepared = result;
-				selected = {
-					...candidate,
-					attempt,
-					seconds: requestedExpiry,
-					copyUntil: visibleSignalReleaseAt(result.releaseAtMs, Date.now())
-				};
-				break;
-			}
-			if (!selected || !prepared) {
-				setNotice(lastReason || t("signal.none"));
+			const result = await searchSignalPairs({
+				choose: (excludedSymbols) => chooseSignalPair({ data: { excludedSymbols } }),
+				prepare: (candidate) => takeSignal({ data: {
+					symbol: candidate.symbol,
+					expirySeconds: requestedExpiry
+				} }),
+				excluded: recentlyUsedSignalSymbols(readSignalJournal()),
+				maxPairs: 8,
+				deadlineAtMs: preparationDeadlineAtMs,
+				timeoutMessage: t("signal.analysisTimeout"),
+				cancelled: () => attemptRef.current !== attempt,
+				onSkip: (symbol, reason) => console.warn("[signal-pair-skipped]", JSON.stringify({
+					symbol,
+					reason
+				}))
+			});
+			if (attemptRef.current !== attempt) return;
+			if (result.decision === "pass") {
+				if (result.retryAcrossPairs === false) {
+					setSearchError(result.reason);
+					const retryAfterMs = result.retryAfterMs ?? 0;
+					setRetryUntil(Date.now() + retryAfterMs);
+					setRetryRemaining(Math.max(0, Math.ceil(retryAfterMs / 1e3)));
+				} else setNotice(result.reason);
 				setPhase("idle");
 				return;
 			}
-			const readyPair = selected;
+			const prepared = result.prepared;
+			const readyPair = {
+				...result.pair,
+				attempt,
+				seconds: requestedExpiry,
+				copyUntil: visibleSignalReleaseAt(prepared.releaseAtMs, Date.now())
+			};
 			setPendingPair(readyPair);
 			setCopyRemaining(Math.max(0, Math.ceil((readyPair.copyUntil - Date.now()) / 1e3)));
 			setCopiedPair(false);
@@ -192,9 +216,14 @@ function SignalDesk() {
 				window.setTimeout(resolve, Math.max(0, readyPair.copyUntil - Date.now()));
 			});
 			if (attemptRef.current !== attempt) return;
+			if (!signalEntryIsLive(prepared.expiresAtMs)) throw new Error(t("signal.entryExpired"));
 			setPhase("analysis");
-			const entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
+			const entry = await waitForSignalRequest(settleSignalRequest(confirmSignalEntry({ data: {
+				symbol: readyPair.symbol,
+				expiresAtMs: prepared.expiresAtMs
+			} })), Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, prepared.expiresAtMs - Date.now()), t("signal.entryExpired"));
 			if (attemptRef.current !== attempt) return;
+			if (!signalEntryIsLive(entry.validUntilMs)) throw new Error(t("signal.entryExpired"));
 			await openSignal({
 				...prepared,
 				openPrice: entry.openPrice,
@@ -268,9 +297,9 @@ function SignalDesk() {
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
 						className: "btn-prime mt-4 min-h-12 w-full",
-						disabled: !ready || phase !== "idle" || Boolean(blocked),
+						disabled: !ready || phase !== "idle" || Boolean(blocked) || retryRemaining > 0,
 						onClick: () => void ask(),
-						children: phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")
+						children: retryRemaining > 0 ? retryLabel : phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: `mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`,
@@ -295,9 +324,9 @@ function SignalDesk() {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: "btn-ghost mt-3 min-h-10 w-full justify-center",
-								disabled: !ready || phase !== "idle" || Boolean(blocked),
+								disabled: !ready || phase !== "idle" || Boolean(blocked) || retryRemaining > 0,
 								onClick: () => void ask(),
-								children: t("signal.tryAgain")
+								children: retryRemaining > 0 ? retryLabel : t("signal.tryAgain")
 							})
 						]
 					}) : null,
@@ -346,9 +375,9 @@ function SignalDesk() {
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: "btn-ghost min-h-11 w-full justify-center",
-								disabled: !ready || phase !== "idle" || Boolean(blocked),
+								disabled: !ready || phase !== "idle" || Boolean(blocked) || retryRemaining > 0,
 								onClick: () => void ask(),
-								children: t("signal.tryAgain")
+								children: retryRemaining > 0 ? t("batch.retry", { seconds: retryRemaining }) : t("signal.tryAgain")
 							})]
 						})]
 					}) : null

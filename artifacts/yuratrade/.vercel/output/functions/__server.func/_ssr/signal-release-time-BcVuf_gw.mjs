@@ -1,5 +1,5 @@
-import { c as SIGNAL_COPY_DELAY_MS, d as SIGNAL_QUOTE_WAIT_MS, i as MIN_ENTRY_BUFFER_MS, r as MAX_SIGNAL_COUNTDOWN_MS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-release-time-BGTHns6S.js
+import { a as MIN_ENTRY_BUFFER_MS, c as SIGNAL_COPY_DELAY_MS, d as SIGNAL_QUOTE_WAIT_MS, i as MAX_SIGNAL_COUNTDOWN_MS, r as MAX_QUOTE_AGE_MS } from "./pocket-gate.middleware-Cu79IwpA.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-release-time-BcVuf_gw.js
 function nextCandleEntryWindow(candles, nowMs) {
 	const candleMs = 6e4;
 	if (!candles.reduce((latest, candle) => {
@@ -54,5 +54,15 @@ function visibleSignalReleaseAt(releaseAtMs, nowMs) {
 	const maximumReleaseAt = nowMs + MAX_SIGNAL_COUNTDOWN_MS;
 	return Math.min(Math.max(releaseAtMs, minimumReleaseAt), maximumReleaseAt);
 }
+function signalEntryExpiresAt(releaseAtMs) {
+	const minuteMs = 6e4;
+	return Math.floor(releaseAtMs / minuteMs) * minuteMs + minuteMs - MIN_ENTRY_BUFFER_MS;
+}
+function entryConfirmationExpiresAt(quoteAtMs, confirmedAtMs, signalExpiresAtMs) {
+	return Math.min(quoteAtMs + MAX_QUOTE_AGE_MS, signalEntryExpiresAt(confirmedAtMs), signalExpiresAtMs);
+}
+function signalEntryIsLive(expiresAtMs, nowMs = Date.now()) {
+	return Number.isFinite(expiresAtMs) && Number.isFinite(nowMs) && nowMs < expiresAtMs;
+}
 //#endregion
-export { waitForSignalRequest as a, visibleSignalReleaseAt as i, settleSignalRequest as n, signalReleaseAt as r, nextCandleEntryWindow as t };
+export { signalEntryIsLive as a, waitForSignalRequest as c, signalEntryExpiresAt as i, nextCandleEntryWindow as n, signalReleaseAt as o, settleSignalRequest as r, visibleSignalReleaseAt as s, entryConfirmationExpiresAt as t };

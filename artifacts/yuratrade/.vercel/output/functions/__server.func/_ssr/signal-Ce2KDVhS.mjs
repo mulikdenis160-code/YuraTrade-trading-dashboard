@@ -1,10 +1,10 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { a as RECOVERY_HISTORY_RETRY_MS, m as getTelegramInitData, o as RECOVERY_HISTORY_WAIT_MS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
-import { C as confirmSignalEntry, E as takeSignal, O as formatExpiryForLanguage, T as readClose, _ as pauseSignalBatch, a as markSignalUnverified, f as signalRecordId, g as completeSignalBatchAttempt, k as useLanguage, l as recordSignalOutcome, n as Route$2, o as readSignalJournal, r as classifySignalAttempt, u as recordSignalStarted } from "./router-Wy8v7YAW.mjs";
-import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-BGTHns6S.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BG8_-GZp.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-HbJy88OD.js
+import { m as getTelegramInitData, o as RECOVERY_HISTORY_RETRY_MS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-Cu79IwpA.mjs";
+import { C as confirmSignalEntry, E as takeSignal, O as formatExpiryForLanguage, T as readClose, _ as pauseSignalBatch, a as markSignalUnverified, f as signalRecordId, g as completeSignalBatchAttempt, k as useLanguage, l as recordSignalOutcome, n as Route$2, o as readSignalJournal, r as classifySignalAttempt, u as recordSignalStarted } from "./router-CneoqEyh.mjs";
+import { c as waitForSignalRequest, r as settleSignalRequest, s as visibleSignalReleaseAt } from "./signal-release-time-BcVuf_gw.mjs";
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-CvOdI3ga.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-Ce2KDVhS.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var country = {
@@ -559,7 +559,7 @@ function SignalCard({ search }) {
 		if (phase !== "preparing-recovery") return;
 		let stop = false;
 		(async () => {
-			const deadline = Date.now() + RECOVERY_HISTORY_WAIT_MS;
+			const deadline = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
 			let result;
 			while (!stop && Date.now() < deadline) {
 				const remainingMs = deadline - Date.now();
@@ -576,7 +576,7 @@ function SignalCard({ search }) {
 			if (stop || !result) return;
 			if (result.decision === "pass") {
 				setPhase("no-signal");
-				setError(result.reason.includes("Последняя закрытая свеча слишком старая") ? "Pocket Option не обновил свечи за 90 секунд. Перекрытие не выдано по устаревшим данным." : result.reason);
+				setError(result.reason.includes("Последняя закрытая свеча слишком старая") ? "Pocket Option не обновил свечи за 20 секунд. Перекрытие не выдано по устаревшим данным." : result.reason);
 				if (search.batchRunId) pauseSignalBatch(search.batchRunId, "Не удалось подтвердить сигнал для следующей попытки.");
 				return;
 			}

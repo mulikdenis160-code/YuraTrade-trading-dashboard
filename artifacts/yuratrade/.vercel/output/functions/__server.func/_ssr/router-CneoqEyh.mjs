@@ -1,9 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
+import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, m as useNavigate, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { i as getServerFnById, n as createServerFn, r as TSS_SERVER_FUNCTION } from "./ssr.mjs";
-import { _ as pocketGateMiddleware, f as analysisPeriodForExpiry, g as isValidExpirySeconds, h as initializeTelegramWebApp, m as getTelegramInitData, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
+import { _ as pocketGateMiddleware, f as analysisPeriodForExpiry, g as isValidExpirySeconds, h as initializeTelegramWebApp, m as getTelegramInitData, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-Cu79IwpA.mjs";
 import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
-import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/createSsrRpc-CU_ZALBq.js
 var createSsrRpc = (functionId) => {
@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-Wy8v7YAW.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-CneoqEyh.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -1075,6 +1075,21 @@ var copy = {
 		"Перевіряємо вхід…",
 		"Checking the entry…"
 	],
+	"signal.entryExpired": [
+		"Окно входа истекло. Получите новый сигнал.",
+		"Вікно входу минуло. Отримайте новий сигнал.",
+		"The entry window has expired. Request a new signal."
+	],
+	"signal.retryCooldownSeconds": [
+		"Повторить через {seconds} с",
+		"Повторити через {seconds} с",
+		"Retry in {seconds}s"
+	],
+	"signal.retryCooldownTimer": [
+		"Повторить через {time}",
+		"Повторити через {time}",
+		"Retry in {time}"
+	],
 	"signal.analysisTimeout": [
 		"Поиск сигнала не завершился за 20 секунд. Попробуйте ещё раз; сигнал не выдан.",
 		"Пошук сигналу не завершився за 20 секунд. Спробуйте ще раз; сигнал не видано.",
@@ -1988,7 +2003,12 @@ var takeSignal = createServerFn({ method: "POST" }).middleware([pocketGateMiddle
 var confirmSignalEntry = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
-	return { symbol };
+	const expiresAtMs = input.expiresAtMs;
+	if (expiresAtMs !== void 0 && !Number.isFinite(expiresAtMs)) throw new Error("Окно входа недоступно.");
+	return {
+		symbol,
+		expiresAtMs
+	};
 }).handler(createSsrRpc("8d16ab25d49de3ba563bd027483e243a7e3dc42cde9f9a502b86bdc62ed38062"));
 var chooseSignalPair = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	return { excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : [] };
@@ -2730,15 +2750,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-M-s0wBxp.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-DbV_z76v.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-Bh7dooZf.mjs");
+var $$splitComponentImporter$3 = () => import("./history-BRv7gTVx.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-a_o4Rqv0.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-B3ICsDMB.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-D97eTNBM.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-Bsp300m4.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-HbJy88OD.mjs");
+var $$splitComponentImporter = () => import("./signal-Ce2KDVhS.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2801,7 +2821,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	}
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-BV4R1YQ_.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-BafZC3xF.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2843,7 +2863,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-BnoiAxl6.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-bE3a_EUK.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

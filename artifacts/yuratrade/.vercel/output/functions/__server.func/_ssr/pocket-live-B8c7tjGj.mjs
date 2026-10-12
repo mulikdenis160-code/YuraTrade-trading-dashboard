@@ -1,14 +1,14 @@
 import { n as createServerFn } from "./ssr.mjs";
-import { _ as pocketGateMiddleware, g as isValidExpirySeconds } from "./pocket-gate.middleware-ClqrhdF7.mjs";
+import { _ as pocketGateMiddleware, g as isValidExpirySeconds } from "./pocket-gate.middleware-Cu79IwpA.mjs";
 import { t as createServerRpc } from "./createServerRpc-DlvCGy7w.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-CLzHLpcJ.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-live-B8c7tjGj.js
 var loadFeed_createServerFn_handler = createServerRpc({
 	id: "fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043",
 	name: "loadFeed",
 	filename: "src/lib/pocket-live.ts"
 }, (opts) => loadFeed.__executeServer(opts));
 var loadFeed = createServerFn({ method: "GET" }).middleware([pocketGateMiddleware]).handler(loadFeed_createServerFn_handler, async () => {
-	const { feedSnapshot } = await import("./pocket-live.server-BV4R1YQ_.mjs");
+	const { feedSnapshot } = await import("./pocket-live.server-BafZC3xF.mjs");
 	return feedSnapshot();
 });
 var readClose_createServerFn_handler = createServerRpc({
@@ -21,7 +21,7 @@ var readClose = createServerFn({ method: "POST" }).middleware([pocketGateMiddlew
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
 	return { symbol };
 }).handler(readClose_createServerFn_handler, async ({ data }) => {
-	const { feedClose } = await import("./pocket-live.server-BV4R1YQ_.mjs");
+	const { feedClose } = await import("./pocket-live.server-BafZC3xF.mjs");
 	return { close: await feedClose(data.symbol) };
 });
 var takeSignal_createServerFn_handler = createServerRpc({
@@ -38,7 +38,7 @@ var takeSignal = createServerFn({ method: "POST" }).middleware([pocketGateMiddle
 		expirySeconds
 	};
 }).handler(takeSignal_createServerFn_handler, async ({ data }) => {
-	const { feedSignal } = await import("./pocket-live.server-BV4R1YQ_.mjs");
+	const { feedSignal } = await import("./pocket-live.server-BafZC3xF.mjs");
 	return feedSignal(data.symbol, data.expirySeconds);
 });
 var confirmSignalEntry_createServerFn_handler = createServerRpc({
@@ -49,10 +49,15 @@ var confirmSignalEntry_createServerFn_handler = createServerRpc({
 var confirmSignalEntry = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
-	return { symbol };
+	const expiresAtMs = input.expiresAtMs;
+	if (expiresAtMs !== void 0 && !Number.isFinite(expiresAtMs)) throw new Error("Окно входа недоступно.");
+	return {
+		symbol,
+		expiresAtMs
+	};
 }).handler(confirmSignalEntry_createServerFn_handler, async ({ data }) => {
-	const { feedConfirmSignalEntry } = await import("./pocket-live.server-BV4R1YQ_.mjs");
-	return feedConfirmSignalEntry(data.symbol);
+	const { feedConfirmSignalEntry } = await import("./pocket-live.server-BafZC3xF.mjs");
+	return feedConfirmSignalEntry(data.symbol, data.expiresAtMs);
 });
 var chooseSignalPair_createServerFn_handler = createServerRpc({
 	id: "4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e",
@@ -62,7 +67,7 @@ var chooseSignalPair_createServerFn_handler = createServerRpc({
 var chooseSignalPair = createServerFn({ method: "POST" }).middleware([pocketGateMiddleware]).validator((input) => {
 	return { excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : [] };
 }).handler(chooseSignalPair_createServerFn_handler, async ({ data }) => {
-	const { feedNextPair } = await import("./pocket-live.server-BV4R1YQ_.mjs");
+	const { feedNextPair } = await import("./pocket-live.server-BafZC3xF.mjs");
 	return feedNextPair(data.excludedSymbols);
 });
 var takeBest_createServerFn_handler = createServerRpc({
@@ -78,7 +83,7 @@ var takeBest = createServerFn({ method: "POST" }).middleware([pocketGateMiddlewa
 		excludedSymbols: Array.isArray(input?.excludedSymbols) ? [...new Set(input.excludedSymbols.filter((symbol) => typeof symbol === "string" && /^[#A-Za-z0-9._-]{2,32}$/.test(symbol.trim())).map((symbol) => symbol.trim()))].slice(0, 24) : []
 	};
 }).handler(takeBest_createServerFn_handler, async ({ data }) => {
-	const { feedBest } = await import("./pocket-live.server-BV4R1YQ_.mjs");
+	const { feedBest } = await import("./pocket-live.server-BafZC3xF.mjs");
 	return feedBest(data.expirySeconds, data.excludedSymbols);
 });
 //#endregion
