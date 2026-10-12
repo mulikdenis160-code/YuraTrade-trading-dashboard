@@ -35,6 +35,7 @@ import {
   buildPocketSubscriptionFrames,
   findPocketRows,
   parsePocketFastHistory,
+  parsePocketHistoryResponse,
   parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
 } from "./pocket-feed-frame";
@@ -60,7 +61,6 @@ const ELIGIBLE_PAYOUTS = new Set([80, 92]);
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4_500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
   "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
-const runBrokerCommand = createKeyedAsyncQueue();
 const BROKER_QUEUE_KEY = "single-pocket-option-connection";
 
 function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
@@ -133,6 +133,14 @@ const pocketSharedRuntime = (pocketGlobal.__primePocketSharedRuntime ??= {
   pairMarketData: new Map<string, PairMarketData>(),
   clockOffsetSeconds: null,
 });
+const pocketBrokerRuntime = pocketGlobal as typeof pocketGlobal & {
+  __primePocketBrokerCommandQueue?: ReturnType<typeof createKeyedAsyncQueue>;
+  __primePocketPendingHistory?: Map<string, Pending>;
+};
+const runBrokerCommand = pocketBrokerRuntime.__primePocketBrokerCommandQueue ??=
+  createKeyedAsyncQueue();
+const pendingHistory = pocketBrokerRuntime.__primePocketPendingHistory ??=
+  new Map<string, Pending>();
 const pairs = new Map<string, FeedPair>();
 const pairMarketData = pocketSharedRuntime.pairMarketData;
 let balance: number | null = null;
@@ -146,8 +154,8 @@ let expectBalance = false;
 let lastPocketMessageAt = 0;
 const lastWarmHistoryAttempt = new Map<string, number>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
+const selectSignalCandidateBatch = createRotatingCandidateSelector<FeedPair>(MAX_ELIGIBLE_PAIRS);
 let expectStream = false;
-const pendingHistory = new Map<string, Pending>();
 let lastStreamDiagnosticAt = 0;
 let lastStaleHistoryReconnectAt = 0;
 let staleHistoryReconnectInFlight: Promise<void> | null = null;
@@ -644,6 +652,47 @@ function handleMessage(current: WebSocket, message: string) {
     rememberFastHistory(socketEvent.payload);
     return;
   }
+  const historyResponse = parsePocketHistoryResponse(message);
+  if (historyResponse) {
+    const request = pendingHistory.get(historyResponse.asset);
+    if (request) {
+      clearTimeout(request.timer);
+      pendingHistory.delete(historyResponse.asset);
+      const serverClockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
+      if (serverClockOffsetSeconds === null) {
+        request.reject(new Error("Время потока Pocket Option не синхронизировано."));
+        return;
+      }
+      const parsedHistory = parsePocketOptionHistory(historyResponse.data);
+      const history: ParsedHistoryPage = {
+        ...parsedHistory,
+        candles: parsedHistory.candles.map((candle) => ({
+          ...candle,
+          time: pocketHistoryCandleLocalTime(candle.time, serverClockOffsetSeconds),
+        })),
+      };
+      console.info("[pocket-history-response]", JSON.stringify({
+        symbol: historyResponse.asset,
+        periodSeconds: request.periodSeconds,
+        receivedRows: historyResponse.data.length,
+        validCandles: history.candles.length,
+        rejectedRows: history.rejectedRows,
+        latestClosedAgeSeconds: history.candles
+          .filter((candle) => candle.time + request.periodSeconds <= Date.now() / 1000)
+          .at(-1)
+          ? Math.round(Date.now() / 1000 - (
+              history.candles
+                .filter((candle) => candle.time + request.periodSeconds <= Date.now() / 1000)
+                .at(-1)!.time + request.periodSeconds
+            ))
+          : null,
+        candleTimestampBasis: "open",
+        frameFormat: message.startsWith("42") ? "socket.io-inline" : "plain-json",
+      }));
+      request.resolve(history);
+    }
+    return;
+  }
   if (message.includes("updateAssets")) {
     expectAssets = true;
     return;
@@ -663,53 +712,6 @@ function handleMessage(current: WebSocket, message: string) {
         socketReadyState: current.readyState,
         frameLength: message.length,
       }));
-    }
-    return;
-  }
-  if (message.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(message) as { asset?: string; data?: unknown[] };
-      if (typeof parsed.asset === "string" && Array.isArray(parsed.data)) {
-          const request = pendingHistory.get(parsed.asset);
-        if (request) {
-          clearTimeout(request.timer);
-          pendingHistory.delete(parsed.asset);
-          const serverClockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
-          if (serverClockOffsetSeconds === null) {
-            request.reject(new Error("Время потока Pocket Option не синхронизировано."));
-            return;
-          }
-          const parsedHistory = parsePocketOptionHistory(parsed.data);
-          const history: ParsedHistoryPage = {
-            ...parsedHistory,
-            candles: parsedHistory.candles.map((candle) => ({
-              ...candle,
-              time: pocketHistoryCandleLocalTime(candle.time, serverClockOffsetSeconds),
-            })),
-          };
-          console.info("[pocket-history-response]", JSON.stringify({
-            symbol: parsed.asset,
-            periodSeconds: request.periodSeconds,
-            receivedRows: parsed.data.length,
-            validCandles: history.candles.length,
-            rejectedRows: history.rejectedRows,
-            latestClosedAgeSeconds: history.candles
-              .filter((candle) => candle.time + request.periodSeconds <= Date.now() / 1000)
-              .at(-1)
-              ? Math.round(Date.now() / 1000 - (
-                  history.candles
-                    .filter((candle) => candle.time + request.periodSeconds <= Date.now() / 1000)
-                    .at(-1)!.time + request.periodSeconds
-                ))
-              : null,
-            candleTimestampBasis: "open",
-          }));
-          request.resolve(history);
-          return;
-        }
-      }
-    } catch {
-      /* ignore a bad history frame */
     }
     return;
   }
@@ -1373,6 +1375,7 @@ export async function feedBest(
   excludedSymbols: string[] = [],
 ): Promise<FeedBestResult> {
   const startedAt = performance.now();
+  const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
   let stage = "validation";
   let feedMs = 0;
   let historyMs = 0;
@@ -1425,8 +1428,13 @@ export async function feedBest(
     if (eligible.length === 0) {
       throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
     }
-    const nextPair = selectRotatingSignalPair(eligible, excludedSymbols.slice(0, 24));
-    const pool = nextPair ? [nextPair] : [];
+    const excluded = new Set(excludedSymbols.map((symbol) => symbol.toLowerCase()));
+    const pool = selectSignalCandidateBatch(eligible)
+      .filter((pair) => !excluded.has(pair.symbol.toLowerCase()));
+    if (pool.length === 0) {
+      const nextPair = selectRotatingSignalPair(eligible, excludedSymbols.slice(0, 24));
+      if (nextPair) pool.push(nextPair);
+    }
     poolSize = pool.length;
     if (pool.length === 0) {
       throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
@@ -1439,12 +1447,24 @@ export async function feedBest(
     try {
       const results = [];
       for (const pair of pool) {
+        if (Date.now() >= preparationDeadlineAtMs) {
+          throw new Error(SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
+        }
         try {
-          const quoteStartedAt = performance.now();
-          await waitFreshQuote(pair.symbol, SIGNAL_QUOTE_WAIT_MS);
-          quoteMs += performance.now() - quoteStartedAt;
-          results.push({ ok: true as const, item: pair, value: await freshSignalHistory(pair.symbol, analysisSeconds) });
+          const loaded = await waitForSignalPreparation((async () => {
+            const quoteStartedAt = performance.now();
+            await waitFreshQuote(pair.symbol, SIGNAL_QUOTE_WAIT_MS);
+            quoteMs += performance.now() - quoteStartedAt;
+            return freshSignalHistory(pair.symbol, analysisSeconds);
+          })(), preparationDeadlineAtMs);
+          results.push({ ok: true as const, item: pair, value: loaded });
         } catch (error) {
+          if (Date.now() >= preparationDeadlineAtMs) throw error;
+          console.warn("[signal-candidate-skipped]", JSON.stringify({
+            symbol: pair.symbol,
+            reason: error instanceof Error ? error.message : "unknown",
+            elapsedMs: Math.round(performance.now() - startedAt),
+          }));
           results.push({ ok: false as const, item: pair, error });
         }
       }
@@ -1481,7 +1501,10 @@ export async function feedBest(
     if (!candidate) {
       throw new Error("Не удалось подготовить данные выбранной пары.");
     }
-    const initialEntryHistory = await freshSignalHistory(candidate.pair.symbol, 60);
+    const initialEntryHistory = await waitForSignalPreparation(
+      freshSignalHistory(candidate.pair.symbol, 60),
+      preparationDeadlineAtMs,
+    );
     if (entryWindowFailure(initialEntryHistory.candles)) {
       stage = "entry-window";
       logTiming("pass");
@@ -1489,13 +1512,21 @@ export async function feedBest(
     }
     stage = "fresh-quote";
     const inputQuoteStartedAt = performance.now();
-    const inputQuote = await waitFreshQuote(candidate.pair.symbol, SIGNAL_QUOTE_WAIT_MS);
+    const inputQuote = await waitForSignalPreparation(
+      waitFreshQuote(candidate.pair.symbol, SIGNAL_QUOTE_WAIT_MS),
+      preparationDeadlineAtMs,
+    );
     quoteMs += performance.now() - inputQuoteStartedAt;
     stage = "analysis";
     const analysisStartedAt = performance.now();
     let review: MarketAiReview;
     try {
-      review = await analyzeMarketCandidates(
+      const remainingAnalysisMs = Math.min(
+        SIGNAL_ANALYSIS_TIMEOUT_MS,
+        preparationDeadlineAtMs - Date.now() - 100,
+      );
+      if (remainingAnalysisMs <= 0) throw new Error(SIGNAL_PREPARATION_TIMEOUT_MESSAGE);
+      review = await waitForSignalPreparation(analyzeMarketCandidates(
         expirySeconds,
         analysisSeconds,
         candidates.map((candidate) => ({
@@ -1505,7 +1536,8 @@ export async function feedBest(
           currentPrice: inputQuote.price,
           quoteAgeMs: inputQuote.ageMs,
         })),
-      );
+        { timeoutMs: remainingAnalysisMs },
+      ), preparationDeadlineAtMs);
     } finally {
       analysisMs = performance.now() - analysisStartedAt;
     }
@@ -1520,7 +1552,10 @@ export async function feedBest(
       logTiming("pass");
       return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
     }
-    const finalEntryHistory = await freshSignalHistory(best.pair.symbol, 60);
+    const finalEntryHistory = await waitForSignalPreparation(
+      freshSignalHistory(best.pair.symbol, 60),
+      preparationDeadlineAtMs,
+    );
     if (entryWindowFailure(finalEntryHistory.candles)) {
       stage = "entry-window";
       logTiming("pass");
@@ -1528,9 +1563,15 @@ export async function feedBest(
     }
     stage = "fresh-quote";
     const quoteStartedAt = performance.now();
-    let entryQuote = await waitFreshQuote(best.pair.symbol, SIGNAL_QUOTE_WAIT_MS);
+    let entryQuote = await waitForSignalPreparation(
+      waitFreshQuote(best.pair.symbol, SIGNAL_QUOTE_WAIT_MS),
+      preparationDeadlineAtMs,
+    );
     quoteMs += performance.now() - quoteStartedAt;
-    let verificationHistory = await freshSignalHistory(best.pair.symbol, 60);
+    let verificationHistory = await waitForSignalPreparation(
+      freshSignalHistory(best.pair.symbol, 60),
+      preparationDeadlineAtMs,
+    );
     if (entryWindowFailure(verificationHistory.candles)) {
       stage = "entry-window";
       logTiming("pass");

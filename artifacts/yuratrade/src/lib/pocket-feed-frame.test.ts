@@ -6,6 +6,7 @@ import {
   buildPocketSubscriptionFrames,
   findPocketRows,
   parsePocketFastHistory,
+  parsePocketHistoryResponse,
   parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
 } from "./pocket-feed-frame.ts";
@@ -110,6 +111,31 @@ test("parses Pocket Option updateHistoryNewFast tick history", () => {
       { time: 1800000015, price: 1.13 },
     ],
   });
+});
+
+test("parses plain Pocket Option history response", () => {
+  const data = [[1800000000, 1.12, 1.13, 1.11, 1.125]];
+  assert.deepEqual(
+    parsePocketHistoryResponse(JSON.stringify({ asset: "AUDNZD_otc", data })),
+    { asset: "AUDNZD_otc", data },
+  );
+});
+
+test("parses Socket.IO-wrapped Pocket Option history response", () => {
+  const data = [[1800000000, 1.12, 1.13, 1.11, 1.125]];
+  assert.deepEqual(
+    parsePocketHistoryResponse(
+      `42${JSON.stringify(["loadHistoryPeriod", { asset: "AUDNZD_otc", data }])}`,
+    ),
+    { asset: "AUDNZD_otc", data },
+  );
+});
+
+test("ignores Socket.IO messages that are not history responses", () => {
+  assert.equal(
+    parsePocketHistoryResponse('42["updateStream",[["AUDNZD_otc",1.12,1800000000]]]' ),
+    null,
+  );
 });
 
 test("rejects malformed fast-history payloads", () => {

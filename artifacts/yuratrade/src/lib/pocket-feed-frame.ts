@@ -78,6 +78,29 @@ export function parsePocketSocketIoEvent(message: string): SocketIoEvent | null 
   }
 }
 
+export function parsePocketHistoryResponse(
+  message: string,
+): { asset: string; data: unknown[] } | null {
+  let payload: unknown;
+  if (message.startsWith("42")) {
+    payload = parsePocketSocketIoEvent(message)?.payload;
+  } else if (message.startsWith("{")) {
+    try {
+      payload = JSON.parse(message);
+    } catch {
+      return null;
+    }
+  } else {
+    return null;
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const response = payload as Record<string, unknown>;
+  if (typeof response.asset !== "string" || !response.asset || !Array.isArray(response.data)) {
+    return null;
+  }
+  return { asset: response.asset, data: response.data };
+}
+
 export function findPocketRows(
   value: unknown,
   isRow: (row: unknown[]) => boolean,
