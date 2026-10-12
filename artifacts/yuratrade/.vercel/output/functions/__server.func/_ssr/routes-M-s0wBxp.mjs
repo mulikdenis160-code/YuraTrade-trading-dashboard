@@ -1,13 +1,13 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { _ as require_react, g as require_jsx_runtime, m as useNavigate, p as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-import { f as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
+import { a as RECOVERY_HISTORY_RETRY_MS, f as analysisPeriodForExpiry, n as EXPIRY_OPTIONS_SECONDS, o as RECOVERY_HISTORY_WAIT_MS, u as SIGNAL_PREPARATION_TIMEOUT_MS } from "./pocket-gate.middleware-ClqrhdF7.mjs";
 import { t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
 import { l as ChevronDown, r as ShieldCheck } from "../_libs/lucide-react.mjs";
-import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-Tl8GheUd.mjs";
-import { t as StatRow } from "./stats-C2EMgShi.mjs";
+import { A as levelForBalance, C as confirmSignalEntry, D as usePocket, E as takeSignal, M as markSignalUsed, N as signalsUsedToday, O as formatExpiryForLanguage, S as chooseSignalPair, c as recentlyUsedSignalSymbols, k as useLanguage, o as readSignalJournal, v as readSignalBatch, w as loadFeed, y as requestSignalBatchStop } from "./router-Wy8v7YAW.mjs";
+import { t as StatRow } from "./stats-n0-7B2v_.mjs";
 import { a as waitForSignalRequest, i as visibleSignalReleaseAt, n as settleSignalRequest } from "./signal-release-time-BGTHns6S.mjs";
-import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BTotOMiN.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-CU2azEqG.js
+import { n as copyPairName, t as AnalysisModal } from "./pair-clipboard-BG8_-GZp.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-M-s0wBxp.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function SignalDesk() {
@@ -118,7 +118,9 @@ function SignalDesk() {
 		if (phase !== "idle" || blocked || !ready) return;
 		const requestedExpiry = expirySeconds;
 		const attempt = ++attemptRef.current;
-		const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+		let preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+		let staleHistoryDeadlineAtMs = null;
+		let extendedForStaleHistory = false;
 		setPhase("choosing");
 		setSearchError("");
 		setNotice("");
@@ -136,13 +138,33 @@ function SignalDesk() {
 				if (attemptRef.current !== attempt) return;
 				if (checkedSymbols.has(candidate.symbol)) break;
 				checkedSymbols.add(candidate.symbol);
-				const signalBudgetMs = preparationDeadlineAtMs - Date.now();
-				if (signalBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
-				const result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
-					symbol: candidate.symbol,
-					expirySeconds: requestedExpiry
-				} })), signalBudgetMs, t("signal.analysisTimeout"));
-				if (attemptRef.current !== attempt) return;
+				let result;
+				while (true) {
+					const signalBudgetMs = preparationDeadlineAtMs - Date.now();
+					if (signalBudgetMs <= 0) throw new Error(lastReason || t("signal.analysisTimeout"));
+					result = await waitForSignalRequest(settleSignalRequest(takeSignal({ data: {
+						symbol: candidate.symbol,
+						expirySeconds: requestedExpiry
+					} })), Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, signalBudgetMs), t("signal.analysisTimeout"));
+					if (attemptRef.current !== attempt) return;
+					if (result.decision !== "pass") break;
+					if (!result.reason.includes("Последняя закрытая свеча слишком старая")) break;
+					lastReason = result.reason;
+					if (staleHistoryDeadlineAtMs === null) {
+						staleHistoryDeadlineAtMs = Date.now() + RECOVERY_HISTORY_WAIT_MS;
+						if (!extendedForStaleHistory) {
+							preparationDeadlineAtMs += RECOVERY_HISTORY_WAIT_MS;
+							extendedForStaleHistory = true;
+						}
+					}
+					const retryDelay = Math.min(RECOVERY_HISTORY_RETRY_MS, staleHistoryDeadlineAtMs - Date.now());
+					if (retryDelay <= 0) {
+						staleHistoryDeadlineAtMs = null;
+						break;
+					}
+					await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
+					if (attemptRef.current !== attempt) return;
+				}
 				if (result.decision === "pass") {
 					lastReason = result.reason;
 					continue;

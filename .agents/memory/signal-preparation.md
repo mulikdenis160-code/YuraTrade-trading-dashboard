@@ -15,11 +15,11 @@ Cap the visible post-analysis countdown at 25 seconds and derive the current ent
 
 **How to apply:** keep the 10-second minimum copy delay, cap the displayed wait at 25 seconds, then validate against the actual current minute and a fresh quote. Preserve the historical-data quality gate and do not invent candles or issue signals from stale analysis.
 
-After a losing attempt, retry the same-pair, same-expiry recovery analysis when the only failure is stale history; wait up to 90 seconds for Pocket Option to deliver usable candles before stopping the recovery.
+For both the first search and a losing-attempt recovery, retry analysis when the only failure is stale history; wait up to 90 seconds for Pocket Option to deliver usable candles before stopping that search.
 
-**Why:** the provider can return a delayed candle page during recovery even while live quotes continue, and the user wants a recovery attempt rather than an immediate stale-history error.
+**Why:** the provider can return delayed candle pages even while live quotes continue, so an immediate stale-history rejection can block both initial signals and overlays.
 
-**How to apply:** retry only the stale-history result, reuse the original pair and expiry, and keep validating candle freshness and live quotes. Never force a direction if fresh data still does not arrive or the model rejects the setup.
+**How to apply:** retry only the stale-history result for the same pair and expiry, keep validating candle freshness and live quotes, and never force a direction if fresh data still does not arrive or the model rejects the setup.
 
 **Why:** a server release timestamp can lose its remaining countdown time during request transit, making the client skip the copy wait and reveal direction immediately.
 
