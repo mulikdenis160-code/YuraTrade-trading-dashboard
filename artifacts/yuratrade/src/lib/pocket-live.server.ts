@@ -133,6 +133,10 @@ const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_
 let expectStream = false;
 const pendingHistory = new Map<string, Pending>();
 let lastStreamDiagnosticAt = 0;
+let lastStaleHistoryReconnectAt = 0;
+let staleHistoryReconnectInFlight: Promise<void> | null = null;
+
+const STALE_HISTORY_RECONNECT_COOLDOWN_MS = 5 * 60_000;
 
 function latestPairTick(symbol: string) {
   const ticks = pairMarketData.get(symbol)?.ticks;
@@ -480,6 +484,58 @@ function failPending(error: Error) {
     request.reject(error);
   }
   pendingHistory.clear();
+}
+
+async function reconnectFeedForStaleHistory(symbol: string, ageSeconds: number | null) {
+  if (staleHistoryReconnectInFlight) {
+    try {
+      await staleHistoryReconnectInFlight;
+    } catch {
+      /* the in-flight reconnect logs its own failure */
+    }
+    return;
+  }
+  if (Date.now() - lastStaleHistoryReconnectAt < STALE_HISTORY_RECONNECT_COOLDOWN_MS) {
+    console.info("[pocket-feed-stale-reconnect-skipped]", JSON.stringify({
+      symbol,
+      reason: "cooldown",
+      ageSeconds,
+    }));
+    return;
+  }
+
+  lastStaleHistoryReconnectAt = Date.now();
+  staleHistoryReconnectInFlight = (async () => {
+    console.warn("[pocket-feed-stale-reconnect-start]", JSON.stringify({ symbol, ageSeconds }));
+    const oldSocket = socket;
+    socket = null;
+    pairs.clear();
+    subscribedAt.clear();
+    pocketServerClockOffsetSeconds = null;
+    failPending(new Error("Поток Pocket Option переподключается после устаревшей истории."));
+    if (oldSocket) {
+      oldSocket.on("error", () => {});
+      try {
+        oldSocket.terminate();
+      } catch {
+        /* socket already closed */
+      }
+    }
+    retryAfter = Date.now() + 250;
+    await ensureFeed();
+    console.info("[pocket-feed-stale-reconnect-ready]", JSON.stringify({ symbol }));
+  })();
+
+  try {
+    await staleHistoryReconnectInFlight;
+  } catch (error) {
+    console.warn("[pocket-feed-stale-reconnect-failed]", JSON.stringify({
+      symbol,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  } finally {
+    staleHistoryReconnectInFlight = null;
+  }
 }
 
 function handleMessage(current: WebSocket, message: string) {
@@ -1080,6 +1136,13 @@ export async function feedSignal(
     lastReceivedCandle: candles.at(-1) ?? null,
     ...summarizeCandleCadence([candles], analysisSeconds),
   }));
+  if (historyAgeSeconds === null || historyAgeSeconds > analysisSeconds * 3) {
+    void reconnectFeedForStaleHistory(symbol, historyAgeSeconds);
+    return {
+      decision: "pass",
+      reason: "Последняя закрытая свеча слишком старая для надёжного анализа. Сигнал не выдан.",
+    };
+  }
   const entryHistoryRequest = settleSignalRequest(
     loadCandles(symbol, 60, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1),
   );

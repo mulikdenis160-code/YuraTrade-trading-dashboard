@@ -21,6 +21,12 @@ For both the first search and a losing-attempt recovery, retry analysis when the
 
 **How to apply:** retry only the stale-history result for the same pair and expiry, keep validating candle freshness and live quotes, and never force a direction if fresh data still does not arrive or the model rejects the setup.
 
+When repeated stale history points to a stuck shared Pocket Option stream, allow one coordinated reconnect and apply a cooldown before another forced reconnect.
+
+**Why:** the feed is shared across site users, so reconnecting can interrupt other requests; repeated stale responses should not cause connection churn.
+
+**How to apply:** let concurrent requests share one reconnect, resume the same pair/expiry retry, and keep rejecting stale candles even if reconnecting does not restore fresh history.
+
 **Why:** a server release timestamp can lose its remaining countdown time during request transit, making the client skip the copy wait and reveal direction immediately.
 
 **Why:** AUDNZD OTC quote acquisition timed out at the same 2-second interval used to throttle resubscription, so a retry could be blocked until the wait had already expired.
