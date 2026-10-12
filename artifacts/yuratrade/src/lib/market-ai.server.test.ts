@@ -145,7 +145,7 @@ test("a direct AI signal uses the AI decision without a confidence threshold or 
 
 test("Gemini receives one pair, technical context, and no abstention option or confidence threshold", () => {
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /одну OTC-валютную пару/);
-  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 30 последних закрытых OHLC-свечей выбранного интервала/);
+  assert.match(DIRECT_AI_SYSTEM_PROMPT, /до 64 последних закрытых OHLC-свечей выбранного интервала/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /Подстраивай прогноз под expirySeconds/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /ADX 14 и \+DI\/-DI/);
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /старшим таймфреймом/);
@@ -153,7 +153,7 @@ test("Gemini receives one pair, technical context, and no abstention option or c
   assert.match(DIRECT_AI_SYSTEM_PROMPT, /выбери направление вверх или вниз/);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /\bpass\b|abstain|no_signal/i);
   assert.doesNotMatch(DIRECT_AI_SYSTEM_PROMPT, /порог уверенности/);
-  assert.equal(DIRECT_AI_HISTORY_CANDLES, 30);
+  assert.equal(DIRECT_AI_HISTORY_CANDLES, 128);
 });
 
 test("analysis request transfers verified OHLC, indicators, quality, higher timeframe, and quote context", async () => {
@@ -224,9 +224,9 @@ test("analysis request transfers verified OHLC, indicators, quality, higher time
   assert.equal(input.candleSeconds, 60);
   assert.equal(input.currentPrice, 1.12345);
   assert.equal(input.quoteAgeMs, 125);
-  assert.equal(input.closes.length, 30);
-  assert.equal(input.candles.length, 30);
-  assert.equal(input.candles[0]?.time, candles[70]?.time);
+  assert.equal(input.closes.length, 64);
+  assert.equal(input.candles.length, 64);
+  assert.equal(input.candles[0]?.time, candles[36]?.time);
   assert.equal(input.dataQuality.closedCandleCount, 100);
   assert.equal(input.dataQuality.latestClosedCandleTime, candles[99]?.time);
   assert.equal(input.dataQuality.missingIntervals, 0);
@@ -240,7 +240,7 @@ test("analysis request transfers verified OHLC, indicators, quality, higher time
       input.technicalIndicators.directionalMovement.minusDi14!,
   );
   assert.equal(input.higherTimeframe?.candleSeconds, 300);
-  assert.equal(input.higherTimeframe?.candles.length, 20);
+  assert.equal(input.higherTimeframe?.candles.length, 16);
   assert.ok(input.higherTimeframe?.technicalIndicators.recentReturnBps.bars14! > 0);
   assert.equal(input.trend.latestClose, input.closes.at(-1));
   assert.equal(input.trend.closeFourCandlesEarlier, input.closes.at(-5));
@@ -325,7 +325,7 @@ test("weak ADX is passed to Gemini instead of suppressing the signal", async () 
 });
 
 test("missing ADX history is passed to Gemini as unavailable context", async () => {
-  const candles = risingCandles(20);
+  const candles = risingCandles(30);
   let input: unknown;
   const readInput = () => input as {
     technicalIndicators: {
@@ -421,7 +421,7 @@ test("stale candle history is rejected before calling the AI", async () => {
   assert.equal(aiCalled, false);
 });
 
-test("a quote older than 20 seconds is rejected before calling the AI", async () => {
+test("a quote older than two seconds is rejected before calling the AI", async () => {
   const candles = risingCandles(20);
   const last = candles.at(-1)!;
   let aiCalled = false;
@@ -433,7 +433,7 @@ test("a quote older than 20 seconds is rejected before calling the AI", async ()
       name: "EUR/USD OTC",
       candles,
       currentPrice: 1.2,
-      quoteAgeMs: 20_001,
+      quoteAgeMs: 2_001,
     }],
     {
       nowSeconds: last.time + 30,
@@ -445,7 +445,7 @@ test("a quote older than 20 seconds is rejected before calling the AI", async ()
   );
   assert.deepEqual(result, {
     decision: "pass",
-    reason: "Живая котировка старше 20 секунд или недоступна. Сигнал не выдан.",
+    reason: "Текущий тик старше 2 секунд или недоступен. Сигнал не выдан.",
   });
   assert.equal(aiCalled, false);
 });
@@ -504,7 +504,7 @@ test("Gemini request failures produce actionable messages without exposing raw e
   assert.equal(GEMINI_MAX_OUTPUT_TOKENS, 8_192);
   assert.match(marketAiApiErrorMessage({ status: 429 }), /ограничил запросы/);
   assert.match(marketAiApiErrorMessage({ status: 401 }), /отклонил подключение/);
-  assert.match(marketAiApiErrorMessage({ status: 504 }), /занял слишком много времени/);
+  assert.match(marketAiApiErrorMessage({ status: 504 }), /Не удалось получить ответ от ИИ/);
   assert.match(marketAiApiErrorMessage({ status: 503 }), /временно недоступен/);
 });
 
@@ -556,11 +556,11 @@ test("an unparseable Gemini response fails after exactly one model request", asy
   assert.equal(calls, 1);
 });
 
-test("a Gemini analysis request is stopped at the nineteen-second budget", async () => {
-  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 19_000);
+test("a Gemini analysis request is stopped at the ten-second budget", async () => {
+  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 10_000);
   const request = async () => new Promise<{ choices: never[] }>(() => {});
   await assert.rejects(
     requestMarketAiReviewOnce(request, [], ["EURUSD_otc"], 10),
-    /занял слишком много времени/,
+    /Не удалось получить ответ от ИИ/,
   );
 });

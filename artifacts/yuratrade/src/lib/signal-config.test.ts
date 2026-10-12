@@ -59,11 +59,11 @@ test("the pair-copy window lasts exactly ten seconds", () => {
 });
 
 test("Gemini and full signal preparation fit within a twenty-second search budget", async () => {
-  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 19_000);
+  assert.equal(SIGNAL_ANALYSIS_TIMEOUT_MS, 10_000);
   assert.equal(SIGNAL_PREPARATION_TIMEOUT_MS, 20_000);
-  assert.equal(SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 8_000);
-  assert.equal(SIGNAL_QUOTE_WAIT_MS, 8_000);
-  assert.equal(SIGNAL_PAIR_SEARCH_LIMIT, 20);
+  assert.equal(SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 4_500);
+  assert.equal(SIGNAL_QUOTE_WAIT_MS, 2_000);
+  assert.equal(SIGNAL_PAIR_SEARCH_LIMIT, 8);
   const request = settleSignalRequest(Promise.resolve("ready"));
   assert.equal(
     await waitForSignalRequest(request, SIGNAL_PREPARATION_TIMEOUT_MS, "timed out"),

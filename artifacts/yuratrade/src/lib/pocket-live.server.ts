@@ -58,7 +58,8 @@ const ELIGIBLE_PAYOUTS = new Set([80, 92]);
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4_500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
   "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
-const runHistoryRequest = createKeyedAsyncQueue();
+const runBrokerCommand = createKeyedAsyncQueue();
+const BROKER_QUEUE_KEY = "single-pocket-option-connection";
 
 function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
   return waitForSignalRequest(
@@ -394,7 +395,12 @@ function subscribe(symbol: string, periodSeconds = 1) {
   if (now - (subscribedAt.get(key) ?? 0) < 2000) return;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   subscribedAt.set(key, now);
-  sendPocketSubscription(socket, symbol, periodSeconds);
+  void runBrokerCommand(BROKER_QUEUE_KEY, async () => {
+    const current = socket;
+    if (current && current.readyState === WebSocket.OPEN) {
+      sendPocketSubscription(current, symbol, periodSeconds);
+    }
+  }).catch(() => {});
 }
 
 function waitQuote(symbol: string, timeoutMs = 12_000) {
@@ -880,13 +886,12 @@ async function loadHistoryPage(
 ): Promise<ParsedHistoryPage> {
   // Pocket's history frames have no request ID, so serialize all requests,
   // including requests for different symbols and periods.
-  return runHistoryRequest("pocket-feed", async () => {
+  return runBrokerCommand(BROKER_QUEUE_KEY, async () => {
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
     const clockDeadline = Date.now() + Math.min(timeoutMs, 2000);
     while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
-      subscribe(symbol, seconds);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     const clockOffsetSeconds = pocketServerClockOffsetSeconds;
@@ -1227,9 +1232,7 @@ export async function feedSignal(
       reason: "После однократного обновления истории свечи остаются старыми. Сигнал не выдан.",
     };
   }
-  const entryHistoryRequest = settleSignalRequest(
-    loadCandles(symbol, 60, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1),
-  );
+  const entryHistoryRequest = settleSignalRequest(freshSignalHistory(symbol, 60));
   const remainingAnalysisMs = Math.min(
     SIGNAL_ANALYSIS_TIMEOUT_MS,
     preparationDeadlineAtMs - Date.now() - 100,
