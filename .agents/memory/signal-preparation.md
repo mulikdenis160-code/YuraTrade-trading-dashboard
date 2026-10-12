@@ -42,3 +42,9 @@ Pocket Option WebSocket authentication should preserve the session while request
 **Why:** current unofficial Pocket Option client implementations include these fields in the auth handshake; omitting them may prevent the optimized/fast-history feed from being enabled.
 
 **How to apply:** add the flags to the parsed auth payload without logging or altering the session value, then verify whether `updateHistoryNewFast` is actually received before relying on it.
+
+The user states that Pocket Option demo and live feeds receive the same market information, so connecting demo solely to obtain market data has no value.
+
+**Why:** the user confirmed the two account modes receive the same market information.
+
+**How to apply:** do not switch to demo merely to test market-data availability; follow the user's next instruction for the feed account.
