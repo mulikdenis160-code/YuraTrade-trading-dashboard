@@ -6,12 +6,11 @@ import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
 export const DIRECT_AI_MODEL = "gemini-3.6-flash";
 export const DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
-export const PROXY_AI_MODEL = "gemini-2.5-flash";
-export const PROXY_AI_MODEL_LABEL = "Gemini 2.5 Flash";
+export const PROXY_AI_MODEL = "gemini-3.8-flash";
+export const PROXY_AI_MODEL_LABEL = "Gemini 3.8 Flash";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
 export const MIN_DIRECT_AI_CANDLES = 30;
 export const GEMINI_MAX_OUTPUT_TOKENS = 8_192;
-export const GEMINI_THINKING_BUDGET = 2_048;
 const DIRECT_AI_VISIBLE_CANDLES = 64;
 const HIGHER_TIMEFRAME_VISIBLE_CANDLES = 16;
 
@@ -20,9 +19,6 @@ export function geminiGenerationConfig(systemInstruction: string, model: string)
     systemInstruction,
     responseMimeType: "application/json" as const,
     maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-    ...(model === PROXY_AI_MODEL
-      ? { thinkingConfig: { thinkingBudget: GEMINI_THINKING_BUDGET } }
-      : {}),
   };
 }
 

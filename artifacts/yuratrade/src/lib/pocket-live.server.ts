@@ -121,8 +121,19 @@ type PairMarketData = {
   historyPeriodSeconds: number | null;
 };
 
+type PocketSharedRuntime = {
+  pairMarketData: Map<string, PairMarketData>;
+  clockOffsetSeconds: number | null;
+};
+const pocketGlobal = globalThis as typeof globalThis & {
+  __primePocketSharedRuntime?: PocketSharedRuntime;
+};
+const pocketSharedRuntime = (pocketGlobal.__primePocketSharedRuntime ??= {
+  pairMarketData: new Map<string, PairMarketData>(),
+  clockOffsetSeconds: null,
+});
 const pairs = new Map<string, FeedPair>();
-const pairMarketData = new Map<string, PairMarketData>();
+const pairMarketData = pocketSharedRuntime.pairMarketData;
 let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
@@ -132,7 +143,6 @@ let retryAfter = 0;
 let expectAssets = false;
 let expectBalance = false;
 let lastPocketMessageAt = 0;
-let pocketServerClockOffsetSeconds: number | null = null;
 const lastWarmHistoryAttempt = new Map<string, number>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
@@ -263,12 +273,12 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
       rawTimestamp,
       receivedAtMs,
     );
-    if (offsetSeconds !== null && pocketServerClockOffsetSeconds === null) {
-      pocketServerClockOffsetSeconds = offsetSeconds;
+    if (offsetSeconds !== null && pocketSharedRuntime.clockOffsetSeconds === null) {
+      pocketSharedRuntime.clockOffsetSeconds = offsetSeconds;
       console.info("[pocket-feed-clock-synced]", JSON.stringify({ offsetSeconds, source: "updateStream" }));
     }
     const price = Number(row[2]);
-    const clockOffsetSeconds = pocketServerClockOffsetSeconds ?? offsetSeconds;
+    const clockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds ?? offsetSeconds;
     if (
       !Number.isFinite(rawTimestamp) ||
       rawTimestamp <= 0 ||
@@ -297,7 +307,7 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
     receivedRows: rows.length,
     quoteRows,
     epochLikeTimestamps,
-    clockSynced: pocketServerClockOffsetSeconds !== null,
+    clockSynced: pocketSharedRuntime.clockOffsetSeconds !== null,
   });
 }
 
@@ -322,7 +332,7 @@ function rememberFastHistory(payload: unknown) {
     return;
   }
   const receivedAtMs = Date.now();
-  const clockOffsetSeconds = pocketServerClockOffsetSeconds;
+  const clockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
   if (clockOffsetSeconds === null) {
     console.warn("[pocket-fast-history-unusable]", JSON.stringify({
       symbol: update.asset,
@@ -374,7 +384,7 @@ function rememberTicks(message: string, frameFormat = "split-array") {
         frameFormat,
         payloadType: Array.isArray(parsed) ? "array" : typeof parsed,
         topLevelLength: Array.isArray(parsed) ? parsed.length : null,
-        clockSynced: pocketServerClockOffsetSeconds !== null,
+        clockSynced: pocketSharedRuntime.clockOffsetSeconds !== null,
       });
     }
   } catch {
@@ -522,7 +532,7 @@ async function reconnectFeedForStaleHistory(symbol: string, ageSeconds: number |
     socket = null;
     pairs.clear();
     subscribedAt.clear();
-    pocketServerClockOffsetSeconds = null;
+    pocketSharedRuntime.clockOffsetSeconds = null;
     failPending(new Error("Поток Pocket Option переподключается после устаревшей истории."));
     if (oldSocket) {
       oldSocket.on("error", () => {});
@@ -624,7 +634,7 @@ function handleMessage(current: WebSocket, message: string) {
         payloadType: Array.isArray(socketEvent.payload) ? "array" : typeof socketEvent.payload,
         topLevelLength: Array.isArray(socketEvent.payload) ? socketEvent.payload.length : null,
         frameFormat: "socket.io-inline",
-        clockSynced: pocketServerClockOffsetSeconds !== null,
+        clockSynced: pocketSharedRuntime.clockOffsetSeconds !== null,
       });
     }
     return;
@@ -663,7 +673,7 @@ function handleMessage(current: WebSocket, message: string) {
         if (request) {
           clearTimeout(request.timer);
           pendingHistory.delete(parsed.asset);
-          const serverClockOffsetSeconds = pocketServerClockOffsetSeconds;
+          const serverClockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
           if (serverClockOffsetSeconds === null) {
             request.reject(new Error("Время потока Pocket Option не синхронизировано."));
             return;
@@ -753,7 +763,7 @@ function connect() {
   }
   connectionError = "";
   isAuthorized = false;
-  pocketServerClockOffsetSeconds = null;
+  pocketSharedRuntime.clockOffsetSeconds = null;
   subscribedAt.clear();
   console.info("[pocket-feed-region-selected]", JSON.stringify({
     account: feedUrl.includes("demo-api-") ? "demo" : "real",
@@ -890,12 +900,18 @@ function eligibleSignalPairs() {
     .slice(0, MAX_ELIGIBLE_PAIRS);
 }
 
-function rankedSignalPairs() {
+function rankedSignalPairs(analysisSeconds = SIGNAL_CANDLE_SECONDS) {
   const now = Date.now();
   const eligible = eligibleSignalPairs();
   const ranked = eligible.filter((pair) => {
     const quote = latestPairQuote(pair.symbol);
     return quote !== null && now - quote.at <= MAX_QUOTE_AGE_MS;
+  });
+  const historyReady = ranked.filter((pair) => {
+    const state = pairMarketData.get(pair.symbol);
+    return state?.historyPeriodSeconds === analysisSeconds &&
+      historyIsFresh(state.history, analysisSeconds) &&
+      closedHistory(state.history, analysisSeconds).length >= MIN_DIRECT_AI_CANDLES;
   });
   if (eligible.length > 0 && ranked.length === 0) {
     console.warn("[pocket-feed-no-fresh-candidates]", JSON.stringify({
@@ -910,7 +926,7 @@ function rankedSignalPairs() {
       socketReadyState: socket?.readyState ?? null,
     }));
   }
-  return ranked;
+  return historyReady.length > 0 ? historyReady : ranked;
 }
 
 function selectRotatingSignalPair(
@@ -951,10 +967,10 @@ async function loadHistoryPage(
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
     const clockDeadline = Date.now() + Math.min(timeoutMs, 4_500);
-    while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
+    while (pocketSharedRuntime.clockOffsetSeconds === null && Date.now() < clockDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    const clockOffsetSeconds = pocketServerClockOffsetSeconds;
+    const clockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
     if (clockOffsetSeconds === null) {
       console.warn("[pocket-history-clock-unsynced]", JSON.stringify({
         symbol,
@@ -1408,7 +1424,7 @@ export async function feedBest(
     feedMs = performance.now() - feedStartedAt;
     const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
     expectedCandleSeconds = analysisSeconds;
-    const ranked = rankedSignalPairs();
+    const ranked = rankedSignalPairs(analysisSeconds);
     const eligible = ranked.length > 0 ? ranked : eligibleSignalPairs();
     if (eligible.length === 0) {
       throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");

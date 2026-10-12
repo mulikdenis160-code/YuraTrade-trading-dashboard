@@ -4,7 +4,6 @@ import {
   acceptsMarketAiReview,
   analyzeMarketCandidates,
   GEMINI_MAX_OUTPUT_TOKENS,
-  GEMINI_THINKING_BUDGET,
   DIRECT_AI_HISTORY_CANDLES,
   DIRECT_AI_MODEL,
   DIRECT_AI_SYSTEM_PROMPT,
@@ -23,13 +22,12 @@ test("direct market analysis uses Gemini 3.6 Flash when no proxy is configured",
   assert.equal(DIRECT_AI_MODEL, "gemini-3.6-flash");
 });
 
-test("proxy Gemini uses bounded reasoning and keeps the required output token limit", () => {
+test("proxy Gemini Flash keeps the required output token limit without extra reasoning delay", () => {
   const proxyConfig = geminiGenerationConfig("system", PROXY_AI_MODEL);
   const directConfig = geminiGenerationConfig("system", DIRECT_AI_MODEL);
-  assert.equal(GEMINI_THINKING_BUDGET, 2_048);
-  assert.equal(proxyConfig.thinkingConfig?.thinkingBudget, GEMINI_THINKING_BUDGET);
+  assert.equal(PROXY_AI_MODEL, "gemini-3.8-flash");
   assert.equal(proxyConfig.maxOutputTokens, GEMINI_MAX_OUTPUT_TOKENS);
-  assert.equal(directConfig.thinkingConfig, undefined);
+  assert.equal(directConfig.maxOutputTokens, GEMINI_MAX_OUTPUT_TOKENS);
 });
 
 test("Gemini gateway deadline responses are recognized as timeouts", () => {
