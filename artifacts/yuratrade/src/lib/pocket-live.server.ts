@@ -58,6 +58,8 @@ import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import { signalReleaseAt, signalEntryExpiresAt, entryConfirmationExpiresAt, signalEntryIsLive } from "./signal-release-time";
 
 const FEED_AUTH = (process.env.POCKET_OPTION_FEED_AUTH ?? "").trim();
+const FEED_DISABLED = process.env.POCKET_OPTION_FEED_DISABLED?.trim().toLowerCase() === "true";
+const FEED_DISABLED_MESSAGE = "Поток Pocket Option временно отключён.";
 const AUTH_MISSING_MESSAGE =
   "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 const AUTH_REJECTED_MESSAGE =
@@ -818,6 +820,10 @@ function handleMessage(current: WebSocket, message: string) {
 
 function connect() {
   if (disposed) throw new Error("Поток Pocket Option перезапускается после обновления сервера.");
+  if (FEED_DISABLED) {
+    connectionError = FEED_DISABLED_MESSAGE;
+    return;
+  }
   if (!FEED_AUTH.trim()) {
     connectionError = AUTH_MISSING_MESSAGE;
     console.error("[pocket-feed-auth-missing]");
@@ -907,6 +913,7 @@ async function ensureFeed(): Promise<void> {
 
 function ensureFeedConnection() {
   if (disposed) return Promise.reject(new Error("Поток Pocket Option остановлен."));
+  if (FEED_DISABLED) return Promise.reject(new Error(FEED_DISABLED_MESSAGE));
   if (isAuthorized && pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
     return Promise.resolve();
   }
@@ -952,6 +959,7 @@ function ensureFeedConnection() {
 }
 
 export async function feedSnapshot() {
+  if (FEED_DISABLED) return { balance: null, pairs: [] };
   startPocketFeed();
   await ensureFeed();
   return {
@@ -961,7 +969,7 @@ export async function feedSnapshot() {
 }
 
 export function startPocketFeed() {
-  if (feedWarmupStarted) return;
+  if (FEED_DISABLED || feedWarmupStarted) return;
   feedWarmupStarted = true;
   void (async () => {
     while (feedWarmupStarted) {
