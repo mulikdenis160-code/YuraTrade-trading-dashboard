@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildPocketAuthFrame,
   buildPocketHistoryRequest,
   buildPocketSubscriptionFrames,
   findPocketRows,
@@ -8,6 +9,26 @@ import {
   parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
 } from "./pocket-feed-frame.ts";
+
+test("requests optimized fast history without changing Pocket Option credentials", () => {
+  const frame = buildPocketAuthFrame(
+    '42["auth",{"session":"redacted-session","isDemo":0,"uid":123}]',
+  );
+  assert.ok(frame);
+  const [, payload] = JSON.parse(frame.slice(2)) as [string, Record<string, unknown>];
+  assert.equal(payload.session, "redacted-session");
+  assert.equal(payload.isDemo, 0);
+  assert.equal(payload.uid, 123);
+  assert.equal(payload.platform, 2);
+  assert.equal(payload.isFastHistory, true);
+  assert.equal(payload.isOptimized, true);
+});
+
+test("rejects malformed auth when building the fast-history handshake", () => {
+  assert.equal(buildPocketAuthFrame("invalid"), null);
+  assert.equal(buildPocketAuthFrame('42["auth",null]'), null);
+  assert.equal(buildPocketAuthFrame('42["updateAssets",[]]'), null);
+});
 
 test("selects the demo endpoint for demo auth and the live endpoint for real auth", () => {
   assert.equal(

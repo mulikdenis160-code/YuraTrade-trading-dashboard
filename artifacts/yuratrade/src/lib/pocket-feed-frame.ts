@@ -5,6 +5,35 @@ export type PocketFastHistory = {
   ticks: Array<{ time: number; price: number }>;
 };
 
+export function buildPocketAuthFrame(auth: string): string | null {
+  const frame = auth.trim();
+  if (!frame.startsWith("42")) return null;
+
+  try {
+    const packet: unknown = JSON.parse(frame.slice(2));
+    if (
+      !Array.isArray(packet) ||
+      packet[0] !== "auth" ||
+      !packet[1] ||
+      typeof packet[1] !== "object" ||
+      Array.isArray(packet[1])
+    ) {
+      return null;
+    }
+    return `42${JSON.stringify([
+      "auth",
+      {
+        ...(packet[1] as Record<string, unknown>),
+        platform: 2,
+        isFastHistory: true,
+        isOptimized: true,
+      },
+    ])}`;
+  } catch {
+    return null;
+  }
+}
+
 export function pocketFeedUrlForAuth(auth: string): string | null {
   const frame = auth.trim();
   if (!frame.startsWith("42")) return null;

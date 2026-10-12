@@ -36,3 +36,9 @@ When repeated stale history points to a stuck shared Pocket Option stream, allow
 **Why:** A history timeout can occur after the feed has loaded its pair catalog; startup logs alone cannot distinguish a delayed provider response from an unrecognized history frame.
 
 **How to apply:** log feed/auth outcome, catalog readiness, history request/response shape, and timeout socket state without logging credentials, raw frames, or quote values. Keep data validation separate from transport waiting.
+
+Pocket Option WebSocket authentication should preserve the session while requesting optimized history with `platform: 2`, `isFastHistory: true`, and `isOptimized: true`.
+
+**Why:** current unofficial Pocket Option client implementations include these fields in the auth handshake; omitting them may prevent the optimized/fast-history feed from being enabled.
+
+**How to apply:** add the flags to the parsed auth payload without logging or altering the session value, then verify whether `updateHistoryNewFast` is actually received before relying on it.

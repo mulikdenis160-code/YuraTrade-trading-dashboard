@@ -29,6 +29,7 @@ import {
   SIGNAL_QUOTE_WAIT_MS,
 } from "./signal-config";
 import {
+  buildPocketAuthFrame,
   buildPocketHistoryRequest,
   buildPocketSubscriptionFrames,
   findPocketRows,
@@ -549,7 +550,14 @@ function handleMessage(current: WebSocket, message: string) {
     return;
   }
   if (message.startsWith("40") && message.includes("sid")) {
-    current.send(FEED_AUTH);
+    const authFrame = buildPocketAuthFrame(FEED_AUTH);
+    if (!authFrame) {
+      connectionError = "Неверный формат авторизации Pocket Option.";
+      console.error("[pocket-feed-auth-format-invalid]");
+      current.close();
+      return;
+    }
+    current.send(authFrame);
     return;
   }
   if (message.includes("NotAuthorized")) {
