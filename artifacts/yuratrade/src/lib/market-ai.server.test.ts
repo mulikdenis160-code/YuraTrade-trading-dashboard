@@ -324,8 +324,8 @@ test("weak ADX is passed to Gemini instead of suppressing the signal", async () 
   assert.ok(readInput().technicalIndicators.directionalMovement.adx14! < 20);
 });
 
-test("missing ADX history is passed to Gemini as unavailable context", async () => {
-  const candles = risingCandles(30);
+test("minimum history keeps indicators available for Gemini", async () => {
+  const candles = risingCandles(31);
   let input: unknown;
   const readInput = () => input as {
     technicalIndicators: {
@@ -343,7 +343,7 @@ test("missing ADX history is passed to Gemini as unavailable context", async () 
       quoteAgeMs: 0,
     }],
     {
-      nowSeconds: candles.at(-1)!.time + 30,
+      nowSeconds: candles.at(-1)!.time + 60,
       request: async (messages) => {
         input = JSON.parse(messages.find((message) => message.role === "user")?.content ?? "{}");
         return { choices: [{ message: { content: validReview }, finish_reason: "stop" }] };
@@ -352,7 +352,7 @@ test("missing ADX history is passed to Gemini as unavailable context", async () 
   );
 
   assert.equal(result.decision, "signal");
-  assert.equal(readInput().technicalIndicators.directionalMovement.adx14, null);
+  assert.ok(Number.isFinite(readInput().technicalIndicators.directionalMovement.adx14));
 });
 
 test("analysis submits only one pair even when multiple candidates are provided", async () => {
@@ -379,7 +379,7 @@ test("analysis submits only one pair even when multiple candidates are provided"
       },
     ],
     {
-      nowSeconds: last.time + 30,
+      nowSeconds: last.time + 60,
       request: async (messages) => {
         userContent = messages.find((message) => message.role === "user")?.content ?? "";
         return { choices: [{ message: { content: validReview }, finish_reason: "STOP" }] };
