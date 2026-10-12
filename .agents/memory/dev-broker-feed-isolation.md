@@ -3,8 +3,8 @@ name: Dev broker feed isolation
 description: The broker feed bootstrap and server-function handler can hold separate in-memory market-data caches in development.
 ---
 
-In development, logs proving that the bootstrap WebSocket is authorized and receiving ticks do not prove that the signal server function can read that same warmed cache. Keep the tick/history map and broker-clock offset on a process-wide `globalThis` runtime shared by the Vite bootstrap and server-function module; rank pairs with fresh quote and fresh history ahead of merely eligible pairs. Validate the signal handler after warmup.
+Logs proving that one broker-feed runtime is authorized and receiving ticks do not prove that another server-function runtime can read its warmed cache. `globalThis` shares data only within the same process and VM; do not assume it bridges separate deployment processes or Vite SSR module contexts. Merge history by candle-open timestamp so an older provider response cannot overwrite newer cached or tick-reconciled candles.
 
-**Why:** module-local state left a direct server-function probe cold while the background bootstrap was warm. Sharing the process state and preferring history-ready pairs allowed a real server-function test to return a signal.
+**Why:** a direct server-function probe could still receive stale history after separate feed logs showed reconciled candles, and delayed broker responses could overwrite newer cache entries. A warmed-context signal test alone does not establish that all runtime contexts share that state.
 
-**How to apply:** test the actual server function after a stable broker warmup and compare its chosen pair, quote age, candle age, and tick coverage with bootstrap diagnostics. Do not claim end-to-end signal success from bootstrap logs alone; if the server function runs in a separate process, use an explicit shared service/API instead of `globalThis`.
+**How to apply:** test the actual handler in the same runtime/process that serves user requests after a stable warmup. Compare its chosen pair, quote age, candle age, and tick coverage with that runtime's diagnostics. If bootstrap and handler are separate, use an explicit shared service/API instead of `globalThis`.

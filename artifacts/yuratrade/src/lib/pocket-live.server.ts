@@ -15,6 +15,7 @@ import {
 } from "./signal-candidate-pool.ts";
 import {
   appendCoveredFastCandles,
+  mergePocketHistoryByTime,
   parsePocketOptionHistory,
   type HistoricalCandle,
   type ParsedHistoryPage,
@@ -686,14 +687,6 @@ function handleMessage(current: WebSocket, message: string) {
               time: pocketHistoryCandleLocalTime(candle.time, serverClockOffsetSeconds),
             })),
           };
-            const state = pairMarketData.get(parsed.asset) ?? {
-              ticks: [],
-              history: [],
-              historyPeriodSeconds: null,
-            };
-            state.history = history.candles.slice(-DIRECT_AI_HISTORY_CANDLES);
-            state.historyPeriodSeconds = request.periodSeconds;
-            pairMarketData.set(parsed.asset, state);
           console.info("[pocket-history-response]", JSON.stringify({
             symbol: parsed.asset,
             periodSeconds: request.periodSeconds,
@@ -1079,6 +1072,9 @@ async function loadCandles(
   };
   const beforeRealtime = candles.at(-1)?.time ?? null;
   candles = appendCoveredFastCandles(candles, state.ticks, seconds, Date.now());
+  if (state.historyPeriodSeconds === seconds) {
+    candles = mergePocketHistoryByTime(state.history, candles, DIRECT_AI_HISTORY_CANDLES);
+  }
   const latest = candles.at(-1)?.time ?? null;
   const now = Date.now();
   const tickTimes = state.ticks.map((tick) => tick.time);

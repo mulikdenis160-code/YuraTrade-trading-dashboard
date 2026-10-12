@@ -14,6 +14,18 @@ export type ParsedHistoryPage = {
 
 export type TimedPriceTick = { time: number; price: number };
 
+export function mergePocketHistoryByTime(
+  cached: HistoricalCandle[],
+  incoming: HistoricalCandle[],
+  limit = 128,
+): HistoricalCandle[] {
+  const byTime = new Map(cached.map((candle) => [candle.time, candle]));
+  for (const candle of incoming) byTime.set(candle.time, candle);
+  return [...byTime.values()]
+    .sort((a, b) => a.time - b.time)
+    .slice(-limit);
+}
+
 export function appendCoveredFastCandles(
   candles: HistoricalCandle[],
   ticks: TimedPriceTick[],

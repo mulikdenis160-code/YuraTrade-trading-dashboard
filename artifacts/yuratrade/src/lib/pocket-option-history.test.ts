@@ -2,8 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   appendCoveredFastCandles,
+  mergePocketHistoryByTime,
   parsePocketOptionHistory,
 } from "./pocket-option-history.ts";
+
+test("older provider responses cannot erase newer cached candles", () => {
+  const cached = [
+    { time: 120, open: 1, close: 1.2, high: 1.3, low: 0.9 },
+    { time: 180, open: 1.2, close: 1.4, high: 1.5, low: 1.1 },
+  ];
+  const olderResponse = [
+    { time: 60, open: 0.9, close: 1, high: 1.1, low: 0.8 },
+    { time: 120, open: 1, close: 1.1, high: 1.2, low: 0.9 },
+  ];
+
+  const merged = mergePocketHistoryByTime(cached, olderResponse);
+  assert.deepEqual(merged.map((candle) => candle.time), [60, 120, 180]);
+  assert.equal(merged.at(-1)?.time, 180);
+  assert.equal(merged.find((candle) => candle.time === 120)?.close, 1.1);
+});
 
 test("fast-history ticks fill every missing closed minute only with adequate coverage", () => {
   const base = [{ time: 60, open: 1, close: 1, high: 1, low: 1 }];
