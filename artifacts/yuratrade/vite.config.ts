@@ -51,6 +51,24 @@ function pgliteBootstrapPlugin(): Plugin {
   };
 }
 
+/** Start the shared broker stream as the server boots, not on a button click. */
+function pocketFeedBootstrapPlugin(): Plugin {
+  return {
+    name: "app-builder:pocket-feed-bootstrap",
+    apply: "serve",
+    async configureServer(server) {
+      try {
+        const mod = (await server.ssrLoadModule("/src/lib/pocket-live.server.ts")) as {
+          startPocketFeed?: () => void;
+        };
+        mod.startPocketFeed?.();
+      } catch (error) {
+        console.error("[app-builder] Pocket feed bootstrap failed:", error);
+      }
+    },
+  };
+}
+
 /**
  * Live-preview OAuth popup — handled HERE so the agent never has to create a
  * `/auth/popup` route (and cannot break it by scaffolding a React page that
@@ -163,6 +181,7 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     pgliteBootstrapPlugin(),
+    pocketFeedBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
