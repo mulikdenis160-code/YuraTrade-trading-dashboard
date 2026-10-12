@@ -16,7 +16,6 @@ import { copyPairName } from "@/lib/pair-clipboard";
 import {
   DEFAULT_SIGNAL_EXPIRY_SECONDS,
   RECOVERY_HISTORY_RETRY_MS,
-  RECOVERY_HISTORY_WAIT_MS,
   SIGNAL_PAIR_SEARCH_LIMIT,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
@@ -169,9 +168,7 @@ export function SignalDesk() {
     if (phase !== "idle" || blocked || !ready) return;
     const requestedExpiry = expirySeconds;
     const attempt = ++attemptRef.current;
-    let preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
-    let staleHistoryDeadlineAtMs: number | null = null;
-    let extendedForStaleHistory = false;
+    const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
     setPhase("choosing");
     setSearchError("");
     setNotice("");
@@ -212,21 +209,11 @@ export function SignalDesk() {
           if (result.decision !== "pass") break;
           if (!result.reason.includes("Последняя закрытая свеча слишком старая")) break;
           lastReason = result.reason;
-          if (staleHistoryDeadlineAtMs === null) {
-            staleHistoryDeadlineAtMs = Date.now() + RECOVERY_HISTORY_WAIT_MS;
-            if (!extendedForStaleHistory) {
-              preparationDeadlineAtMs += RECOVERY_HISTORY_WAIT_MS;
-              extendedForStaleHistory = true;
-            }
-          }
           const retryDelay = Math.min(
             RECOVERY_HISTORY_RETRY_MS,
-            staleHistoryDeadlineAtMs - Date.now(),
+            preparationDeadlineAtMs - Date.now(),
           );
-          if (retryDelay <= 0) {
-            staleHistoryDeadlineAtMs = null;
-            break;
-          }
+          if (retryDelay <= 0) break;
           await new Promise<void>((resolve) => window.setTimeout(resolve, retryDelay));
           if (attemptRef.current !== attempt) return;
         }

@@ -15,11 +15,11 @@ Cap the visible post-analysis countdown at 25 seconds and derive the current ent
 
 **How to apply:** keep the 10-second minimum copy delay, cap the displayed wait at 25 seconds, then validate against the actual current minute and a fresh quote. Preserve the historical-data quality gate and do not invent candles or issue signals from stale analysis.
 
-For both the first search and a losing-attempt recovery, retry analysis when the only failure is stale history; wait up to 90 seconds for Pocket Option to deliver usable candles before stopping that search.
+For both the first search and a losing-attempt recovery, retry analysis when the only failure is stale history, but include retries within the same 20-second total search deadline.
 
-**Why:** the provider can return delayed candle pages even while live quotes continue, so an immediate stale-history rejection can block both initial signals and overlays.
+**Why:** stale Pocket Option history may update during a short retry, but the user requires signal searches to stop after 20 seconds.
 
-**How to apply:** retry only the stale-history result for the same pair and expiry, keep validating candle freshness and live quotes, and never force a direction if fresh data still does not arrive or the model rejects the setup.
+**How to apply:** retry only the stale-history result for the same pair and expiry while time remains in the original 20-second deadline; keep validating candle freshness and live quotes, and never force a direction if fresh data still does not arrive or the model rejects the setup.
 
 When repeated stale history points to a stuck shared Pocket Option stream, allow one coordinated reconnect and apply a cooldown before another forced reconnect.
 

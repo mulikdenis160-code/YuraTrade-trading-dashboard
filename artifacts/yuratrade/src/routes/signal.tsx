@@ -23,7 +23,6 @@ import {
   MAX_OVERLAYS,
   DEFAULT_SIGNAL_EXPIRY_SECONDS,
   RECOVERY_HISTORY_RETRY_MS,
-  RECOVERY_HISTORY_WAIT_MS,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
@@ -443,7 +442,7 @@ function SignalCard({ search }: { search: Search }) {
     if (phase !== "preparing-recovery") return;
     let stop = false;
     void (async () => {
-      const deadline = Date.now() + RECOVERY_HISTORY_WAIT_MS;
+      const deadline = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
       let result: Awaited<ReturnType<typeof takeSignal>> | undefined;
       while (!stop && Date.now() < deadline) {
         const remainingMs = deadline - Date.now();
@@ -468,7 +467,7 @@ function SignalCard({ search }: { search: Search }) {
         setPhase("no-signal");
         setError(
           result.reason.includes("Последняя закрытая свеча слишком старая")
-            ? "Pocket Option не обновил свечи за 90 секунд. Перекрытие не выдано по устаревшим данным."
+            ? "Pocket Option не обновил свечи за 20 секунд. Перекрытие не выдано по устаревшим данным."
             : result.reason,
         );
         if (search.batchRunId) {
