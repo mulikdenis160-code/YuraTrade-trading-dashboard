@@ -51,11 +51,11 @@ const AUTH_MISSING_MESSAGE =
   "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 const AUTH_REJECTED_MESSAGE =
   "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";
-const HISTORY_PAGE_CANDLES = 150;
+const HISTORY_PAGE_CANDLES = 128;
 const SIGNAL_CANDIDATES_PER_SEARCH = 1;
-const MAX_ELIGIBLE_PAIRS = 20;
-const MIN_SIGNAL_PAYOUT = 92;
-const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 8_000;
+const MAX_ELIGIBLE_PAIRS = 8;
+const ELIGIBLE_PAYOUTS = new Set([80, 92]);
+const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4_500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
   "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
 const runHistoryRequest = createKeyedAsyncQueue();
@@ -800,11 +800,10 @@ export async function feedSnapshot() {
 
 function rankedSignalPairs() {
   return [...pairs.values()]
-    .filter(
-      (pair) =>
-        pair.group === "fx" &&
-        pair.symbol.toLowerCase().includes("otc") &&
-        pair.payout >= MIN_SIGNAL_PAYOUT,
+    .filter((pair) =>
+      pair.group === "fx" &&
+      pair.symbol.toLowerCase().includes("otc") &&
+      ELIGIBLE_PAYOUTS.has(pair.payout),
     )
     .sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name))
     .slice(0, MAX_ELIGIBLE_PAIRS);
@@ -826,7 +825,7 @@ export async function feedNextPair(excludedSymbols: string[] = []): Promise<Feed
   await ensureFeed();
   const ranked = rankedSignalPairs();
   if (ranked.length === 0) {
-    throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
+    throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
   }
   const pair = selectRotatingSignalPair(ranked, excludedSymbols.slice(0, 24));
   if (!pair) throw new Error("Не удалось выбрать валютную пару.");
@@ -839,7 +838,9 @@ async function loadHistoryPage(
   time: number,
   timeoutMs = 12_000,
 ): Promise<ParsedHistoryPage> {
-  return runHistoryRequest(symbol, async () => {
+  // Pocket's history frames have no request ID, so serialize all requests,
+  // including requests for different symbols and periods.
+  return runHistoryRequest("pocket-feed", async () => {
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
@@ -930,7 +931,7 @@ async function loadCandles(
   let rejectedRows = 0;
   let cursor = Math.floor(Date.now() / 1000);
   const maxPages = pageLimit
-    ?? Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES) + 1;
+    ?? Math.ceil(DIRECT_AI_HISTORY_CANDLES / HISTORY_PAGE_CANDLES);
   for (let page = 0; page < maxPages && collected.size < DIRECT_AI_HISTORY_CANDLES; page += 1) {
     const history = await loadHistoryPage(
       symbol,
@@ -973,6 +974,41 @@ async function loadCandles(
   state.historyPeriodSeconds = seconds;
   pairMarketData.set(symbol, state);
   return { candles: state.history, rejectedRows };
+}
+
+function closedHistory(candles: HistoricalCandle[], seconds: number, nowMs = Date.now()) {
+  const nowSeconds = nowMs / 1000;
+  return candles
+    .filter((candle) => candle.time + seconds <= nowSeconds)
+    .sort((a, b) => a.time - b.time);
+}
+
+function historyIsFresh(candles: HistoricalCandle[], seconds: number, nowMs = Date.now()) {
+  const latest = closedHistory(candles, seconds, nowMs).at(-1);
+  if (!latest) return false;
+  // Pocket history timestamps are candle-open times; close time is start + period.
+  const ageSinceCloseMs = nowMs - (latest.time + seconds) * 1000;
+  return ageSinceCloseMs >= -1_000 && ageSinceCloseMs <= (seconds * 1000) + 4_500;
+}
+
+async function freshSignalHistory(symbol: string, seconds: number) {
+  const cached = pairMarketData.get(symbol);
+  if (
+    cached?.historyPeriodSeconds === seconds &&
+    closedHistory(cached.history, seconds).length >= MIN_DIRECT_AI_CANDLES &&
+    historyIsFresh(cached.history, seconds)
+  ) {
+    return { candles: closedHistory(cached.history, seconds).slice(-DIRECT_AI_HISTORY_CANDLES), rejectedRows: 0 };
+  }
+  const refreshed = await loadCandles(symbol, seconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1);
+  const candles = closedHistory(refreshed.candles, seconds);
+  if (candles.length < MIN_DIRECT_AI_CANDLES) {
+    throw new Error(`После обновления истории доступны только ${candles.length} закрытых свечей; нужно минимум ${MIN_DIRECT_AI_CANDLES}.`);
+  }
+  if (!historyIsFresh(candles, seconds)) {
+    throw new Error("После обновления история свечей остаётся устаревшей. Сигнал не выдан.");
+  }
+  return { ...refreshed, candles };
 }
 
 async function waitForSafeEntryHistory(
@@ -1111,19 +1147,20 @@ export async function feedSignal(
     !pair ||
     pair.group !== "fx" ||
     !pair.symbol.toLowerCase().includes("otc") ||
-    pair.payout < MIN_SIGNAL_PAYOUT
+    !ELIGIBLE_PAYOUTS.has(pair.payout)
   ) {
-    throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
+    throw new Error("Для сигнала нужна активная OTC-пара с выплатой ровно 80% или 92%.");
   }
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const historyStartedAt = performance.now();
   const inputQuoteStartedAt = historyStartedAt;
-  const [history, inputQuote] = await waitForSignalPreparation(
-    Promise.all([
-      loadCandles(symbol, analysisSeconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1),
-      waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS),
-    ]),
+  const history = await waitForSignalPreparation(
+    freshSignalHistory(symbol, analysisSeconds),
+    preparationDeadlineAtMs,
+  );
+  const inputQuote = await waitForSignalPreparation(
+    waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS),
     preparationDeadlineAtMs,
   );
   const historyMs = Math.round(performance.now() - historyStartedAt);
@@ -1139,16 +1176,15 @@ export async function feedSignal(
     rejectedRows: history.rejectedRows,
     expectedCandleSeconds: analysisSeconds,
     latestClosedAgeSeconds: historyAgeSeconds,
-    freshForAnalysis: historyAgeSeconds !== null && historyAgeSeconds <= analysisSeconds * 3,
+    freshForAnalysis: historyAgeSeconds !== null && historyAgeSeconds <= analysisSeconds + 4.5,
     firstCandle: candles[0] ?? null,
     lastReceivedCandle: candles.at(-1) ?? null,
     ...summarizeCandleCadence([candles], analysisSeconds),
   }));
-  if (historyAgeSeconds === null || historyAgeSeconds > analysisSeconds * 3) {
-    void reconnectFeedForStaleHistory(symbol, historyAgeSeconds);
+  if (historyAgeSeconds === null || historyAgeSeconds > analysisSeconds + 4.5) {
     return {
       decision: "pass",
-      reason: "Последняя закрытая свеча слишком старая для надёжного анализа. Сигнал не выдан.",
+      reason: "После однократного обновления истории свечи остаются старыми. Сигнал не выдан.",
     };
   }
   const entryHistoryRequest = settleSignalRequest(
