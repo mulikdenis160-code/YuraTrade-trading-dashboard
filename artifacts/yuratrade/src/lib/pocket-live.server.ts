@@ -1301,26 +1301,15 @@ export async function feedConfirmSignalEntry(symbol: string) {
     throw new Error("Для сигнала нужна активная OTC-пара с выплатой ровно 80% или 92%.");
   }
 
-  const history = await loadCandles(
-    symbol,
-    60,
-    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-    1,
-  );
-  const safeHistory = await waitForSafeEntryHistory(symbol, history);
-  if (safeHistory.failure) throw new Error(safeHistory.failure.reason);
+  const history = await freshSignalHistory(symbol, 60);
+  if (entryWindowFailure(history.candles)) {
+    throw new Error("Не удалось определить безопасное окно по последней закрытой свече.");
+  }
 
   let quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
-  const verificationHistory = await loadCandles(
-    symbol,
-    60,
-    CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-    1,
-  );
+  const verificationHistory = await freshSignalHistory(symbol, 60);
   if (entryWindowFailure(verificationHistory.candles)) {
-    const rechecked = await waitForSafeEntryHistory(symbol, verificationHistory);
-    if (rechecked.failure) throw new Error(rechecked.failure.reason);
-    quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+    throw new Error("Последняя закрытая свеча не подтверждает безопасное окно для входа.");
   }
 
   return { openPrice: quote.price };
@@ -1434,20 +1423,11 @@ export async function feedBest(
     if (!candidate) {
       throw new Error("Не удалось подготовить данные выбранной пары.");
     }
-    const initialEntryHistory = await loadCandles(
-      candidate.pair.symbol,
-      60,
-      CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-      1,
-    );
-    const safeInitialHistory = await waitForSafeEntryHistory(
-      candidate.pair.symbol,
-      initialEntryHistory,
-    );
-    if (safeInitialHistory.failure) {
+    const initialEntryHistory = await freshSignalHistory(candidate.pair.symbol, 60);
+    if (entryWindowFailure(initialEntryHistory.candles)) {
       stage = "entry-window";
       logTiming("pass");
-      return safeInitialHistory.failure;
+      return { decision: "pass", reason: "Не удалось определить безопасное окно по последней закрытой свече." };
     }
     stage = "fresh-quote";
     const inputQuoteStartedAt = performance.now();
@@ -1482,37 +1462,21 @@ export async function feedBest(
       logTiming("pass");
       return { decision: "pass", reason: "Ответ ИИ указал пару вне доступного списка; сигнал не выдан." };
     }
-    const finalEntryHistory = await loadCandles(
-      best.pair.symbol,
-      60,
-      CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-      1,
-    );
-    const safeFinalHistory = await waitForSafeEntryHistory(best.pair.symbol, finalEntryHistory);
-    if (safeFinalHistory.failure) {
+    const finalEntryHistory = await freshSignalHistory(best.pair.symbol, 60);
+    if (entryWindowFailure(finalEntryHistory.candles)) {
       stage = "entry-window";
       logTiming("pass");
-      return safeFinalHistory.failure;
+      return { decision: "pass", reason: "Не удалось подтвердить окно по последней закрытой свече." };
     }
     stage = "fresh-quote";
     const quoteStartedAt = performance.now();
     let entryQuote = await waitFreshQuote(best.pair.symbol);
     quoteMs += performance.now() - quoteStartedAt;
-    let verificationHistory = await loadCandles(
-      best.pair.symbol,
-      60,
-      CANDIDATE_HISTORY_PAGE_TIMEOUT_MS,
-      1,
-    );
+    let verificationHistory = await freshSignalHistory(best.pair.symbol, 60);
     if (entryWindowFailure(verificationHistory.candles)) {
-      const rechecked = await waitForSafeEntryHistory(best.pair.symbol, verificationHistory);
-      if (rechecked.failure) {
-        stage = "entry-window";
-        logTiming("pass");
-        return rechecked.failure;
-      }
-      verificationHistory = rechecked.history;
-      entryQuote = await waitFreshQuote(best.pair.symbol);
+      stage = "entry-window";
+      logTiming("pass");
+      return { decision: "pass", reason: "Последняя закрытая свеча не подтверждает безопасное окно." };
     }
     const finalWindowFailure = entryWindowFailure(verificationHistory.candles);
     if (finalWindowFailure) {
