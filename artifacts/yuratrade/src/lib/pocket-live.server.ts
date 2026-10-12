@@ -136,6 +136,7 @@ const pendingHistory = new Map<string, Pending>();
 let lastStreamDiagnosticAt = 0;
 let lastStaleHistoryReconnectAt = 0;
 let staleHistoryReconnectInFlight: Promise<void> | null = null;
+let feedWarmupStarted = false;
 
 const STALE_HISTORY_RECONNECT_COOLDOWN_MS = 5 * 60_000;
 
@@ -798,6 +799,45 @@ export async function feedSnapshot() {
   };
 }
 
+export function startPocketFeed() {
+  if (feedWarmupStarted) return;
+  feedWarmupStarted = true;
+  void (async () => {
+    while (feedWarmupStarted) {
+      try {
+        await ensureFeed();
+        const candidates = rankedSignalPairs();
+        for (const pair of candidates) {
+          if (!feedWarmupStarted) return;
+          // Keep quote and candle subscriptions hot; history requests run FIFO.
+          subscribe(pair.symbol, 1);
+          subscribe(pair.symbol, SIGNAL_CANDLE_SECONDS);
+          const state = pairMarketData.get(pair.symbol);
+          if (
+            state?.historyPeriodSeconds !== SIGNAL_CANDLE_SECONDS ||
+            !historyIsFresh(state.history, SIGNAL_CANDLE_SECONDS) ||
+            closedHistory(state.history, SIGNAL_CANDLE_SECONDS).length < MIN_DIRECT_AI_CANDLES
+          ) {
+            await loadCandles(
+              pair.symbol,
+              SIGNAL_CANDLE_SECONDS,
+              SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
+              1,
+            );
+          }
+        }
+      } catch (error) {
+        console.warn("[pocket-feed-warmup]", JSON.stringify({
+          errorName: error instanceof Error ? error.name : typeof error,
+          activePairs: pairs.size,
+          socketReadyState: socket?.readyState ?? null,
+        }));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+  })();
+}
+
 function rankedSignalPairs() {
   return [...pairs.values()]
     .filter((pair) =>
@@ -1256,9 +1296,9 @@ export async function feedConfirmSignalEntry(symbol: string) {
     !pair ||
     pair.group !== "fx" ||
     !pair.symbol.toLowerCase().includes("otc") ||
-    pair.payout < MIN_SIGNAL_PAYOUT
+    !ELIGIBLE_PAYOUTS.has(pair.payout)
   ) {
-    throw new Error("Для сигнала нужна активная OTC-валютная пара с выплатой не ниже 92%.");
+    throw new Error("Для сигнала нужна активная OTC-пара с выплатой ровно 80% или 92%.");
   }
 
   const history = await loadCandles(
@@ -1339,13 +1379,13 @@ export async function feedBest(
     expectedCandleSeconds = analysisSeconds;
     const ranked = rankedSignalPairs();
     if (ranked.length === 0) {
-      throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
+      throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
     }
     const nextPair = selectRotatingSignalPair(ranked, excludedSymbols.slice(0, 24));
     const pool = nextPair ? [nextPair] : [];
     poolSize = pool.length;
     if (pool.length === 0) {
-      throw new Error("Нет активных OTC-валютных пар с выплатой не ниже 92%.");
+      throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
     }
     const candidates: Array<{ pair: FeedPair; candles: HistoricalCandle[] }> = [];
     let historyFailure = "";
@@ -1353,10 +1393,15 @@ export async function feedBest(
     const historyStartedAt = performance.now();
     let historyResults: Awaited<ReturnType<typeof loadCandidatesInParallel<FeedPair, LoadedHistory>>>;
     try {
-      historyResults = await loadCandidatesInParallel(
-        pool,
-        (pair) => loadCandles(pair.symbol, analysisSeconds, CANDIDATE_HISTORY_PAGE_TIMEOUT_MS),
-      );
+      const results = [];
+      for (const pair of pool) {
+        try {
+          results.push({ ok: true as const, item: pair, value: await freshSignalHistory(pair.symbol, analysisSeconds) });
+        } catch (error) {
+          results.push({ ok: false as const, item: pair, error });
+        }
+      }
+      historyResults = results;
     } finally {
       historyMs = performance.now() - historyStartedAt;
     }

@@ -429,7 +429,7 @@ export async function analyzeMarketCandidates(
       candidate.currentPrice > 0 &&
       Number.isFinite(candidate.quoteAgeMs) &&
       candidate.quoteAgeMs >= 0 &&
-      candidate.quoteAgeMs <= 20_000,
+      candidate.quoteAgeMs <= 2_000,
   );
   if (eligibleCandidates.length === 0) {
     const hasEnoughButStaleHistory = preparedCandidates.some(
@@ -445,9 +445,9 @@ export async function analyzeMarketCandidates(
             !Number.isFinite(candidate.currentPrice) ||
             !Number.isFinite(candidate.quoteAgeMs) ||
             candidate.quoteAgeMs < 0 ||
-            candidate.quoteAgeMs > 20_000
+            candidate.quoteAgeMs > 2_000
           )
-          ? "Живая котировка старше 20 секунд или недоступна. Сигнал не выдан."
+          ? "Текущий тик старше 2 секунд или недоступен. Сигнал не выдан."
           : `После проверки данных нужно не менее ${MIN_DIRECT_AI_CANDLES} закрытых корректных свечей на пару.`,
     };
   }
