@@ -60,6 +60,17 @@ test("split events survive heartbeat and decode nested attachments in order", ()
   assert.deepEqual(decode('["second"]'), { name: "updateAssets", payload: [["second"], ["first"]] });
 });
 
+test("inline ticks between history header and attachment do not lose candles", () => {
+  const decode = createPocketEventDecoder();
+  decode('451-["updateHistoryNewFast",{"_placeholder":true,"num":0}]');
+  assert.deepEqual(decode('42["updateStream",[["AUDUSD_otc",1800000010,1.25]]]'), {
+    name: "updateStream", payload: [["AUDUSD_otc",1800000010,1.25]],
+  });
+  decode("2");
+  const payload = { asset: "AUDUSD_otc", period: 60, candles: [[1800000000, 1.25, 1.26, 1.27, 1.24, 10]], history: [] };
+  assert.deepEqual(decode(JSON.stringify(payload)), { name: "updateHistoryNewFast", payload });
+});
+
 test("decoder discards malformed attachments and superseded headers", () => {
   const decode = createPocketEventDecoder();
   decode('451-["old",{"_placeholder":true,"num":0}]');

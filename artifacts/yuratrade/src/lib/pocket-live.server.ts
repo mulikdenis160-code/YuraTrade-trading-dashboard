@@ -14,6 +14,7 @@ import { SignalDataError } from "./signal-data-error.ts";
 import { historyForPeriod, storePeriodHistory, refreshPeriodHistories, type PocketMarketCache } from "./pocket-market-cache.ts";
 import { analysisPeriodForExpiry, formatExpiry, isValidExpirySeconds } from "./expiry";
 import { createKeyedAsyncQueue } from "./async-keyed-queue";
+import { scheduleHistoryRecovery } from "./pocket-history-recovery.ts";
 import {
   createRotatingCandidateSelector,
   loadCandidatesInParallel,
@@ -145,11 +146,11 @@ const pocketSharedRuntime = (pocketGlobal.__primePocketSharedRuntime ??= {
 });
 const pocketBrokerRuntime = pocketGlobal as typeof pocketGlobal & {
   __primePocketDispose?: () => void;
-  __primePocketBrokerCommandQueue?: ReturnType<typeof createKeyedAsyncQueue>;
+  __primePocketBrokerPriorityQueue?: ReturnType<typeof createKeyedAsyncQueue>;
   __primePocketPendingHistory?: Map<string, Pending>;
 };
 pocketBrokerRuntime.__primePocketDispose?.();
-const runBrokerCommand = pocketBrokerRuntime.__primePocketBrokerCommandQueue ??=
+const runBrokerCommand = pocketBrokerRuntime.__primePocketBrokerPriorityQueue ??=
   createKeyedAsyncQueue();
 const pendingHistory = pocketBrokerRuntime.__primePocketPendingHistory ??=
   new Map<string, Pending>();
@@ -478,12 +479,10 @@ function subscribe(symbol: string, periodSeconds = 1) {
   if (now - (subscribedAt.get(key) ?? 0) < 30_000) return;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   subscribedAt.set(key, now);
-  void runBrokerCommand(BROKER_QUEUE_KEY, async () => {
-    const current = socket;
-    if (current && current.readyState === WebSocket.OPEN) {
-      for (const frame of buildPocketQuoteSubscriptionFrames(symbol)) current.send(frame);
-    }
-  }).catch(() => {});
+  // These frames do not switch the chart and need not wait for history.
+  try {
+    for (const frame of buildPocketQuoteSubscriptionFrames(symbol)) socket.send(frame);
+  } catch { subscribedAt.delete(key); }
 }
 
 function waitQuote(symbol: string, timeoutMs = 12_000) {
@@ -993,8 +992,9 @@ export function startPocketFeed() {
               await loadCandles(
                 pair.symbol,
                 SIGNAL_CANDLE_SECONDS,
-                SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
+                4_500,
                 1,
+                -1,
               );
             } catch (error) {
               console.warn("[pocket-history-warmup-failed]", JSON.stringify({
@@ -1097,12 +1097,18 @@ async function loadHistoryPage(
   seconds: number,
   time: number,
   timeoutMs = 4_500,
+  priority = 0,
 ): Promise<ParsedHistoryPage> {
   // Legacy history frames omit request IDs; keep requests serialized even
   // when newer replies include an index we can match.
   return runBrokerCommand(BROKER_QUEUE_KEY, async () => {
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
+    const cached = historyForPeriod(pairMarketData.get(symbol), seconds);
+    if (Math.abs(Date.now() / 1000 - time) <= seconds * 2 &&
+        closedHistory(cached, seconds).length >= MIN_DIRECT_AI_CANDLES && historyIsFresh(cached, seconds)) {
+      return { candles: [...cached], rejectedRows: 0 };
+    }
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
     const clockDeadline = Date.now() + Math.min(timeoutMs, 4_500);
     while (pocketSharedRuntime.clockOffsetSeconds === null && Date.now() < clockDeadline) {
@@ -1131,29 +1137,52 @@ async function loadHistoryPage(
       );
       const requestIndex = Math.max(lastHistoryRequestIndex + 1, Math.floor(Date.now() / 10));
       lastHistoryRequestIndex = requestIndex;
-      const timer = setTimeout(() => {
-        if (settleLatestHistoryFromCache(symbol)) return;
-        if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
-        console.warn("[pocket-history-timeout]", JSON.stringify({
-          symbol,
-          periodSeconds: seconds,
-          requestTime,
-          serverClockOffsetSeconds: clockOffsetSeconds,
-          timeBasis: "local-plus-feed-offset",
-          timeoutMs,
-          socketReadyState: socket?.readyState ?? null,
-          pairAvailable: pairs.has(symbol),
-          connectionError: connectionError || null,
-          lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null,
-        }));
-        reject(new Error(request.receivedHistory
-          ? "Pocket Option прислал только устаревшую или неполную историю. Свежие свечи пока недоступны."
-          : `История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
-      }, timeoutMs);
+      const sendHistory = () => {
+        if (socket !== current || current.readyState !== WebSocket.OPEN) {
+          throw new Error("Соединение с Pocket Option прервалось во время загрузки истории.");
+        }
+        sendPocketSubscription(current, symbol, seconds);
+        current.send("42" + JSON.stringify(["loadHistoryPeriod", buildPocketHistoryRequest(
+          symbol, seconds, requestTime, requestIndex, seconds * HISTORY_PAGE_CANDLES,
+        )]));
+      };
+      const recovery = scheduleHistoryRecovery({
+        timeoutMs,
+        retry: priority < 0 ? null : () => {
+          if (settleLatestHistoryFromCache(symbol)) return;
+          console.info("[pocket-history-retry]", JSON.stringify({ symbol, periodSeconds: seconds, requestIndex }));
+          sendHistory();
+        },
+        fail: (error) => {
+          if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+          reject(error);
+        },
+        expire: () => {
+          if (settleLatestHistoryFromCache(symbol)) return;
+          if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+          console.warn("[pocket-history-timeout]", JSON.stringify({
+            symbol,
+            periodSeconds: seconds,
+            requestTime,
+            serverClockOffsetSeconds: clockOffsetSeconds,
+            timeBasis: "local-plus-feed-offset",
+            timeoutMs,
+            socketReadyState: socket?.readyState ?? null,
+            pairAvailable: pairs.has(symbol),
+            connectionError: connectionError || null,
+            lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null,
+          }));
+          reject(new Error(request.receivedHistory
+            ? "Pocket Option прислал только устаревшую или неполную историю. Свежие свечи пока недоступны."
+            : `История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
+        },
+      });
       request = {
         asset: symbol, index: requestIndex, periodSeconds: seconds,
         latestWanted: Math.abs(Date.now() / 1000 - time) <= seconds * 2,
-        resolve, reject, timer,
+        resolve: (history) => { recovery.stop(); resolve(history); },
+        reject: (error) => { recovery.stop(); reject(error); },
+        timer: recovery.timer,
       };
       pendingHistory.set(symbol, request);
       try {
@@ -1165,27 +1194,14 @@ async function loadHistoryPage(
           timeBasis: "local-plus-feed-offset",
           socketReadyState: current.readyState,
         }));
-        sendPocketSubscription(current, symbol, seconds);
-        current.send(
-          "42" +
-            JSON.stringify([
-              "loadHistoryPeriod",
-              buildPocketHistoryRequest(
-                symbol,
-                seconds,
-                requestTime,
-                requestIndex,
-                seconds * HISTORY_PAGE_CANDLES,
-              ),
-            ]),
-        );
+        sendHistory();
       } catch {
-        clearTimeout(timer);
+        recovery.stop();
         if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
         reject(new Error("Не удалось запросить историю свечей Pocket Option."));
       }
     });
-  });
+  }, priority);
 }
 
 const historyLoads = new Map<string, Promise<LoadedHistory>>();
@@ -1195,11 +1211,12 @@ function loadCandles(
   seconds: number,
   pageTimeoutMs = 4_500,
   pageLimit?: number,
+  priority = 0,
 ): Promise<LoadedHistory> {
-  const key = `${symbol}:${seconds}:${pageLimit ?? "all"}`;
+  const key = `${symbol}:${seconds}:${pageLimit ?? "all"}:${priority}`;
   const existing = historyLoads.get(key);
   if (existing) return existing;
-  const task = loadCandlesUnshared(symbol, seconds, pageTimeoutMs, pageLimit).finally(() => {
+  const task = loadCandlesUnshared(symbol, seconds, pageTimeoutMs, pageLimit, priority).finally(() => {
     if (historyLoads.get(key) === task) historyLoads.delete(key);
   });
   historyLoads.set(key, task);
@@ -1211,6 +1228,7 @@ async function loadCandlesUnshared(
   seconds: number,
   pageTimeoutMs = 4_500,
   pageLimit?: number,
+  priority = 0,
 ): Promise<{ candles: HistoricalCandle[]; rejectedRows: number }> {
   await ensureFeed();
   const collected = new Map<number, HistoricalCandle>();
@@ -1224,6 +1242,7 @@ async function loadCandlesUnshared(
       seconds,
       cursor,
       pageTimeoutMs,
+      priority,
     );
     rejectedRows += history.rejectedRows;
     const candles = history.candles;

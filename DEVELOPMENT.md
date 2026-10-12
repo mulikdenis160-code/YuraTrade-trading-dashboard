@@ -83,7 +83,7 @@ and `corepack pnpm@10.30.0 --filter @workspace/api-server run dev`;
   authentication; it is not proof of an invalid key.
 
 Current validation: all workspace type checks and all three application builds
-passed. Application tests: 211 passed. Tooling tests: 193 passed, four failed
+passed. Application tests: 217 passed. Tooling tests: 193 passed, four failed
 because the platform documentation described above is missing. HTTP smoke
 checks passed for the website, the API health endpoint and mockup sandbox.
 Pocket Option authenticated and supplied history and fast ticks. After fixing
@@ -133,3 +133,29 @@ quota. Evidence: `/workspace/site-preview/signal-check-results.json` and
 History and signal deadlines remain bounded. Stale or incomplete candles are
 not relabeled as fresh, and no trades are opened by these checks. Changes in
 this checkout are not deployed to an existing Replit website automatically.
+
+## History timeout recovery
+
+Signal history now has an eight-second response deadline and one reissue after
+2.5 seconds. Both attempts share the request ID, chart lock and original
+deadline; successful completion, disconnection and HMR disposal cancel the
+recovery timer. Background warmup retains a 4.5-second deadline without retries
+and uses lower queue priority. A queued signal can use history that became fresh
+while waiting, rather than requesting the same data again. Quote subscriptions
+do not switch charts and no longer wait behind history loads.
+
+The Socket.IO decoder preserves a pending history attachment across intervening
+inline quote/control events. Previously any inline event discarded the pending
+header, so the following candle attachment could be lost. Authorization changes
+and superseding binary headers still reset pending decoding state.
+
+Tests cover lost requests, responses arriving after five seconds, cancellation,
+retry failure, bounded expiration, queue priority/FIFO ordering and interleaved
+quote/history frames. All 217 application tests, package typechecks and builds
+passed. A real Pocket diagnostic deliberately dropped each initial foreground
+request: three different pairs returned validated 60/300/900-second history
+after recovery, 99 candles each, in 3.64/2.98/3.36 seconds. This is a history
+recovery check, not a Gemini signal generation or a Replit production test.
+Evidence: /workspace/site-preview/pocket-history-recovery-results.json.
+A separate real series still observed missing responses before these checks;
+provider outages and invalid history remain errors rather than fabricated data.

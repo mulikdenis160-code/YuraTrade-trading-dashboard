@@ -36,8 +36,11 @@ export function createPocketEventDecoder() {
       return null;
     }
     if (message.startsWith("42")) {
-      pending = null;
-      return parsePocketSocketIoEvent(message);
+      const event = parsePocketSocketIoEvent(message);
+      // Inline quotes/control messages may arrive between a binary history
+      // header and its JSON attachment. They must not discard that history.
+      if (event?.name === "successauth" || event?.name === "NotAuthorized") pending = null;
+      return event;
     }
     if (!pending || (!message.startsWith("[") && !message.startsWith("{"))) return null;
     try {
