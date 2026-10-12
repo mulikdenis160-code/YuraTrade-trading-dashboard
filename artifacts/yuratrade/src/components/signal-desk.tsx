@@ -195,13 +195,26 @@ export function SignalDesk() {
 
         const signalBudgetMs = preparationDeadlineAtMs - Date.now();
         if (signalBudgetMs <= 0) throw new Error(lastReason || t("signal.analysisTimeout"));
-        const result = await waitForSignalRequest(
-          settleSignalRequest(takeSignal({
-            data: { symbol: candidate.symbol, expirySeconds: requestedExpiry },
-          })),
-          Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, signalBudgetMs),
-          t("signal.analysisTimeout"),
-        );
+        let result: Awaited<ReturnType<typeof takeSignal>>;
+        try {
+          result = await waitForSignalRequest(
+            settleSignalRequest(takeSignal({
+              data: { symbol: candidate.symbol, expirySeconds: requestedExpiry },
+            })),
+            Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, signalBudgetMs),
+            t("signal.analysisTimeout"),
+          );
+        } catch (cause) {
+          if (attemptRef.current !== attempt) return;
+          if (Date.now() >= preparationDeadlineAtMs) throw cause;
+          lastReason = cause instanceof Error ? cause.message : t("signal.none");
+          console.warn("[signal-pair-skipped]", JSON.stringify({
+            symbol: candidate.symbol,
+            reason: lastReason,
+            remainingMs: preparationDeadlineAtMs - Date.now(),
+          }));
+          continue;
+        }
         if (attemptRef.current !== attempt) return;
         if (result.decision === "pass") {
           lastReason = result.reason;
