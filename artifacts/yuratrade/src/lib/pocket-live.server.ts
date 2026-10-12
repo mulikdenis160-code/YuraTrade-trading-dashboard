@@ -1073,7 +1073,18 @@ async function loadCandles(
     historyPeriodSeconds: null,
   };
   const beforeRealtime = candles.at(-1)?.time ?? null;
-  candles = appendCoveredFastCandles(candles, state.ticks, seconds, Date.now());
+  candles = appendCoveredFastCandles(
+    candles,
+    state.ticks,
+    seconds,
+    Date.now(),
+    undefined,
+    (coverage) => console.info("[pocket-fast-history-coverage]", JSON.stringify({
+      symbol,
+      periodSeconds: seconds,
+      ...coverage,
+    })),
+  );
   if (state.historyPeriodSeconds === seconds) {
     candles = mergePocketHistoryByTime(state.history, candles, DIRECT_AI_HISTORY_CANDLES);
   }

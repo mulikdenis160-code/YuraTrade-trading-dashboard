@@ -13,6 +13,16 @@ export type ParsedHistoryPage = {
 };
 
 export type TimedPriceTick = { time: number; price: number };
+export type FastHistoryCoverageDiagnostic = {
+  latestKnownTimeMs: number;
+  formingCandleStartMs: number;
+  candleOffsetMs: number;
+  missingCount: number;
+  reconstructedCount: number;
+  blockedAtIndex: number | null;
+  blockedTickCount: number | null;
+  blockedCoverageMs: number | null;
+};
 
 export function mergePocketHistoryByTime(
   cached: HistoricalCandle[],
@@ -32,6 +42,7 @@ export function appendCoveredFastCandles(
   periodSeconds: number,
   nowMs: number,
   maxGapCandles = 8,
+  onCoverage?: (diagnostic: FastHistoryCoverageDiagnostic) => void,
 ): HistoricalCandle[] {
   if (
     candles.length === 0 ||
@@ -43,7 +54,11 @@ export function appendCoveredFastCandles(
   const periodMs = periodSeconds * 1000;
   const orderedCandles = [...candles].sort((a, b) => a.time - b.time);
   const latestKnownTimeMs = orderedCandles.at(-1)!.time * 1000;
-  const formingCandleStartMs = Math.floor(nowMs / periodMs) * periodMs;
+  // Keep the broker's candle anchor. OTC candle boundaries can be offset
+  // from Unix-minute boundaries; flooring to epoch time mis-buckets fast ticks.
+  const formingCandleStartMs =
+    latestKnownTimeMs +
+    Math.floor((nowMs - latestKnownTimeMs) / periodMs) * periodMs;
   const missingCount = Math.floor((formingCandleStartMs - periodMs - latestKnownTimeMs) / periodMs);
   if (missingCount <= 0 || missingCount > maxGapCandles) return candles;
 
@@ -56,19 +71,34 @@ export function appendCoveredFastCandles(
       tick.time >= formingCandleStartMs ||
       tick.price <= 0
     ) continue;
-    const candleTimeMs = Math.floor(tick.time / periodMs) * periodMs;
+    const candleIndex = Math.floor((tick.time - latestKnownTimeMs) / periodMs);
+    if (candleIndex < 1 || candleIndex > missingCount) continue;
+    const candleTimeMs = latestKnownTimeMs + candleIndex * periodMs;
     const group = grouped.get(candleTimeMs) ?? [];
     group.push(tick);
     grouped.set(candleTimeMs, group);
   }
 
   const reconstructed: HistoricalCandle[] = [];
+  let blockedAtIndex: number | null = null;
+  let blockedTickCount: number | null = null;
+  let blockedCoverageMs: number | null = null;
   for (let index = 1; index <= missingCount; index += 1) {
     const candleTimeMs = latestKnownTimeMs + index * periodMs;
     const group = (grouped.get(candleTimeMs) ?? []).sort((a, b) => a.time - b.time);
-    if (group.length < 4) return candles;
+    if (group.length < 4) {
+      blockedAtIndex = index;
+      blockedTickCount = group.length;
+      blockedCoverageMs = group.length > 1 ? group.at(-1)!.time - group[0]!.time : 0;
+      break;
+    }
     const coverageMs = group.at(-1)!.time - group[0]!.time;
-    if (coverageMs < periodMs * 0.7) return candles;
+    if (coverageMs < periodMs * 0.7) {
+      blockedAtIndex = index;
+      blockedTickCount = group.length;
+      blockedCoverageMs = coverageMs;
+      break;
+    }
     const prices = group.map((tick) => tick.price);
     reconstructed.push({
       time: candleTimeMs / 1000,
@@ -79,7 +109,19 @@ export function appendCoveredFastCandles(
     });
   }
 
-  return [...orderedCandles, ...reconstructed];
+  onCoverage?.({
+    latestKnownTimeMs,
+    formingCandleStartMs,
+    candleOffsetMs: latestKnownTimeMs % periodMs,
+    missingCount,
+    reconstructedCount: reconstructed.length,
+    blockedAtIndex,
+    blockedTickCount,
+    blockedCoverageMs,
+  });
+  return reconstructed.length > 0
+    ? [...orderedCandles, ...reconstructed]
+    : candles;
 }
 
 export function parsePocketOptionHistory(data: unknown[]): ParsedHistoryPage {

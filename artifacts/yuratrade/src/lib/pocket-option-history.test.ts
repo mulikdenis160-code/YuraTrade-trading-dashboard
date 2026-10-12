@@ -36,6 +36,41 @@ test("fast-history ticks fill every missing closed minute only with adequate cov
   assert.equal(result.at(-1)?.close, 1.05);
 });
 
+test("fast-history reconstruction follows Pocket candle boundaries with a non-minute Unix offset", () => {
+  const base = [{ time: 62, open: 1, close: 1, high: 1, low: 1 }];
+  const ticks = [];
+  for (let minute = 1; minute <= 3; minute += 1) {
+    for (const second of [1, 15, 30, 45]) {
+      ticks.push({ time: (62 + minute * 60 + second) * 1000, price: 1 + minute / 100 });
+    }
+  }
+
+  const result = appendCoveredFastCandles(base, ticks, 60, 302_000);
+  assert.deepEqual(result.map((candle) => candle.time), [62, 122, 182, 242]);
+  assert.equal(result.at(-1)?.close, 1.03);
+});
+
+test("fast-history preserves the valid contiguous candles before an incomplete newest candle", () => {
+  const base = [{ time: 60, open: 1, close: 1, high: 1, low: 1 }];
+  const ticks = [
+    { time: 121_000, price: 1.01 },
+    { time: 135_000, price: 1.02 },
+    { time: 150_000, price: 1.03 },
+    { time: 165_000, price: 1.04 },
+    { time: 181_000, price: 1.05 },
+    { time: 195_000, price: 1.06 },
+    { time: 210_000, price: 1.07 },
+    { time: 225_000, price: 1.08 },
+    { time: 241_000, price: 1.09 },
+    { time: 245_000, price: 1.1 },
+    { time: 250_000, price: 1.11 },
+  ];
+
+  const result = appendCoveredFastCandles(base, ticks, 60, 300_000);
+  assert.deepEqual(result.map((candle) => candle.time), [60, 120, 180]);
+  assert.equal(result.at(-1)?.close, 1.08);
+});
+
 test("fast-history data never fills partial coverage or the currently forming candle", () => {
   const base = [{ time: 60, open: 1, close: 1, high: 1, low: 1 }];
   const incomplete = [
