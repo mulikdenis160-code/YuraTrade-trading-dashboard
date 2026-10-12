@@ -4,12 +4,71 @@ import {
   buildPocketAuthFrame,
   buildPocketHistoryRequest,
   buildPocketSubscriptionFrames,
+  buildPocketQuoteSubscriptionFrames,
+  createPocketEventDecoder,
   findPocketRows,
   parsePocketFastHistory,
+  parsePocketFastCandleHistory,
   parsePocketHistoryResponse,
   parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
+  pocketHistoryMatchesRequest,
 } from "./pocket-feed-frame.ts";
+
+test("fast candle history works without tick history and keeps its asset and period", () => {
+  const result = parsePocketFastCandleHistory({ asset: "CHFJPY_otc", period: 60,
+    candles: [[120, 178.052, 178.095, 178.117, 177.993, 96]] });
+  assert.ok(result);
+  assert.equal(result.asset, "CHFJPY_otc");
+  assert.equal(result.periodSeconds, 60);
+  assert.equal(result.history.candles[0].close, 178.095);
+  assert.equal(parsePocketFastCandleHistory({ asset: "CHFJPY_otc", period: 0, candles: [[120, 1, 1, 1, 1]] }), null);
+  assert.equal(parsePocketFastCandleHistory({ asset: "CHFJPY_otc", period: 60, candles: [[120, 1, 2, 1, 1]] }), null);
+});
+
+test("late history replies cannot satisfy a newer request or a different candle period", () => {
+  const request = { asset: "AUDUSD_otc", index: 123, periodSeconds: 60 };
+  const response = parsePocketHistoryResponse(JSON.stringify({ asset: request.asset, data: [], index: 123, period: 60 }));
+  assert.ok(response);
+  assert.equal(pocketHistoryMatchesRequest(response, request), true);
+  assert.equal(pocketHistoryMatchesRequest({ ...response, index: 122 }, request), false);
+  assert.equal(pocketHistoryMatchesRequest({ ...response, periodSeconds: 300 }, request), false);
+  assert.equal(pocketHistoryMatchesRequest({ ...response, asset: "EURUSD_otc" }, request), false);
+  assert.equal(pocketHistoryMatchesRequest({ asset: request.asset, data: [] }, request), true);
+});
+
+test("quote subscriptions do not switch the shared chart away from an in-flight history request", () => {
+  assert.deepEqual(buildPocketQuoteSubscriptionFrames("AUDUSD_otc"), [
+    '42["subscribeSymbol","AUDUSD_otc"]',
+    '42["subfor","AUDUSD_otc"]',
+  ]);
+});
+
+test("decodes split fast history instead of losing its JSON attachment", () => {
+  const decode = createPocketEventDecoder();
+  assert.equal(decode('451-["updateHistoryNewFast",{"_placeholder":true,"num":0}]'), null);
+  const payload = { asset: "AUDUSD_otc", period: 60, history: [[1800000000, 1.25]] };
+  assert.deepEqual(decode(JSON.stringify(payload)), { name: "updateHistoryNewFast", payload });
+  assert.equal(decode(JSON.stringify(payload)), null);
+});
+
+test("split events survive heartbeat and decode nested attachments in order", () => {
+  const decode = createPocketEventDecoder();
+  assert.equal(decode('452-["updateAssets",[{"_placeholder":true,"num":1},{"_placeholder":true,"num":0}]]'), null);
+  assert.equal(decode("2"), null);
+  assert.equal(decode('["first"]'), null);
+  assert.deepEqual(decode('["second"]'), { name: "updateAssets", payload: [["second"], ["first"]] });
+});
+
+test("decoder discards malformed attachments and superseded headers", () => {
+  const decode = createPocketEventDecoder();
+  decode('451-["old",{"_placeholder":true,"num":0}]');
+  assert.deepEqual(decode('42["successauth",{}]'), { name: "successauth", payload: {} });
+  assert.equal(decode('{}'), null);
+  decode('451-["old",{"_placeholder":true,"num":0}]');
+  assert.equal(decode('{bad'), null);
+  assert.equal(decode('{}'), null);
+});
 
 test("requests optimized fast history without changing Pocket Option credentials", () => {
   const frame = buildPocketAuthFrame(

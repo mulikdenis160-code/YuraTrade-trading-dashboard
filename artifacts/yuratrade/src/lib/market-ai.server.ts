@@ -1,4 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
+import { createHash } from "node:crypto";
+import { environmentFetch } from "./http-fetch.server.ts";
+import { createMarketAiController, MarketAiServiceError, marketAiFailure, retryAfterMilliseconds } from "./market-ai-control.ts";
 import { z } from "zod";
 import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
@@ -86,6 +89,28 @@ export function activeGeminiModel(
 
 let client: GoogleGenAI | null = null;
 let clientIdentity = "";
+let requestController = createMarketAiController();
+const controllerGlobal = globalThis as typeof globalThis & {
+  __primeGeminiControl?: { identity: string; controller: ReturnType<typeof createMarketAiController> };
+};
+
+const geminiFetch: typeof fetch = async (input, init) => {
+  const response = await environmentFetch(input, init);
+  if ([429, 500, 502, 503].includes(response.status)) {
+    let body: unknown;
+    try { body = await response.clone().json(); } catch { /* proxy response without JSON */ }
+    const failure = marketAiFailure({ status: response.status, message: JSON.stringify(body) });
+    const delay = retryAfterMilliseconds(response.headers.get("retry-after"));
+    if (delay !== null) {
+      failure.retryAfterMs = Math.max(1_000, failure.retryDelayProvided ? Math.max(delay, failure.retryAfterMs) : delay);
+      failure.retryDelayProvided = true;
+    }
+    console.warn("[signal-ai-service]", JSON.stringify({ code: failure.code, status: response.status, retryAfterMs: failure.retryAfterMs }));
+    await response.body?.cancel();
+    throw failure;
+  }
+  return response;
+};
 
 function getGeminiClient() {
   const hasProxy = Boolean(
@@ -105,9 +130,14 @@ function getGeminiClient() {
   const model = activeGeminiModel();
   const identity = `${model.model}\u0000${apiKey}\u0000${model.proxyBaseUrl ?? ""}`;
   if (!client || clientIdentity !== identity) {
+    const identityHash = createHash("sha256").update(identity).digest("hex");
+    requestController = controllerGlobal.__primeGeminiControl?.identity === identityHash
+      ? controllerGlobal.__primeGeminiControl.controller : createMarketAiController();
+    controllerGlobal.__primeGeminiControl = { identity: identityHash, controller: requestController };
     client = new GoogleGenAI({
       apiKey,
       httpOptions: {
+        fetch: geminiFetch,
         ...(model.proxyBaseUrl
           ? { apiVersion: "", baseUrl: model.proxyBaseUrl }
           : {}),
@@ -117,7 +147,12 @@ function getGeminiClient() {
     });
     clientIdentity = identity;
   }
-  return { client, model };
+  return { client, model, controller: requestController };
+}
+
+export function marketAiAvailability() {
+  try { return getGeminiClient().controller.unavailable(); }
+  catch { return new MarketAiServiceError("ai_configuration", "Gemini не настроен. Проверьте ключ и настройки подключения."); }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -132,6 +167,7 @@ function errorStatusCode(error: unknown): number | null {
 }
 
 export function isMarketAiTimeout(error: unknown) {
+  if (error instanceof MarketAiServiceError) return error.code === "ai_timeout";
   const status = errorStatusCode(error);
   const name = error instanceof Error ? error.name.toLowerCase() : "";
   return status === 408 || status === 504 || name.includes("timeout") || name.includes("abort");
@@ -321,9 +357,9 @@ type ReviewChoice = {
 };
 
 type ReviewCompletion = { choices: ReviewChoice[] };
-type ReviewCompletionRequest = (messages: ReviewMessage[]) => Promise<ReviewCompletion>;
+type ReviewCompletionRequest = (messages: ReviewMessage[], options?: { signal: AbortSignal; timeoutMs: number }) => Promise<ReviewCompletion>;
 
-function requestMarketAiCompletion(messages: ReviewMessage[]) {
+function requestMarketAiCompletion(messages: ReviewMessage[], options?: { signal: AbortSignal; timeoutMs: number }) {
   const system = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
@@ -332,13 +368,19 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
     .filter((message) => message.role === "user")
     .map((message) => message.content)
     .join("\n\n");
-  const { client: gemini, model } = getGeminiClient();
+  const { client: gemini, model, controller } = getGeminiClient();
+  const key = createHash("sha256").update(JSON.stringify([model.model, system, userPrompt])).digest("hex");
+  const deadline = Date.now() + (options?.timeoutMs ?? SIGNAL_ANALYSIS_TIMEOUT_MS);
 
-  return gemini.models.generateContent({
+  return controller.run(key, (remainingMs) => gemini.models.generateContent({
     model: model.model,
     contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    config: geminiGenerationConfig(system, model.model),
-  }).then((response) => ({
+    config: {
+      ...geminiGenerationConfig(system, model.model),
+      abortSignal: options?.signal,
+      httpOptions: { timeout: remainingMs, retryOptions: { attempts: 1 } },
+    },
+  }), deadline, options?.signal).then((response) => ({
     choices: [{
       message: { content: response.text || null },
       finish_reason: String(response.candidates?.[0]?.finishReason ?? "STOP"),
@@ -346,12 +388,13 @@ function requestMarketAiCompletion(messages: ReviewMessage[]) {
   }));
 }
 
-function withTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+function withTimeout<T>(request: Promise<T>, timeoutMs: number, abort: () => void): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<T>((_, reject) => {
     timer = setTimeout(() => {
       const error = new Error(`Gemini request exceeded ${timeoutMs} ms.`);
       error.name = "TimeoutError";
+      abort();
       reject(error);
     }, timeoutMs);
   });
@@ -371,13 +414,14 @@ export async function requestMarketAiReviewOnce(
   let timedOut = false;
   let errorStatus: number | null = null;
   let errorName: string | null = null;
+  const abort = new AbortController();
   try {
-    choice = (await withTimeout(request(baseMessages), timeoutMs)).choices[0];
+    choice = (await withTimeout(request(baseMessages, { signal: abort.signal, timeoutMs }), timeoutMs, () => abort.abort())).choices[0];
   } catch (error) {
     timedOut = isMarketAiTimeout(error);
     errorStatus = errorStatusCode(error);
     errorName = error instanceof Error ? error.name : null;
-    throw new Error(marketAiApiErrorMessage(error));
+    throw marketAiFailure(error);
   } finally {
     console.info("[signal-ai-duration]", JSON.stringify({
       durationMs: Math.round(performance.now() - startedAt),
@@ -394,12 +438,12 @@ export async function requestMarketAiReviewOnce(
     : null;
   if (review) return review;
   if (choice?.message.refusal) {
-    throw new Error("Gemini отказался выполнить анализ. Сигнал не выдан.");
+    throw new MarketAiServiceError("ai_invalid_response", "Gemini отказался выполнить анализ. Сигнал не выдан.");
   }
   if (choice?.finish_reason?.toLowerCase().includes("max_tokens")) {
-    throw new Error("Gemini оборвал ответ по лимиту длины. Сигнал не выдан.");
+    throw new MarketAiServiceError("ai_invalid_response", "Gemini оборвал ответ по лимиту длины. Сигнал не выдан.");
   }
-  throw new Error("Gemini вернул ответ, который не удалось проверить. Сигнал не выдан.");
+  throw new MarketAiServiceError("ai_invalid_response", "Gemini вернул ответ, который не удалось проверить. Сигнал не выдан.");
 }
 
 export async function analyzeMarketCandidates(

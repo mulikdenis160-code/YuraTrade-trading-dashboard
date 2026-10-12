@@ -19,10 +19,11 @@ import {
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
+import { searchSignalPairs } from "@/lib/signal-search";
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import { analysisPeriodForExpiry, EXPIRY_OPTIONS_SECONDS } from "@/lib/expiry";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
-import { visibleSignalReleaseAt } from "@/lib/signal-release-time";
+import { visibleSignalReleaseAt, signalEntryIsLive } from "@/lib/signal-release-time";
 
 type PairChoice = Awaited<ReturnType<typeof chooseSignalPair>>;
 type PreparedSignal = Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }>
@@ -50,6 +51,19 @@ export function SignalDesk() {
   const [copyRemaining, setCopyRemaining] = useState(SIGNAL_COPY_DELAY_SECONDS);
   const [copiedPair, setCopiedPair] = useState(false);
   const [used, setUsed] = useState(0);
+  const [retryUntil, setRetryUntil] = useState(0);
+  const [retryRemaining, setRetryRemaining] = useState(0);
+  const retryLabel = retryRemaining >= 60
+    ? t("signal.retryCooldownTimer", { time: `${Math.floor(retryRemaining / 60)}:${String(retryRemaining % 60).padStart(2, "0")}` })
+    : t("signal.retryCooldownSeconds", { seconds: retryRemaining });
+
+  useEffect(() => {
+    const update = () => setRetryRemaining(Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000)));
+    update();
+    if (retryUntil <= Date.now()) return;
+    const timer = window.setInterval(update, 500);
+    return () => window.clearInterval(timer);
+  }, [retryUntil]);
   const attemptRef = useRef(0);
 
   useEffect(() => () => {
@@ -164,7 +178,7 @@ export function SignalDesk() {
   };
 
   const ask = async () => {
-    if (phase !== "idle" || blocked || !ready) return;
+    if (phase !== "idle" || blocked || !ready || Date.now() < retryUntil) return;
     const requestedExpiry = expirySeconds;
     const attempt = ++attemptRef.current;
     const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
@@ -174,67 +188,32 @@ export function SignalDesk() {
     setPendingPair(null);
     try {
       const excludedSymbols = recentlyUsedSignalSymbols(readSignalJournal());
-      const checkedSymbols = new Set<string>();
-      let selected: PendingPair | null = null;
-      let prepared: Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }> | null = null;
-      let lastReason = "";
-
-      for (let index = 0; index < SIGNAL_PAIR_SEARCH_LIMIT; index += 1) {
-        const candidateBudgetMs = preparationDeadlineAtMs - Date.now();
-        if (candidateBudgetMs <= 0) throw new Error(t("signal.analysisTimeout"));
-        const candidate = await waitForSignalRequest(
-          settleSignalRequest(chooseSignalPair({
-            data: { excludedSymbols: [...excludedSymbols, ...checkedSymbols] },
-          })),
-          candidateBudgetMs,
-          t("signal.analysisTimeout"),
-        );
-        if (attemptRef.current !== attempt) return;
-        if (checkedSymbols.has(candidate.symbol)) break;
-        checkedSymbols.add(candidate.symbol);
-
-        const signalBudgetMs = preparationDeadlineAtMs - Date.now();
-        if (signalBudgetMs <= 0) throw new Error(lastReason || t("signal.analysisTimeout"));
-        let result: Awaited<ReturnType<typeof takeSignal>>;
-        try {
-          result = await waitForSignalRequest(
-            settleSignalRequest(takeSignal({
-              data: { symbol: candidate.symbol, expirySeconds: requestedExpiry },
-            })),
-            Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, signalBudgetMs),
-            t("signal.analysisTimeout"),
-          );
-        } catch (cause) {
-          if (attemptRef.current !== attempt) return;
-          if (Date.now() >= preparationDeadlineAtMs) throw cause;
-          lastReason = cause instanceof Error ? cause.message : t("signal.none");
-          console.warn("[signal-pair-skipped]", JSON.stringify({
-            symbol: candidate.symbol,
-            reason: lastReason,
-            remainingMs: preparationDeadlineAtMs - Date.now(),
-          }));
-          continue;
-        }
-        if (attemptRef.current !== attempt) return;
-        if (result.decision === "pass") {
-          lastReason = result.reason;
-          continue;
-        }
-        prepared = result;
-        selected = {
-          ...candidate,
-          attempt,
-          seconds: requestedExpiry,
-          copyUntil: visibleSignalReleaseAt(result.releaseAtMs, Date.now()),
-        };
-        break;
-      }
-
-      if (!selected || !prepared) {
-        setNotice(lastReason || t("signal.none"));
+      const result = await searchSignalPairs<PairChoice, Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }>>({
+        choose: (excludedSymbols) => chooseSignalPair({ data: { excludedSymbols } }),
+        prepare: (candidate) => takeSignal({ data: { symbol: candidate.symbol, expirySeconds: requestedExpiry } }),
+        excluded: excludedSymbols,
+        maxPairs: SIGNAL_PAIR_SEARCH_LIMIT,
+        deadlineAtMs: preparationDeadlineAtMs,
+        timeoutMessage: t("signal.analysisTimeout"),
+        cancelled: () => attemptRef.current !== attempt,
+        onSkip: (symbol, reason) => console.warn("[signal-pair-skipped]", JSON.stringify({ symbol, reason })),
+      });
+      if (attemptRef.current !== attempt) return;
+      if (result.decision === "pass") {
+        if (result.retryAcrossPairs === false) {
+          setSearchError(result.reason);
+          const retryAfterMs = result.retryAfterMs ?? 0;
+          setRetryUntil(Date.now() + retryAfterMs);
+          setRetryRemaining(Math.max(0, Math.ceil(retryAfterMs / 1000)));
+        } else setNotice(result.reason);
         setPhase("idle");
         return;
       }
+      const prepared = result.prepared;
+      const selected: PendingPair = {
+        ...result.pair, attempt, seconds: requestedExpiry,
+        copyUntil: visibleSignalReleaseAt(prepared.releaseAtMs, Date.now()),
+      };
 
       const readyPair = selected;
       setPendingPair(readyPair);
@@ -245,9 +224,13 @@ export function SignalDesk() {
         window.setTimeout(resolve, Math.max(0, readyPair.copyUntil - Date.now()));
       });
       if (attemptRef.current !== attempt) return;
+      if (!signalEntryIsLive(prepared.expiresAtMs)) throw new Error(t("signal.entryExpired"));
       setPhase("analysis");
-      const entry = await confirmSignalEntry({ data: { symbol: readyPair.symbol } });
+      const entry = await waitForSignalRequest(settleSignalRequest(confirmSignalEntry({
+        data: { symbol: readyPair.symbol, expiresAtMs: prepared.expiresAtMs },
+      })), Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, prepared.expiresAtMs - Date.now()), t("signal.entryExpired"));
       if (attemptRef.current !== attempt) return;
+      if (!signalEntryIsLive(entry.validUntilMs)) throw new Error(t("signal.entryExpired"));
       await openSignal(
         { ...prepared, openPrice: entry.openPrice, symbol: readyPair.symbol, group: readyPair.group, seconds: readyPair.seconds },
         attempt,
@@ -313,8 +296,8 @@ export function SignalDesk() {
             {t("signal.analyzed", { period: expiryLabel(analysisSeconds) })}
           </p>
         </section>
-        <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked)} onClick={() => void ask()}>
-          {phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")}
+        <button type="button" className="btn-prime mt-4 min-h-12 w-full" disabled={!ready || phase !== "idle" || Boolean(blocked) || retryRemaining > 0} onClick={() => void ask()}>
+          {retryRemaining > 0 ? retryLabel : phase === "copy" ? t("signal.pairReady") : phase === "idle" ? t("signal.get") : t("signal.checking")}
         </button>
         <p className={`mt-2 text-center text-xs ${blocked ? "text-loss" : "text-dim"}`}>
           {blocked || (admin || cap === null ? t("signal.noLimit") : t("signal.today", { used, cap }))}
@@ -326,10 +309,10 @@ export function SignalDesk() {
             <button
               type="button"
               className="btn-ghost mt-3 min-h-10 w-full justify-center"
-              disabled={!ready || phase !== "idle" || Boolean(blocked)}
+              disabled={!ready || phase !== "idle" || Boolean(blocked) || retryRemaining > 0}
               onClick={() => void ask()}
             >
-              {t("signal.tryAgain")}
+              {retryRemaining > 0 ? retryLabel : t("signal.tryAgain")}
             </button>
           </section>
         ) : null}
@@ -362,10 +345,10 @@ export function SignalDesk() {
               <button
                 type="button"
                 className="btn-ghost min-h-11 w-full justify-center"
-                disabled={!ready || phase !== "idle" || Boolean(blocked)}
+                disabled={!ready || phase !== "idle" || Boolean(blocked) || retryRemaining > 0}
                 onClick={() => void ask()}
               >
-                {t("signal.tryAgain")}
+                {retryRemaining > 0 ? t("batch.retry", { seconds: retryRemaining }) : t("signal.tryAgain")}
               </button>
             </div>
           </section>

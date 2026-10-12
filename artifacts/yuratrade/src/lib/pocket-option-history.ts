@@ -155,3 +155,32 @@ export function parsePocketOptionHistory(data: unknown[]): ParsedHistoryPage {
   candles.sort((a, b) => a.time - b.time);
   return { candles, rejectedRows: data.length - candles.length };
 }
+
+/** Fast history tuples are [open time, open, close, high, low, volume]. */
+export function parsePocketFastCandles(data: unknown[]): ParsedHistoryPage {
+  return parsePocketOptionHistory(data.map((row) => {
+    if (!Array.isArray(row) || row.length < 5) return null;
+    const rawTime = Number(row[0]);
+    return {
+      time: rawTime >= 1_000_000_000_000 ? rawTime / 1000 : rawTime,
+      open: row[1],
+      close: row[2],
+      high: row[3],
+      low: row[4],
+    };
+  }));
+}
+
+/** Cache only closed candles; live ticks may complete later missing intervals. */
+export function reconcileClosedPocketHistory(
+  cached: HistoricalCandle[],
+  incoming: HistoricalCandle[],
+  ticks: TimedPriceTick[],
+  periodSeconds: number,
+  nowMs: number,
+  limit = 128,
+): HistoricalCandle[] {
+  const closed = mergePocketHistoryByTime(cached, incoming, limit)
+    .filter((candle) => (candle.time + periodSeconds) * 1000 <= nowMs);
+  return appendCoveredFastCandles(closed, ticks, periodSeconds, nowMs).slice(-limit);
+}

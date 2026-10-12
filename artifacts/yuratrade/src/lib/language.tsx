@@ -356,6 +356,9 @@ const copy = {
   "signal.countdownRemaining": ["Осталось {seconds} секунд", "Залишилося {seconds} секунд", "{seconds} seconds remaining"],
   "signal.countdownUnit": ["до сигнала", "до сигналу", "until the signal"],
   "signal.finalizing": ["Проверяем вход…", "Перевіряємо вхід…", "Checking the entry…"],
+  "signal.entryExpired": ["Окно входа истекло. Получите новый сигнал.", "Вікно входу минуло. Отримайте новий сигнал.", "The entry window has expired. Request a new signal."],
+  "signal.retryCooldownSeconds": ["Повторить через {seconds} с", "Повторити через {seconds} с", "Retry in {seconds}s"],
+  "signal.retryCooldownTimer": ["Повторить через {time}", "Повторити через {time}", "Retry in {time}"],
   "signal.analysisTimeout": [
     "Поиск сигнала не завершился за 20 секунд. Попробуйте ещё раз; сигнал не выдан.",
     "Пошук сигналу не завершився за 20 секунд. Спробуйте ще раз; сигнал не видано.",

@@ -8,7 +8,8 @@
     "build": "node scripts/with-app-env.mjs vite build --config vite.config.ts",
     "serve": "node scripts/with-app-env.mjs vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test src/lib/signal-journal.test.ts src/lib/signal-batch.test.ts src/lib/daily-signal-stats.test.ts src/lib/signal-model.server.test.ts src/lib/market-ai.server.test.ts src/lib/market-analysis-context.server.test.ts src/lib/signal-candidate-pool.test.ts src/lib/pocket-option-history.test.ts src/lib/pocket-server-time.test.ts src/lib/pocket-feed-frame.test.ts src/lib/expiry.test.ts src/lib/signal-entry-window.test.ts src/lib/signal-release-time.test.ts src/lib/signal-config.test.ts src/lib/pair-clipboard.test.ts src/lib/telegram-init-data.server.test.ts src/lib/pocket-partner-status.test.ts src/lib/pocket-gate-policy.test.ts src/lib/telegram-bot.test.ts"
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test src/lib/*.test.ts src/lib/auth/*.test.ts src/lib/app-data/*.test.ts",
+    "test:tooling": "node --test scripts/*.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
@@ -52,6 +53,7 @@
     "@tanstack/router-plugin": "^1.168.0",
     "@types/node": "catalog:",
     "@types/pg": "^8.11.10",
+    "@types/proxy-from-env": "1.0.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^5.2.0",
@@ -92,6 +94,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "@google/genai": "^2.27.0",
-    "@replit/connectors-sdk": "^0.4.3"
+    "@replit/connectors-sdk": "^0.4.3",
+    "https-proxy-agent": "7.0.6",
+    "proxy-from-env": "1.1.0",
+    "undici": "^7.30.0"
   }
 }

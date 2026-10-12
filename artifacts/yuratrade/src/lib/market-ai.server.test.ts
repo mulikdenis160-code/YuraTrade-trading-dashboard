@@ -562,3 +562,12 @@ test("a Gemini analysis request is stopped at the ten-second budget", async () =
     /Не удалось получить ответ от ИИ/,
   );
 });
+
+test("analysis deadlines abort the SDK request instead of leaving it running in the background", async () => {
+  let signal: AbortSignal | undefined;
+  await assert.rejects(requestMarketAiReviewOnce(async (_messages, options) => {
+    signal = options?.signal;
+    return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(signal?.reason), { once: true }));
+  }, [], ["EURUSD_otc"], 10), /Не удалось получить ответ от ИИ/);
+  assert.equal(signal?.aborted, true);
+});

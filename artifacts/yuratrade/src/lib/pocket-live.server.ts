@@ -1,12 +1,17 @@
 import WebSocket from "ws";
+import { pocketProxyAgent } from "./pocket-proxy.server";
 import {
   activeGeminiModel,
+  marketAiAvailability,
   acceptsMarketAiReview,
   analyzeMarketCandidates,
   DIRECT_AI_HISTORY_CANDLES,
   MIN_DIRECT_AI_CANDLES,
   type MarketAiReview,
 } from "./market-ai.server";
+import { MarketAiServiceError, type SignalServiceFailure } from "./market-ai-control.ts";
+import { SignalDataError } from "./signal-data-error.ts";
+import { historyForPeriod, storePeriodHistory, refreshPeriodHistories, type PocketMarketCache } from "./pocket-market-cache.ts";
 import { analysisPeriodForExpiry, formatExpiry, isValidExpirySeconds } from "./expiry";
 import { createKeyedAsyncQueue } from "./async-keyed-queue";
 import {
@@ -17,6 +22,7 @@ import {
   appendCoveredFastCandles,
   mergePocketHistoryByTime,
   parsePocketOptionHistory,
+  reconcileClosedPocketHistory,
   type HistoricalCandle,
   type ParsedHistoryPage,
 } from "./pocket-option-history.ts";
@@ -33,11 +39,14 @@ import {
   buildPocketAuthFrame,
   buildPocketHistoryRequest,
   buildPocketSubscriptionFrames,
+  buildPocketQuoteSubscriptionFrames,
+  createPocketEventDecoder,
   findPocketRows,
   parsePocketFastHistory,
+  parsePocketFastCandleHistory,
   parsePocketHistoryResponse,
-  parsePocketSocketIoEvent,
   pocketFeedUrlForAuth,
+  pocketHistoryMatchesRequest,
 } from "./pocket-feed-frame";
 import {
   estimatePocketServerClockOffsetSeconds,
@@ -46,7 +55,7 @@ import {
 } from "./pocket-server-time";
 import { nextCandleEntryWindow } from "./signal-entry-window";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
-import { signalReleaseAt } from "./signal-release-time";
+import { signalReleaseAt, signalEntryExpiresAt, entryConfirmationExpiresAt, signalEntryIsLive } from "./signal-release-time";
 
 const FEED_AUTH = (process.env.POCKET_OPTION_FEED_AUTH ?? "").trim();
 const AUTH_MISSING_MESSAGE =
@@ -95,9 +104,9 @@ export type FeedSignal = {
   aiConfidence: number;
 };
 
-type PassResult = { decision: "pass"; reason: string };
+type PassResult = { decision: "pass"; reason: string; retryAcrossPairs?: boolean; retryAfterMs?: number } | SignalServiceFailure;
 type SignalResult = { decision: "signal" } & FeedSignal;
-type PreparedSignalResult = SignalResult & { releaseAtMs: number };
+type PreparedSignalResult = SignalResult & { releaseAtMs: number; expiresAtMs: number };
 type BestSignalResult = SignalResult & {
   symbol: string;
   group: PairGroup;
@@ -108,6 +117,9 @@ export type FeedBestResult = PassResult | BestSignalResult;
 
 type Pending = {
   asset: string;
+  index: number;
+  latestWanted: boolean;
+  receivedHistory?: boolean;
   periodSeconds: number;
   resolve: (history: ParsedHistoryPage) => void;
   reject: (error: Error) => void;
@@ -116,11 +128,7 @@ type Pending = {
 
 type LoadedHistory = { candles: HistoricalCandle[]; rejectedRows: number };
 type PairTick = { price: number; time: number };
-type PairMarketData = {
-  ticks: PairTick[];
-  history: HistoricalCandle[];
-  historyPeriodSeconds: number | null;
-};
+type PairMarketData = PocketMarketCache;
 
 type PocketSharedRuntime = {
   pairMarketData: Map<string, PairMarketData>;
@@ -134,9 +142,11 @@ const pocketSharedRuntime = (pocketGlobal.__primePocketSharedRuntime ??= {
   clockOffsetSeconds: null,
 });
 const pocketBrokerRuntime = pocketGlobal as typeof pocketGlobal & {
+  __primePocketDispose?: () => void;
   __primePocketBrokerCommandQueue?: ReturnType<typeof createKeyedAsyncQueue>;
   __primePocketPendingHistory?: Map<string, Pending>;
 };
+pocketBrokerRuntime.__primePocketDispose?.();
 const runBrokerCommand = pocketBrokerRuntime.__primePocketBrokerCommandQueue ??=
   createKeyedAsyncQueue();
 const pendingHistory = pocketBrokerRuntime.__primePocketPendingHistory ??=
@@ -146,16 +156,21 @@ const pairMarketData = pocketSharedRuntime.pairMarketData;
 let balance: number | null = null;
 let socket: WebSocket | null = null;
 let ready: Promise<void> | null = null;
+let cancelReady: (() => void) | null = null;
+let disposed = false;
 let isAuthorized = false;
 let connectionError = "";
 let retryAfter = 0;
 let expectAssets = false;
 let expectBalance = false;
 let lastPocketMessageAt = 0;
+let lastHistoryRequestIndex = 0;
 const lastWarmHistoryAttempt = new Map<string, number>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 const selectSignalCandidateBatch = createRotatingCandidateSelector<FeedPair>(MAX_ELIGIBLE_PAIRS);
 let expectStream = false;
+let decodePocketEvent = createPocketEventDecoder();
+const earlyFastHistory = new Map<string, unknown>();
 let lastStreamDiagnosticAt = 0;
 let lastStaleHistoryReconnectAt = 0;
 let staleHistoryReconnectInFlight: Promise<void> | null = null;
@@ -264,6 +279,19 @@ function buildDirectAiSignal(
   };
 }
 
+function settleLatestHistoryFromCache(symbol: string, rejectedRows = 0): boolean {
+  const request = pendingHistory.get(symbol);
+  const state = pairMarketData.get(symbol);
+  if (!request?.latestWanted || !state) return false;
+  const history = historyForPeriod(state, request.periodSeconds);
+  if (closedHistory(history, request.periodSeconds).length < MIN_DIRECT_AI_CANDLES ||
+      !historyIsFresh(history, request.periodSeconds)) return false;
+  clearTimeout(request.timer);
+  pendingHistory.delete(symbol);
+  request.resolve({ candles: [...history], rejectedRows });
+  return true;
+}
+
 function rememberTickRows(rows: unknown, frameFormat: string) {
   if (!Array.isArray(rows)) return;
   const receivedAtMs = Date.now();
@@ -308,7 +336,9 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
     state.ticks.push({ price, time: tickTime });
     state.ticks.sort((left, right) => left.time - right.time);
     if (state.ticks.length > 2_000) state.ticks.splice(0, state.ticks.length - 2_000);
+    refreshPeriodHistories(state, receivedAtMs, DIRECT_AI_HISTORY_CANDLES);
     pairMarketData.set(symbol, state);
+    settleLatestHistoryFromCache(symbol);
     quoteRows += 1;
   }
   logStreamDiagnostic("info", {
@@ -318,11 +348,17 @@ function rememberTickRows(rows: unknown, frameFormat: string) {
     epochLikeTimestamps,
     clockSynced: pocketSharedRuntime.clockOffsetSeconds !== null,
   });
+  if (pocketSharedRuntime.clockOffsetSeconds !== null && earlyFastHistory.size > 0) {
+    const updates = [...earlyFastHistory.values()];
+    earlyFastHistory.clear();
+    for (const update of updates) rememberFastHistory(update);
+  }
 }
 
 function rememberFastHistory(payload: unknown) {
   const update = parsePocketFastHistory(payload);
-  if (!update) {
+  const candleUpdate = parsePocketFastCandleHistory(payload);
+  if (!update && !candleUpdate) {
     const record = payload && typeof payload === "object" && !Array.isArray(payload)
       ? payload as Record<string, unknown>
       : null;
@@ -341,25 +377,27 @@ function rememberFastHistory(payload: unknown) {
     return;
   }
   const receivedAtMs = Date.now();
+  const asset = candleUpdate?.asset ?? update!.asset;
+  const periodSeconds = candleUpdate?.periodSeconds ?? update!.periodSeconds;
   const clockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
   if (clockOffsetSeconds === null) {
+    earlyFastHistory.set(asset, payload);
     console.warn("[pocket-fast-history-unusable]", JSON.stringify({
-      symbol: update.asset,
+      symbol: asset,
       reason: "clock-not-synced",
-      tickCount: update.ticks.length,
+      tickCount: update?.ticks.length ?? 0,
     }));
     return;
   }
   const ticks: PairTick[] = [];
-  for (const tick of update.ticks) {
+  for (const tick of update?.ticks ?? []) {
     const rawTime = tick.time >= 1_000_000_000_000 ? tick.time / 1000 : tick.time;
     ticks.push({
       time: (rawTime - clockOffsetSeconds) * 1000,
       price: tick.price,
     });
   }
-  if (ticks.length === 0) return;
-  const state = pairMarketData.get(update.asset) ?? {
+  const state = pairMarketData.get(asset) ?? {
     ticks: [],
     history: [],
     historyPeriodSeconds: null,
@@ -369,13 +407,34 @@ function rememberFastHistory(payload: unknown) {
   state.ticks = [...byTime.values()]
     .sort((left, right) => left.time - right.time)
     .slice(-2_000);
-  pairMarketData.set(update.asset, state);
+  if (candleUpdate) {
+    const candles = candleUpdate.history.candles.map((candle) => ({
+      ...candle,
+      time: pocketHistoryCandleLocalTime(candle.time, clockOffsetSeconds),
+    }));
+    const history = reconcileClosedPocketHistory(
+      historyForPeriod(state, candleUpdate.periodSeconds),
+      candles,
+      state.ticks,
+      candleUpdate.periodSeconds,
+      receivedAtMs,
+      DIRECT_AI_HISTORY_CANDLES,
+    );
+    storePeriodHistory(state, candleUpdate.periodSeconds, history);
+  }
+  // Fast attachments can arrive after the ordinary candle response. Refresh
+  // its cache now instead of leaving it stale until another broker request.
+  refreshPeriodHistories(state, receivedAtMs, DIRECT_AI_HISTORY_CANDLES);
+  pairMarketData.set(asset, state);
+  settleLatestHistoryFromCache(asset, candleUpdate?.history.rejectedRows ?? 0);
   console.info("[pocket-fast-history]", JSON.stringify({
-    symbol: update.asset,
-    periodSeconds: update.periodSeconds,
+    symbol: asset,
+    periodSeconds,
+    validCandles: candleUpdate?.history.candles.length ?? 0,
+    rejectedCandleRows: candleUpdate?.history.rejectedRows ?? 0,
     tickCount: ticks.length,
-    oldestTickTime: Math.floor(Math.min(...ticks.map((tick) => tick.time)) / 1000),
-    newestTickAgeMs: Math.max(0, Date.now() - Math.max(...ticks.map((tick) => tick.time))),
+    oldestTickTime: ticks.length ? Math.floor(Math.min(...ticks.map((tick) => tick.time)) / 1000) : null,
+    newestTickAgeMs: ticks.length ? Math.max(0, Date.now() - Math.max(...ticks.map((tick) => tick.time))) : null,
   }));
 }
 
@@ -414,13 +473,13 @@ function sendPocketSubscription(target: WebSocket, symbol: string, periodSeconds
 function subscribe(symbol: string, periodSeconds = 1) {
   const now = Date.now();
   const key = `${symbol}:${periodSeconds}`;
-  if (now - (subscribedAt.get(key) ?? 0) < 2000) return;
+  if (now - (subscribedAt.get(key) ?? 0) < 30_000) return;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   subscribedAt.set(key, now);
   void runBrokerCommand(BROKER_QUEUE_KEY, async () => {
     const current = socket;
     if (current && current.readyState === WebSocket.OPEN) {
-      sendPocketSubscription(current, symbol, periodSeconds);
+      for (const frame of buildPocketQuoteSubscriptionFrames(symbol)) current.send(frame);
     }
   }).catch(() => {});
 }
@@ -481,12 +540,17 @@ function freshQuoteFromCache(symbol: string) {
   return {
     price: quote.price,
     ageMs,
+    at: quote.at,
   };
 }
 
 async function waitFreshQuote(symbol: string, timeoutMs = 12_000) {
-  await waitQuote(symbol, timeoutMs);
-  return freshQuoteFromCache(symbol);
+  try {
+    await waitQuote(symbol, timeoutMs);
+    return freshQuoteFromCache(symbol);
+  } catch (error) {
+    throw new SignalDataError(error instanceof Error ? error.message : "Котировка пары недоступна.", "pair");
+  }
 }
 
 function entryWindowFailure(candles: HistoricalCandle[], nowMs = Date.now()): PassResult | null {
@@ -589,7 +653,8 @@ function handleMessage(current: WebSocket, message: string) {
     current.send(authFrame);
     return;
   }
-  if (message.includes("NotAuthorized")) {
+  const socketEvent = decodePocketEvent(message);
+  if (socketEvent?.name === "NotAuthorized" || message.includes("NotAuthorized")) {
     isAuthorized = false;
     connectionError = AUTH_REJECTED_MESSAGE;
     console.warn("[pocket-feed-auth-rejected]", JSON.stringify({ socketReadyState: current.readyState }));
@@ -601,8 +666,7 @@ function handleMessage(current: WebSocket, message: string) {
     }
     return;
   }
-  const socketEvent = parsePocketSocketIoEvent(message);
-  if (socketEvent?.name === "successauth" || message.includes("successauth")) {
+  if (socketEvent?.name === "successauth") {
     isAuthorized = true;
     connectionError = "";
     console.info("[pocket-feed-authenticated]", JSON.stringify({
@@ -617,6 +681,7 @@ function handleMessage(current: WebSocket, message: string) {
       (row) => row.length >= 15 && row[14] === true && row[9] === 1,
     );
     if (rows) {
+      expectAssets = false;
       storeAssets(rows);
       console.info("[pocket-feed-assets]", JSON.stringify({
         receivedRows: rows.length,
@@ -655,9 +720,8 @@ function handleMessage(current: WebSocket, message: string) {
   const historyResponse = parsePocketHistoryResponse(message);
   if (historyResponse) {
     const request = pendingHistory.get(historyResponse.asset);
-    if (request) {
-      clearTimeout(request.timer);
-      pendingHistory.delete(historyResponse.asset);
+    if (request && pocketHistoryMatchesRequest(historyResponse, request)) {
+      request.receivedHistory = true;
       const serverClockOffsetSeconds = pocketSharedRuntime.clockOffsetSeconds;
       if (serverClockOffsetSeconds === null) {
         request.reject(new Error("Время потока Pocket Option не синхронизировано."));
@@ -671,6 +735,19 @@ function handleMessage(current: WebSocket, message: string) {
           time: pocketHistoryCandleLocalTime(candle.time, serverClockOffsetSeconds),
         })),
       };
+      const state = pairMarketData.get(historyResponse.asset) ?? {
+        ticks: [], history: [], historyPeriodSeconds: null,
+      };
+      history.candles = reconcileClosedPocketHistory(
+        historyForPeriod(state, request.periodSeconds),
+        history.candles,
+        state.ticks,
+        request.periodSeconds,
+        Date.now(),
+        DIRECT_AI_HISTORY_CANDLES,
+      );
+      storePeriodHistory(state, request.periodSeconds, history.candles);
+      pairMarketData.set(historyResponse.asset, state);
       console.info("[pocket-history-response]", JSON.stringify({
         symbol: historyResponse.asset,
         periodSeconds: request.periodSeconds,
@@ -689,7 +766,14 @@ function handleMessage(current: WebSocket, message: string) {
         candleTimestampBasis: "open",
         frameFormat: message.startsWith("42") ? "socket.io-inline" : "plain-json",
       }));
-      request.resolve(history);
+      if (!request.latestWanted || (
+        closedHistory(history.candles, request.periodSeconds).length >= MIN_DIRECT_AI_CANDLES &&
+        historyIsFresh(history.candles, request.periodSeconds)
+      )) {
+        clearTimeout(request.timer);
+        pendingHistory.delete(historyResponse.asset);
+        request.resolve(history);
+      }
     }
     return;
   }
@@ -733,6 +817,7 @@ function handleMessage(current: WebSocket, message: string) {
 }
 
 function connect() {
+  if (disposed) throw new Error("Поток Pocket Option перезапускается после обновления сервера.");
   if (!FEED_AUTH.trim()) {
     connectionError = AUTH_MISSING_MESSAGE;
     console.error("[pocket-feed-auth-missing]");
@@ -760,11 +845,19 @@ function connect() {
   isAuthorized = false;
   pocketSharedRuntime.clockOffsetSeconds = null;
   subscribedAt.clear();
+  pairs.clear();
+  pairMarketData.clear();
+  expectAssets = false;
+  expectStream = false;
+  expectBalance = false;
+  decodePocketEvent = createPocketEventDecoder();
+  earlyFastHistory.clear();
   console.info("[pocket-feed-region-selected]", JSON.stringify({
     account: feedUrl.includes("demo-api-") ? "demo" : "real",
     region: "eu",
   }));
   const next = new WebSocket(feedUrl, {
+    agent: pocketProxyAgent(feedUrl),
     headers: {
       Origin: "https://pocketoption.com",
       "User-Agent":
@@ -776,6 +869,7 @@ function connect() {
     if (socket !== next) return;
     console.error("[pocket-feed-error]", JSON.stringify({
       errorName: error.name,
+      errorCode: (error as NodeJS.ErrnoException).code ?? null,
       socketReadyState: next.readyState,
     }));
     socket = null;
@@ -785,7 +879,9 @@ function connect() {
     failPending(new Error(connectionError));
   });
   socket = next;
-  next.on("message", (data) => handleMessage(next, textOf(data)));
+  next.on("message", (data) => {
+    if (socket === next) handleMessage(next, textOf(data));
+  });
   const closeEventSocket = next as unknown as {
     on: (event: "close", listener: (code: number, reason: Buffer) => void) => unknown;
   };
@@ -804,7 +900,13 @@ function connect() {
   });
 }
 
-function ensureFeed() {
+async function ensureFeed(): Promise<void> {
+  try { await ensureFeedConnection(); }
+  catch (error) { throw new SignalDataError(error instanceof Error ? error.message : "Поток Pocket Option недоступен.", "feed"); }
+}
+
+function ensureFeedConnection() {
+  if (disposed) return Promise.reject(new Error("Поток Pocket Option остановлен."));
   if (isAuthorized && pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
     return Promise.resolve();
   }
@@ -816,17 +918,35 @@ function ensureFeed() {
       if (isAuthorized && pairs.size > 0 && socket && socket.readyState === WebSocket.OPEN) {
         clearInterval(timer);
         ready = null;
+        cancelReady = null;
         resolve();
         return;
       }
-      if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) connect();
+      if ((!socket || socket.readyState === 3) && Date.now() >= retryAfter) {
+        try {
+          connect();
+        } catch (error) {
+          clearInterval(timer);
+          ready = null;
+          cancelReady = null;
+          reject(error);
+          return;
+        }
+      }
       if (Date.now() - started > 12000) {
         clearInterval(timer);
         ready = null;
+        cancelReady = null;
         if (!connectionError) connectionError = "Котировки Pocket Option не получены за 12 секунд.";
         reject(new Error(connectionError));
       }
     }, 200);
+    cancelReady = () => {
+      clearInterval(timer);
+      ready = null;
+      cancelReady = null;
+      reject(new Error("Поток Pocket Option перезапускается."));
+    };
   });
   return ready;
 }
@@ -852,24 +972,28 @@ export function startPocketFeed() {
           if (!feedWarmupStarted) return;
           // Keep quote and candle subscriptions hot; history requests run FIFO.
           subscribe(pair.symbol, 1);
-          subscribe(pair.symbol, SIGNAL_CANDLE_SECONDS);
           const quote = latestPairQuote(pair.symbol);
           if (!quote || Date.now() - quote.at > MAX_QUOTE_AGE_MS) continue;
           const state = pairMarketData.get(pair.symbol);
-          const historyNeedsWarm =
-            !state ||
-            state.historyPeriodSeconds !== SIGNAL_CANDLE_SECONDS ||
-            !historyIsFresh(state.history, SIGNAL_CANDLE_SECONDS) ||
-            closedHistory(state.history, SIGNAL_CANDLE_SECONDS).length < MIN_DIRECT_AI_CANDLES;
+          const cachedHistory = historyForPeriod(state, SIGNAL_CANDLE_SECONDS);
+          const historyNeedsWarm = !historyIsFresh(cachedHistory, SIGNAL_CANDLE_SECONDS) ||
+            closedHistory(cachedHistory, SIGNAL_CANDLE_SECONDS).length < MIN_DIRECT_AI_CANDLES;
           const lastAttempt = lastWarmHistoryAttempt.get(pair.symbol) ?? 0;
           if (historyNeedsWarm && Date.now() - lastAttempt >= WARM_HISTORY_REFRESH_MS) {
             lastWarmHistoryAttempt.set(pair.symbol, Date.now());
-            await loadCandles(
-              pair.symbol,
-              SIGNAL_CANDLE_SECONDS,
-              SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
-              1,
-            );
+            try {
+              await loadCandles(
+                pair.symbol,
+                SIGNAL_CANDLE_SECONDS,
+                SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
+                1,
+              );
+            } catch (error) {
+              console.warn("[pocket-history-warmup-failed]", JSON.stringify({
+                symbol: pair.symbol,
+                errorName: error instanceof Error ? error.name : typeof error,
+              }));
+            }
           }
         }
       } catch (error) {
@@ -883,6 +1007,17 @@ export function startPocketFeed() {
     }
   })();
 }
+
+pocketBrokerRuntime.__primePocketDispose = () => {
+  disposed = true;
+  feedWarmupStarted = false;
+  cancelReady?.();
+  const oldSocket = socket;
+  socket = null;
+  isAuthorized = false;
+  failPending(new Error("Поток Pocket Option перезапускается."));
+  oldSocket?.terminate();
+};
 
 function eligibleSignalPairs() {
   return [...pairs.values()]
@@ -904,9 +1039,9 @@ function rankedSignalPairs(analysisSeconds = SIGNAL_CANDLE_SECONDS) {
   });
   const historyReady = ranked.filter((pair) => {
     const state = pairMarketData.get(pair.symbol);
-    return state?.historyPeriodSeconds === analysisSeconds &&
-      historyIsFresh(state.history, analysisSeconds) &&
-      closedHistory(state.history, analysisSeconds).length >= MIN_DIRECT_AI_CANDLES;
+    const history = historyForPeriod(state, analysisSeconds);
+    return historyIsFresh(history, analysisSeconds) &&
+      closedHistory(history, analysisSeconds).length >= MIN_DIRECT_AI_CANDLES;
   });
   if (eligible.length > 0 && ranked.length === 0) {
     console.warn("[pocket-feed-no-fresh-candidates]", JSON.stringify({
@@ -955,8 +1090,8 @@ async function loadHistoryPage(
   time: number,
   timeoutMs = 4_500,
 ): Promise<ParsedHistoryPage> {
-  // Pocket's history frames have no request ID, so serialize all requests,
-  // including requests for different symbols and periods.
+  // Legacy history frames omit request IDs; keep requests serialized even
+  // when newer replies include an index we can match.
   return runBrokerCommand(BROKER_QUEUE_KEY, async () => {
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
@@ -986,7 +1121,10 @@ async function loadHistoryPage(
         clockOffsetSeconds,
         seconds,
       );
+      const requestIndex = Math.max(lastHistoryRequestIndex + 1, Math.floor(Date.now() / 10));
+      lastHistoryRequestIndex = requestIndex;
       const timer = setTimeout(() => {
+        if (settleLatestHistoryFromCache(symbol)) return;
         if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
         console.warn("[pocket-history-timeout]", JSON.stringify({
           symbol,
@@ -1000,9 +1138,15 @@ async function loadHistoryPage(
           connectionError: connectionError || null,
           lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null,
         }));
-        reject(new Error(`История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
+        reject(new Error(request.receivedHistory
+          ? "Pocket Option прислал только устаревшую или неполную историю. Свежие свечи пока недоступны."
+          : `История свечей не пришла за ${Math.ceil(timeoutMs / 1000)} секунд. Попробуйте ещё раз.`));
       }, timeoutMs);
-      request = { asset: symbol, periodSeconds: seconds, resolve, reject, timer };
+      request = {
+        asset: symbol, index: requestIndex, periodSeconds: seconds,
+        latestWanted: Math.abs(Date.now() / 1000 - time) <= seconds * 2,
+        resolve, reject, timer,
+      };
       pendingHistory.set(symbol, request);
       try {
         console.info("[pocket-history-request]", JSON.stringify({
@@ -1022,7 +1166,7 @@ async function loadHistoryPage(
                 symbol,
                 seconds,
                 requestTime,
-                Math.floor(Date.now() / 10),
+                requestIndex,
                 seconds * HISTORY_PAGE_CANDLES,
               ),
             ]),
@@ -1036,7 +1180,25 @@ async function loadHistoryPage(
   });
 }
 
-async function loadCandles(
+const historyLoads = new Map<string, Promise<LoadedHistory>>();
+
+function loadCandles(
+  symbol: string,
+  seconds: number,
+  pageTimeoutMs = 4_500,
+  pageLimit?: number,
+): Promise<LoadedHistory> {
+  const key = `${symbol}:${seconds}:${pageLimit ?? "all"}`;
+  const existing = historyLoads.get(key);
+  if (existing) return existing;
+  const task = loadCandlesUnshared(symbol, seconds, pageTimeoutMs, pageLimit).finally(() => {
+    if (historyLoads.get(key) === task) historyLoads.delete(key);
+  });
+  historyLoads.set(key, task);
+  return task;
+}
+
+async function loadCandlesUnshared(
   symbol: string,
   seconds: number,
   pageTimeoutMs = 4_500,
@@ -1072,6 +1234,11 @@ async function loadCandles(
     history: [],
     historyPeriodSeconds: null,
   };
+  candles = mergePocketHistoryByTime(
+    historyForPeriod(state, seconds),
+    closedHistory(candles, seconds),
+    DIRECT_AI_HISTORY_CANDLES,
+  );
   const beforeRealtime = candles.at(-1)?.time ?? null;
   candles = appendCoveredFastCandles(
     candles,
@@ -1085,9 +1252,6 @@ async function loadCandles(
       ...coverage,
     })),
   );
-  if (state.historyPeriodSeconds === seconds) {
-    candles = mergePocketHistoryByTime(state.history, candles, DIRECT_AI_HISTORY_CANDLES);
-  }
   const latest = candles.at(-1)?.time ?? null;
   const now = Date.now();
   const tickTimes = state.ticks.map((tick) => tick.time);
@@ -1119,10 +1283,9 @@ async function loadCandles(
         : Math.max(0, Math.floor(Date.now() / 1000) - latest - seconds),
     }));
   }
-  state.history = candles;
-  state.historyPeriodSeconds = seconds;
+  storePeriodHistory(state, seconds, candles);
   pairMarketData.set(symbol, state);
-  return { candles: state.history, rejectedRows };
+  return { candles, rejectedRows };
 }
 
 function closedHistory(candles: HistoricalCandle[], seconds: number, nowMs = Date.now()) {
@@ -1141,13 +1304,21 @@ function historyIsFresh(candles: HistoricalCandle[], seconds: number, nowMs = Da
 }
 
 async function freshSignalHistory(symbol: string, seconds: number) {
+  try { return await readFreshSignalHistory(symbol, seconds); }
+  catch (error) {
+    if (error instanceof SignalDataError) throw error;
+    throw new SignalDataError(error instanceof Error ? error.message : "История пары недоступна.", "pair");
+  }
+}
+
+async function readFreshSignalHistory(symbol: string, seconds: number) {
   const cached = pairMarketData.get(symbol);
+  const history = historyForPeriod(cached, seconds);
   if (
-    cached?.historyPeriodSeconds === seconds &&
-    closedHistory(cached.history, seconds).length >= MIN_DIRECT_AI_CANDLES &&
-    historyIsFresh(cached.history, seconds)
+    closedHistory(history, seconds).length >= MIN_DIRECT_AI_CANDLES &&
+    historyIsFresh(history, seconds)
   ) {
-    return { candles: closedHistory(cached.history, seconds).slice(-DIRECT_AI_HISTORY_CANDLES), rejectedRows: 0 };
+    return { candles: closedHistory(history, seconds).slice(-DIRECT_AI_HISTORY_CANDLES), rejectedRows: 0 };
   }
   const refreshed = await loadCandles(symbol, seconds, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1);
   const candles = closedHistory(refreshed.candles, seconds);
@@ -1242,6 +1413,18 @@ export async function feedSignal(
   symbol: string,
   expirySeconds: number,
 ): Promise<FeedSignalResult> {
+  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
+  const unavailable = marketAiAvailability();
+  if (unavailable) return unavailable.toResult();
+  try { return await prepareFeedSignal(symbol, expirySeconds); }
+  catch (error) {
+    if (error instanceof MarketAiServiceError) return error.toResult();
+    if (error instanceof SignalDataError) return error.toResult();
+    throw error;
+  }
+}
+
+async function prepareFeedSignal(symbol: string, expirySeconds: number): Promise<FeedSignalResult> {
   startPocketFeed();
   if (!isValidExpirySeconds(expirySeconds)) {
     throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
@@ -1256,7 +1439,7 @@ export async function feedSignal(
     !pair.symbol.toLowerCase().includes("otc") ||
     !ELIGIBLE_PAYOUTS.has(pair.payout)
   ) {
-    throw new Error("Для сигнала нужна активная OTC-пара с выплатой ровно 80% или 92%.");
+    throw new SignalDataError("Для сигнала нужна активная OTC-пара с выплатой ровно 80% или 92%.", "pair");
   }
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
@@ -1351,10 +1534,17 @@ export async function feedSignal(
     releaseDelayMs: Math.max(0, releaseAtMs - Date.now()),
     decision: "signal",
   }));
-  return { decision: "signal", ...signal, releaseAtMs };
+  return { decision: "signal", ...signal, releaseAtMs, expiresAtMs: signalEntryExpiresAt(releaseAtMs) };
 }
 
-export async function feedConfirmSignalEntry(symbol: string) {
+export async function feedConfirmSignalEntry(symbol: string, expiresAtMs?: number) {
+  const deadline = Math.min(Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS, expiresAtMs ?? Infinity);
+  if (!signalEntryIsLive(deadline)) throw new Error("Окно входа истекло. Получите новый сигнал.");
+  return waitForSignalRequest(settleSignalRequest(confirmFeedSignalEntry(symbol, deadline)),
+    Math.max(1, deadline - Date.now()), "Окно входа истекло. Получите новый сигнал.");
+}
+
+async function confirmFeedSignalEntry(symbol: string, expiresAtMs: number) {
   startPocketFeed();
   await ensureFeed();
   const pair = pairs.get(symbol);
@@ -1378,13 +1568,34 @@ export async function feedConfirmSignalEntry(symbol: string) {
     throw new Error("Последняя закрытая свеча не подтверждает безопасное окно для входа.");
   }
 
-  return { openPrice: quote.price };
+  if (Date.now() - quote.at > MAX_QUOTE_AGE_MS) quote = await waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS);
+  if (entryWindowFailure(verificationHistory.candles) || !historyIsFresh(verificationHistory.candles, 60)) {
+    throw new Error("Окно входа истекло. Получите новый сигнал.");
+  }
+
+  const confirmedAtMs = Date.now();
+  const historyValidUntilMs = (verificationHistory.candles.at(-1)?.time ?? 0) * 1000 + 120_000 + 4_500;
+  const validUntilMs = Math.min(historyValidUntilMs, entryConfirmationExpiresAt(quote.at, confirmedAtMs, expiresAtMs));
+  if (!signalEntryIsLive(validUntilMs, confirmedAtMs)) throw new Error("Окно входа истекло. Получите новый сигнал.");
+  return { openPrice: quote.price, confirmedAtMs, validUntilMs };
 }
 
 export async function feedBest(
   expirySeconds: number,
   excludedSymbols: string[] = [],
 ): Promise<FeedBestResult> {
+  if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
+  const unavailable = marketAiAvailability();
+  if (unavailable) return unavailable.toResult();
+  try { return await prepareFeedBest(expirySeconds, excludedSymbols); }
+  catch (error) {
+    if (error instanceof MarketAiServiceError) return error.toResult();
+    if (error instanceof SignalDataError) return error.toResult();
+    throw error;
+  }
+}
+
+async function prepareFeedBest(expirySeconds: number, excludedSymbols: string[]): Promise<FeedBestResult> {
   const startedAt = performance.now();
   const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
   let stage = "validation";

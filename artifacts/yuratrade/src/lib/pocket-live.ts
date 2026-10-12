@@ -44,14 +44,16 @@ export const takeSignal = createServerFn({ method: "POST" })
 
 export const confirmSignalEntry = createServerFn({ method: "POST" })
   .middleware([pocketGateMiddleware])
-  .validator((input: { symbol: string }) => {
+  .validator((input: { symbol: string; expiresAtMs?: number }) => {
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) throw new Error("Пара недоступна.");
-    return { symbol };
+    const expiresAtMs = input.expiresAtMs;
+    if (expiresAtMs !== undefined && !Number.isFinite(expiresAtMs)) throw new Error("Окно входа недоступно.");
+    return { symbol, expiresAtMs };
   })
   .handler(async ({ data }) => {
     const { feedConfirmSignalEntry } = await import("./pocket-live.server");
-    return feedConfirmSignalEntry(data.symbol);
+    return feedConfirmSignalEntry(data.symbol, data.expiresAtMs);
   });
 
 export const chooseSignalPair = createServerFn({ method: "POST" })

@@ -6,7 +6,7 @@ declare module "ws" {
     readyState: number;
     constructor(
       url: string,
-      options?: { headers?: Record<string, string>; handshakeTimeout?: number },
+      options?: { headers?: Record<string, string>; handshakeTimeout?: number; agent?: import("node:http").Agent },
     );
     send(data: string): void;
     close(): void;

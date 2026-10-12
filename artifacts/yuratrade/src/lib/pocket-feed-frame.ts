@@ -1,4 +1,57 @@
+import { parsePocketFastCandles, type ParsedHistoryPage } from "./pocket-option-history.ts";
+
 export type SocketIoEvent = { name: string; payload: unknown };
+export type PocketHistoryResponse = {
+  asset: string;
+  data: unknown[];
+  index?: number;
+  periodSeconds?: number;
+};
+
+/** Socket.IO may send an event header followed by separate JSON attachments. */
+export function createPocketEventDecoder() {
+  let pending: { packet: unknown[]; count: number; attachments: unknown[] } | null = null;
+  function replace(value: unknown, attachments: unknown[]): unknown {
+    if (Array.isArray(value)) return value.map((child) => replace(child, attachments));
+    if (value && typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      if (record._placeholder === true && Number.isInteger(record.num)) {
+        return attachments[record.num as number];
+      }
+      return Object.fromEntries(Object.entries(record).map(([key, child]) => [key, replace(child, attachments)]));
+    }
+    return value;
+  }
+  return (message: string): SocketIoEvent | null => {
+    const header = /^45([1-9]\d*)-(\[.*)$/s.exec(message);
+    if (header) {
+      pending = null;
+      try {
+        const packet: unknown = JSON.parse(header[2]);
+        const count = Number(header[1]);
+        if (Array.isArray(packet) && typeof packet[0] === "string" && count <= 16) {
+          pending = { packet, count, attachments: [] };
+        }
+      } catch { /* malformed header */ }
+      return null;
+    }
+    if (message.startsWith("42")) {
+      pending = null;
+      return parsePocketSocketIoEvent(message);
+    }
+    if (!pending || (!message.startsWith("[") && !message.startsWith("{"))) return null;
+    try {
+      pending.attachments.push(JSON.parse(message));
+      if (pending.attachments.length < pending.count) return null;
+      const packet = replace(pending.packet, pending.attachments) as unknown[];
+      pending = null;
+      return { name: packet[0] as string, payload: packet[1] };
+    } catch {
+      pending = null;
+      return null;
+    }
+  };
+}
 export type PocketFastHistory = {
   asset: string;
   periodSeconds: number | null;
@@ -67,6 +120,13 @@ export function buildPocketSubscriptionFrames(
   ];
 }
 
+export function buildPocketQuoteSubscriptionFrames(symbol: string): string[] {
+  return [
+    `42${JSON.stringify(["subscribeSymbol", symbol])}`,
+    `42${JSON.stringify(["subfor", symbol])}`,
+  ];
+}
+
 export function parsePocketSocketIoEvent(message: string): SocketIoEvent | null {
   if (!message.startsWith("42")) return null;
   try {
@@ -80,7 +140,7 @@ export function parsePocketSocketIoEvent(message: string): SocketIoEvent | null 
 
 export function parsePocketHistoryResponse(
   message: string,
-): { asset: string; data: unknown[] } | null {
+): PocketHistoryResponse | null {
   let payload: unknown;
   if (message.startsWith("42")) {
     payload = parsePocketSocketIoEvent(message)?.payload;
@@ -98,7 +158,21 @@ export function parsePocketHistoryResponse(
   if (typeof response.asset !== "string" || !response.asset || !Array.isArray(response.data)) {
     return null;
   }
-  return { asset: response.asset, data: response.data };
+  return {
+    asset: response.asset,
+    data: response.data,
+    ...(typeof response.index === "number" && Number.isFinite(response.index) ? { index: response.index } : {}),
+    ...(typeof response.period === "number" && Number.isFinite(response.period) ? { periodSeconds: response.period } : {}),
+  };
+}
+
+export function pocketHistoryMatchesRequest(
+  response: PocketHistoryResponse,
+  request: { asset: string; index: number; periodSeconds: number },
+): boolean {
+  return response.asset === request.asset &&
+    (response.index === undefined || response.index === request.index) &&
+    (response.periodSeconds === undefined || response.periodSeconds === request.periodSeconds);
 }
 
 export function findPocketRows(
@@ -161,4 +235,18 @@ export function parsePocketFastHistory(payload: unknown): PocketFastHistory | nu
     periodSeconds: Number.isInteger(period) && period > 0 ? period : null,
     ticks,
   };
+}
+
+export function parsePocketFastCandleHistory(payload: unknown): {
+  asset: string;
+  periodSeconds: number;
+  history: ParsedHistoryPage;
+} | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  const periodSeconds = Number(record.period);
+  if (typeof record.asset !== "string" || !record.asset ||
+      !Number.isInteger(periodSeconds) || periodSeconds <= 0 || !Array.isArray(record.candles)) return null;
+  const history = parsePocketFastCandles(record.candles);
+  return history.candles.length > 0 ? { asset: record.asset, periodSeconds, history } : null;
 }
