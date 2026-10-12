@@ -23,14 +23,11 @@ test("near a minute boundary, countdown ends in the next safe minute", () => {
   );
 });
 
-test("stale candle timestamps schedule release in a future minute", () => {
+test("delayed candle timestamps do not push the signal countdown into an old minute", () => {
   const latestClosed = candles[2].time;
   const currentWindowClosesAt = (latestClosed + 120) * 1_000;
   const nowMs = currentWindowClosesAt + 5_000;
-  assert.equal(
-    signalReleaseAt(candles, nowMs),
-    currentWindowClosesAt + 60_000 + SIGNAL_COPY_DELAY_MS,
-  );
+  assert.equal(signalReleaseAt(candles, nowMs), nowMs + SIGNAL_COPY_DELAY_MS);
 });
 
 test("signal countdown remains visible for the full copy delay after preparation", () => {

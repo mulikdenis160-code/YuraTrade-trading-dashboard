@@ -1,13 +1,12 @@
 import { i as MIN_ENTRY_BUFFER_MS, l as SIGNAL_QUOTE_WAIT_MS, o as SIGNAL_COPY_DELAY_MS, r as MAX_SIGNAL_COUNTDOWN_MS } from "./pocket-gate.middleware-BndXO9TO.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/signal-release-time-DkrtvERr.js
+//#region node_modules/.nitro/vite/services/ssr/assets/signal-release-time-DmZPP6vk.js
 function nextCandleEntryWindow(candles, nowMs) {
 	const candleMs = 6e4;
-	const lastClosed = candles.reduce((latest, candle) => {
+	if (!candles.reduce((latest, candle) => {
 		if (!Number.isFinite(candle.time) || candle.time * 1e3 + candleMs > nowMs) return latest;
 		return !latest || candle.time > latest.time ? candle : latest;
-	}, null);
-	if (!lastClosed) return null;
-	const opensAtMs = (lastClosed.time + 60) * 1e3;
+	}, null)) return null;
+	const opensAtMs = Math.floor(nowMs / candleMs) * candleMs;
 	const closesAtMs = opensAtMs + candleMs;
 	const remainingMs = closesAtMs - nowMs;
 	return {

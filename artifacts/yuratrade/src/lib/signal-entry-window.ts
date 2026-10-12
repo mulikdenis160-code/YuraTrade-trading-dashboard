@@ -23,7 +23,10 @@ export function nextCandleEntryWindow(
   }, null);
   if (!lastClosed) return null;
 
-  const opensAtMs = (lastClosed.time + SIGNAL_CANDLE_SECONDS) * 1000;
+  // Historical candles can lag the live quote feed. Their timestamps validate
+  // that closed history exists, but must not be used to infer the current entry
+  // minute or an old minute will make every otherwise-valid signal fail.
+  const opensAtMs = Math.floor(nowMs / candleMs) * candleMs;
   const closesAtMs = opensAtMs + candleMs;
   const remainingMs = closesAtMs - nowMs;
   return {

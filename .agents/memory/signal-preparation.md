@@ -9,6 +9,12 @@ Complete candidate selection and signal preparation within a 20-second total dea
 
 **How to apply:** enforce the 20-second deadline from the start of initial search and on recovery preparation, while letting successful calls return immediately. On both flows, show the pair/countdown only after preparation succeeds, anchor the full copy delay to when the client displays the pair, reveal direction only after the countdown, revalidate the one-minute entry window and fresh quote before issuing, and reject unsafe entries. Never issue a signal from incomplete data. Keep recovery on the initial pair and expiry, and do not open trades automatically. In the journal and summary, exclude intermediate losing attempts from final win/loss totals; count a loss only after the final permitted overlay expires in a loss.
 
+Cap the visible post-analysis countdown at 25 seconds and derive the current entry minute from the synchronized live clock, not the delayed historical-candle timestamp. Continue to recheck the entry window and fresh quote before issuing.
+
+**Why:** delayed candle history made the entry-window check point to an expired minute and could block every otherwise-prepared signal; waiting for that old timestamp also produced countdowns longer than the user's 25-second maximum.
+
+**How to apply:** keep the 10-second minimum copy delay, cap the displayed wait at 25 seconds, then validate against the actual current minute and a fresh quote. Preserve the historical-data quality gate and do not invent candles or issue signals from stale analysis.
+
 **Why:** a server release timestamp can lose its remaining countdown time during request transit, making the client skip the copy wait and reveal direction immediately.
 
 **Why:** AUDNZD OTC quote acquisition timed out at the same 2-second interval used to throttle resubscription, so a retry could be blocked until the wait had already expired.

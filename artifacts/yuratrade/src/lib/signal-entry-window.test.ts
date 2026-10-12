@@ -35,3 +35,12 @@ test("rejects entry before the next minute candle opens", () => {
 test("returns no entry window until there is a fully closed candle", () => {
   assert.equal(nextCandleEntryWindow(candles, candles[0].time * 1000), null);
 });
+
+test("delayed candle history does not shift the live minute-entry window into the past", () => {
+  const lastClosed = candles[2].time;
+  const nowMs = (lastClosed + 60) * 1000 + 180_010;
+  const window = nextCandleEntryWindow(candles, nowMs);
+  assert.equal(window?.opensAtMs, Math.floor(nowMs / 60_000) * 60_000);
+  assert.equal(window?.canEnter, true);
+  assert.equal(window?.remainingMs, 59_990);
+});
