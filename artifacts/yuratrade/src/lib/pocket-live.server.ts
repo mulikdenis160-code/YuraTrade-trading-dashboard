@@ -54,6 +54,7 @@ const AUTH_REJECTED_MESSAGE =
 const HISTORY_PAGE_CANDLES = 128;
 const SIGNAL_CANDIDATES_PER_SEARCH = 1;
 const MAX_ELIGIBLE_PAIRS = 8;
+const WARM_HISTORY_REFRESH_MS = 30_000;
 const ELIGIBLE_PAYOUTS = new Set([80, 92]);
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4_500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
@@ -132,6 +133,7 @@ let expectAssets = false;
 let expectBalance = false;
 let lastPocketMessageAt = 0;
 let pocketServerClockOffsetSeconds: number | null = null;
+const lastWarmHistoryAttempt = new Map<string, number>();
 const selectSignalCandidates = createRotatingCandidateSelector<FeedPair>(SIGNAL_CANDIDATES_PER_SEARCH);
 let expectStream = false;
 const pendingHistory = new Map<string, Pending>();
@@ -825,6 +827,7 @@ function ensureFeed() {
 }
 
 export async function feedSnapshot() {
+  startPocketFeed();
   await ensureFeed();
   return {
     balance,
@@ -839,18 +842,23 @@ export function startPocketFeed() {
     while (feedWarmupStarted) {
       try {
         await ensureFeed();
-        const candidates = rankedSignalPairs();
+        const candidates = eligibleSignalPairs();
         for (const pair of candidates) {
           if (!feedWarmupStarted) return;
           // Keep quote and candle subscriptions hot; history requests run FIFO.
           subscribe(pair.symbol, 1);
           subscribe(pair.symbol, SIGNAL_CANDLE_SECONDS);
+          const quote = latestPairQuote(pair.symbol);
+          if (!quote || Date.now() - quote.at > MAX_QUOTE_AGE_MS) continue;
           const state = pairMarketData.get(pair.symbol);
-          if (
-            state?.historyPeriodSeconds !== SIGNAL_CANDLE_SECONDS ||
+          const historyNeedsWarm =
+            !state ||
+            state.historyPeriodSeconds !== SIGNAL_CANDLE_SECONDS ||
             !historyIsFresh(state.history, SIGNAL_CANDLE_SECONDS) ||
-            closedHistory(state.history, SIGNAL_CANDLE_SECONDS).length < MIN_DIRECT_AI_CANDLES
-          ) {
+            closedHistory(state.history, SIGNAL_CANDLE_SECONDS).length < MIN_DIRECT_AI_CANDLES;
+          const lastAttempt = lastWarmHistoryAttempt.get(pair.symbol) ?? 0;
+          if (historyNeedsWarm && Date.now() - lastAttempt >= WARM_HISTORY_REFRESH_MS) {
+            lastWarmHistoryAttempt.set(pair.symbol, Date.now());
             await loadCandles(
               pair.symbol,
               SIGNAL_CANDLE_SECONDS,
@@ -871,7 +879,7 @@ export function startPocketFeed() {
   })();
 }
 
-function rankedSignalPairs() {
+function eligibleSignalPairs() {
   return [...pairs.values()]
     .filter((pair) =>
       pair.group === "fx" &&
@@ -880,6 +888,29 @@ function rankedSignalPairs() {
     )
     .sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name))
     .slice(0, MAX_ELIGIBLE_PAIRS);
+}
+
+function rankedSignalPairs() {
+  const now = Date.now();
+  const eligible = eligibleSignalPairs();
+  const ranked = eligible.filter((pair) => {
+    const quote = latestPairQuote(pair.symbol);
+    return quote !== null && now - quote.at <= MAX_QUOTE_AGE_MS;
+  });
+  if (eligible.length > 0 && ranked.length === 0) {
+    console.warn("[pocket-feed-no-fresh-candidates]", JSON.stringify({
+      eligiblePairs: eligible.map((pair) => {
+        const quote = latestPairQuote(pair.symbol);
+        return {
+          symbol: pair.symbol,
+          payout: pair.payout,
+          quoteAgeMs: quote ? now - quote.at : null,
+        };
+      }),
+      socketReadyState: socket?.readyState ?? null,
+    }));
+  }
+  return ranked;
 }
 
 function selectRotatingSignalPair(
@@ -895,12 +926,14 @@ function selectRotatingSignalPair(
 }
 
 export async function feedNextPair(excludedSymbols: string[] = []): Promise<FeedSignalPair> {
+  startPocketFeed();
   await ensureFeed();
   const ranked = rankedSignalPairs();
-  if (ranked.length === 0) {
+  const candidates = ranked.length > 0 ? ranked : eligibleSignalPairs();
+  if (candidates.length === 0) {
     throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
   }
-  const pair = selectRotatingSignalPair(ranked, excludedSymbols.slice(0, 24));
+  const pair = selectRotatingSignalPair(candidates, excludedSymbols.slice(0, 24));
   if (!pair) throw new Error("Не удалось выбрать валютную пару.");
   return { symbol: pair.symbol, name: pair.name, payout: pair.payout, group: "fx" };
 }
@@ -909,7 +942,7 @@ async function loadHistoryPage(
   symbol: string,
   seconds: number,
   time: number,
-  timeoutMs = 12_000,
+  timeoutMs = 4_500,
 ): Promise<ParsedHistoryPage> {
   // Pocket's history frames have no request ID, so serialize all requests,
   // including requests for different symbols and periods.
@@ -917,7 +950,7 @@ async function loadHistoryPage(
     await ensureFeed();
     if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("Котировки сейчас недоступны.");
-    const clockDeadline = Date.now() + Math.min(timeoutMs, 2000);
+    const clockDeadline = Date.now() + Math.min(timeoutMs, 4_500);
     while (pocketServerClockOffsetSeconds === null && Date.now() < clockDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -995,7 +1028,7 @@ async function loadHistoryPage(
 async function loadCandles(
   symbol: string,
   seconds: number,
-  pageTimeoutMs = 12_000,
+  pageTimeoutMs = 4_500,
   pageLimit?: number,
 ): Promise<{ candles: HistoricalCandle[]; rejectedRows: number }> {
   await ensureFeed();
@@ -1031,6 +1064,25 @@ async function loadCandles(
   const beforeRealtime = candles.at(-1)?.time ?? null;
   candles = appendCoveredFastCandles(candles, state.ticks, seconds, Date.now());
   const latest = candles.at(-1)?.time ?? null;
+  const now = Date.now();
+  const tickTimes = state.ticks.map((tick) => tick.time);
+  const latestClosedTime = latest === null ? null : latest + seconds;
+  const latestClosedAgeSeconds = latestClosedTime === null
+    ? null
+    : Math.round(now / 1000 - latestClosedTime);
+  if (latestClosedAgeSeconds === null || latestClosedAgeSeconds > seconds + 4.5) {
+    console.warn("[pocket-history-still-stale]", JSON.stringify({
+      symbol,
+      periodSeconds: seconds,
+      latestClosedAgeSeconds,
+      tickCount: state.ticks.length,
+      tickSpanSeconds: tickTimes.length > 1
+        ? Math.round((Math.max(...tickTimes) - Math.min(...tickTimes)) / 1000)
+        : 0,
+      latestTickAgeMs: tickTimes.length ? Math.max(0, now - Math.max(...tickTimes)) : null,
+      tickCoverageAfterHistory: tickTimes.filter((time) => beforeRealtime !== null && time > beforeRealtime * 1000).length,
+    }));
+  }
   if (latest !== beforeRealtime) {
     console.info("[pocket-history-reconciled]", JSON.stringify({
       symbol,
@@ -1165,6 +1217,7 @@ export async function feedSignal(
   symbol: string,
   expirySeconds: number,
 ): Promise<FeedSignalResult> {
+  startPocketFeed();
   if (!isValidExpirySeconds(expirySeconds)) {
     throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
   }
@@ -1182,18 +1235,18 @@ export async function feedSignal(
   }
   subscribe(symbol);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
-  const historyStartedAt = performance.now();
-  const inputQuoteStartedAt = historyStartedAt;
-  const history = await waitForSignalPreparation(
-    freshSignalHistory(symbol, analysisSeconds),
-    preparationDeadlineAtMs,
-  );
+  const inputQuoteStartedAt = performance.now();
   const inputQuote = await waitForSignalPreparation(
     waitFreshQuote(symbol, SIGNAL_QUOTE_WAIT_MS),
     preparationDeadlineAtMs,
   );
-  const historyMs = Math.round(performance.now() - historyStartedAt);
   const inputQuoteMs = Math.round(performance.now() - inputQuoteStartedAt);
+  const historyStartedAt = performance.now();
+  const history = await waitForSignalPreparation(
+    freshSignalHistory(symbol, analysisSeconds),
+    preparationDeadlineAtMs,
+  );
+  const historyMs = Math.round(performance.now() - historyStartedAt);
   const candles = history.candles;
   const latestCandle = candles.at(-1);
   const historyAgeSeconds = latestCandle
@@ -1277,6 +1330,7 @@ export async function feedSignal(
 }
 
 export async function feedConfirmSignalEntry(symbol: string) {
+  startPocketFeed();
   await ensureFeed();
   const pair = pairs.get(symbol);
   if (
@@ -1349,15 +1403,17 @@ export async function feedBest(
     }
     stage = "feed";
     const feedStartedAt = performance.now();
+    startPocketFeed();
     await ensureFeed();
     feedMs = performance.now() - feedStartedAt;
     const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
     expectedCandleSeconds = analysisSeconds;
     const ranked = rankedSignalPairs();
-    if (ranked.length === 0) {
+    const eligible = ranked.length > 0 ? ranked : eligibleSignalPairs();
+    if (eligible.length === 0) {
       throw new Error("Нет активных OTC-валютных пар с выплатой ровно 80% или 92%.");
     }
-    const nextPair = selectRotatingSignalPair(ranked, excludedSymbols.slice(0, 24));
+    const nextPair = selectRotatingSignalPair(eligible, excludedSymbols.slice(0, 24));
     const pool = nextPair ? [nextPair] : [];
     poolSize = pool.length;
     if (pool.length === 0) {
@@ -1372,6 +1428,9 @@ export async function feedBest(
       const results = [];
       for (const pair of pool) {
         try {
+          const quoteStartedAt = performance.now();
+          await waitFreshQuote(pair.symbol, SIGNAL_QUOTE_WAIT_MS);
+          quoteMs += performance.now() - quoteStartedAt;
           results.push({ ok: true as const, item: pair, value: await freshSignalHistory(pair.symbol, analysisSeconds) });
         } catch (error) {
           results.push({ ok: false as const, item: pair, error });
@@ -1418,7 +1477,7 @@ export async function feedBest(
     }
     stage = "fresh-quote";
     const inputQuoteStartedAt = performance.now();
-    const inputQuote = await waitFreshQuote(candidate.pair.symbol);
+    const inputQuote = await waitFreshQuote(candidate.pair.symbol, SIGNAL_QUOTE_WAIT_MS);
     quoteMs += performance.now() - inputQuoteStartedAt;
     stage = "analysis";
     const analysisStartedAt = performance.now();
@@ -1457,7 +1516,7 @@ export async function feedBest(
     }
     stage = "fresh-quote";
     const quoteStartedAt = performance.now();
-    let entryQuote = await waitFreshQuote(best.pair.symbol);
+    let entryQuote = await waitFreshQuote(best.pair.symbol, SIGNAL_QUOTE_WAIT_MS);
     quoteMs += performance.now() - quoteStartedAt;
     let verificationHistory = await freshSignalHistory(best.pair.symbol, 60);
     if (entryWindowFailure(verificationHistory.candles)) {

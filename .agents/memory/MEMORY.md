@@ -8,3 +8,4 @@
 - [TanStack dev RPC diagnostics](tanstack-dev-rpc.md) — use the current Vite-generated function ID and same-origin `Origin` header for live dev calls.
 - [Node TypeScript tests](node-typescript-tests.md) — Node's built-in type-strip runner needs explicit `.ts` specifiers for relative ESM imports.
 - [Managed database publishing](managed-db-publishing.md) — keep app migrations in development; let Replit Publish apply production schema changes.
+- [Dev broker feed isolation](dev-broker-feed-isolation.md) — a Vite bootstrap feed may not share tick/history state with server-function execution; verify both paths.

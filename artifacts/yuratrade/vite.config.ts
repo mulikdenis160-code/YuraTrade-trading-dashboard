@@ -51,7 +51,7 @@ function pgliteBootstrapPlugin(): Plugin {
   };
 }
 
-/** Start the shared broker stream as the server boots, not on a button click. */
+/** Start the live broker feed when the dev server starts. */
 function pocketFeedBootstrapPlugin(): Plugin {
   return {
     name: "app-builder:pocket-feed-bootstrap",
