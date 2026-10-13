@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandName } from "@/components/brand";
 import { levels } from "@/lib/levels";
 import { loadFeed, readClose } from "@/lib/pocket-live";
+import { startVisiblePolling } from "@/lib/visible-polling";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { useLanguage } from "@/lib/language";
 import {
@@ -63,11 +64,10 @@ export function Shell({ children }: { children: ReactNode }) {
         })
         .catch(() => {});
     };
-    pull();
-    const timer = window.setInterval(pull, 8000);
+    const stopPolling = startVisiblePolling(pull, 8000);
     return () => {
       stop = true;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [admin]);
 

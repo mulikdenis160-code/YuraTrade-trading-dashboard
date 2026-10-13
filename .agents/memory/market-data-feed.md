@@ -50,3 +50,9 @@ Treat fresh ticks and fresh candle history as separate requirements. The user ap
 **Why:** Pocket Option's regular history lagged by several minutes, while the user asked for signals when requested and authorized the provider's fast-history path with a coverage safeguard.
 
 **How to apply:** reconcile regular OHLC history with fast-history ticks only for fully covered closed minutes. Never fabricate uncovered bars, and keep the fresh-quote check independent.
+
+Run the Pocket Option feed only while an authenticated user is using the signal app; start on demand and disconnect after 90 seconds without app requests.
+
+**Why:** the user asked to avoid keeping the broker connection active around the clock.
+
+**How to apply:** keep Telegram updates event-driven through the webhook, and make the market-data socket demand-driven with an idle timeout that is refreshed by active app requests.

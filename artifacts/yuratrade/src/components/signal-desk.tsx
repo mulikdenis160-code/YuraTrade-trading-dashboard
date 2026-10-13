@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { chooseSignalPair, confirmSignalEntry, loadFeed, takeSignal } from "@/lib/pocket-live";
+import { startVisiblePolling } from "@/lib/visible-polling";
 import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import {
@@ -98,12 +99,11 @@ export function SignalDesk() {
           setFeedError(cause instanceof Error ? cause.message : "Не удалось подключиться к Pocket Option.");
         });
     };
-    pull();
     setUsed(signalsUsedToday(id));
-    const timer = window.setInterval(pull, 8000);
+    const stopPolling = startVisiblePolling(pull, 8000);
     return () => {
       stop = true;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [id]);
 

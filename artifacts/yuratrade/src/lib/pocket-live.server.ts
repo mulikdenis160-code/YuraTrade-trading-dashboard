@@ -76,6 +76,7 @@ const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4_500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
   "Подготовка сигнала не завершилась за отведённое время. Сигнал не выдан.";
 const BROKER_QUEUE_KEY = "single-pocket-option-connection";
+const FEED_IDLE_TIMEOUT_MS = 90_000;
 
 function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
   return waitForSignalRequest(
@@ -180,6 +181,8 @@ let lastStreamDiagnosticAt = 0;
 let lastStaleHistoryReconnectAt = 0;
 let staleHistoryReconnectInFlight: Promise<void> | null = null;
 let feedWarmupStarted = false;
+let lastFeedActivityAt = 0;
+let feedIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
 const STALE_HISTORY_RECONNECT_COOLDOWN_MS = 5 * 60_000;
 
@@ -970,7 +973,19 @@ export async function feedSnapshot() {
 }
 
 export function startPocketFeed() {
-  if (FEED_DISABLED || feedWarmupStarted) return;
+  if (FEED_DISABLED) return;
+  lastFeedActivityAt = Date.now();
+  if (feedIdleTimer) clearTimeout(feedIdleTimer);
+  feedIdleTimer = setTimeout(() => {
+    feedIdleTimer = null;
+    const idleForMs = Date.now() - lastFeedActivityAt;
+    if (idleForMs < FEED_IDLE_TIMEOUT_MS) {
+      startPocketFeedIdleTimer();
+      return;
+    }
+    stopPocketFeedAfterIdle(idleForMs);
+  }, FEED_IDLE_TIMEOUT_MS);
+  if (feedWarmupStarted) return;
   feedWarmupStarted = true;
   void (async () => {
     while (feedWarmupStarted) {
@@ -1018,9 +1033,41 @@ export function startPocketFeed() {
   })();
 }
 
+function startPocketFeedIdleTimer() {
+  if (feedIdleTimer) clearTimeout(feedIdleTimer);
+  feedIdleTimer = setTimeout(() => {
+    feedIdleTimer = null;
+    const idleForMs = Date.now() - lastFeedActivityAt;
+    if (idleForMs < FEED_IDLE_TIMEOUT_MS) {
+      startPocketFeedIdleTimer();
+      return;
+    }
+    stopPocketFeedAfterIdle(idleForMs);
+  }, FEED_IDLE_TIMEOUT_MS);
+}
+
+function stopPocketFeedAfterIdle(idleForMs: number) {
+  feedWarmupStarted = false;
+  cancelReady?.();
+  failPending(new Error("Поток Pocket Option остановлен после простоя."));
+  const oldSocket = socket;
+  socket = null;
+  isAuthorized = false;
+  expectAssets = false;
+  expectStream = false;
+  expectBalance = false;
+  balance = null;
+  pairs.clear();
+  subscribedAt.clear();
+  oldSocket?.terminate();
+  console.info("[pocket-feed-idle-stop]", JSON.stringify({ idleForMs }));
+}
+
 pocketBrokerRuntime.__primePocketDispose = () => {
   disposed = true;
   feedWarmupStarted = false;
+  if (feedIdleTimer) clearTimeout(feedIdleTimer);
+  feedIdleTimer = null;
   cancelReady?.();
   const oldSocket = socket;
   socket = null;
