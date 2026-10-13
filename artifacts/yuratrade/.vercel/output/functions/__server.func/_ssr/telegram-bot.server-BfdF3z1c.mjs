@@ -1,8 +1,8 @@
 import { t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
-import { A as levelForBalance } from "./router-DGCxSxFb.mjs";
+import { A as levelForBalance } from "./router-BU3DFwT5.mjs";
 import { readTelegramLocale, saveTelegramLocale, verifyLinkedPocketAccountForTelegramUser, verifyPocketAccountForTelegramUser } from "./pocket-gate.server-By8mD9Rm.mjs";
 import { createHash, timingSafeEqual } from "node:crypto";
-//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-DU-zGHBS.js
+//#region node_modules/.nitro/vite/services/ssr/assets/telegram-bot.server-BfdF3z1c.js
 var POCKET_OPTION_REFERRAL_URL = "https://po-ru4.click/register?utm_campaign=857649&utm_source=affiliate&utm_medium=sr&a=iRpVNOoIijYLHF&al=1788919&ac=ftd&cid=974710&code=50START";
 var ALREADY_REGISTERED_CALLBACK_DATA = "already_registered";
 var messages = {
@@ -259,6 +259,14 @@ async function sendTelegramMessage(chatId, text, replyMarkup) {
 		...replyMarkup ? { reply_markup: replyMarkup } : {}
 	});
 }
+async function readLocaleOrFallback(telegramUserId, fallback) {
+	try {
+		return await readTelegramLocale(telegramUserId) ?? fallback;
+	} catch (error) {
+		console.error("[telegram-locale-read-failed]", error);
+		return fallback;
+	}
+}
 function isValidChatId(value) {
 	return typeof value === "number" && Number.isSafeInteger(value) || typeof value === "string" && /^-?\d+$/.test(value);
 }
@@ -279,7 +287,7 @@ async function handleCallbackQuery(callback) {
 	const chosenLocale = parseTelegramLocaleCallbackData(data);
 	if (!(data === "primebot:language" || data === "primebot:instructions" || chosenLocale !== null)) return;
 	const verification = await verifyLinkedPocketAccountForTelegramUser(String(telegramUserId));
-	const locale = await readTelegramLocale(String(telegramUserId)) ?? telegramLocale(callback.from?.language_code);
+	const locale = await readLocaleOrFallback(String(telegramUserId), telegramLocale(callback.from?.language_code));
 	if (verification.status !== "verified") {
 		const reply = formatTelegramVerificationReply(verification, locale, telegramUserId);
 		const start = buildTelegramStartReply(locale);
@@ -306,7 +314,7 @@ async function handleMessage(message) {
 		if (typeof telegramUserId === "number" && Number.isSafeInteger(telegramUserId)) {
 			const verification = await verifyLinkedPocketAccountForTelegramUser(String(telegramUserId));
 			if (verification.status === "verified") {
-				const locale = await readTelegramLocale(String(telegramUserId)) ?? telegramLocale(message.from?.language_code);
+				const locale = await readLocaleOrFallback(String(telegramUserId), telegramLocale(message.from?.language_code));
 				const reply = formatTelegramVerificationReply(verification, locale, telegramUserId);
 				await sendTelegramMessage(chat.id, reply.text, buildTelegramMainMenuMarkup(locale));
 				return;
@@ -319,7 +327,7 @@ async function handleMessage(message) {
 	if (!isTelegramPocketIdPromptReply(message.reply_to_message) || typeof message.text !== "string" || typeof message.from?.id !== "number" || !Number.isSafeInteger(message.from.id)) return;
 	const result = await verifyPocketAccountForTelegramUser(message.text.trim(), String(message.from.id));
 	const reply = formatTelegramVerificationReply(result, message.from.language_code, message.from.id);
-	const locale = await readTelegramLocale(String(message.from.id)) ?? telegramLocale(message.from.language_code);
+	const locale = await readLocaleOrFallback(String(message.from.id), telegramLocale(message.from.language_code));
 	await sendTelegramMessage(chat.id, reply.text, result.status === "verified" ? buildTelegramMainMenuMarkup(locale) : void 0);
 	if (reply.retryWithId) await sendTelegramMessage(chat.id, buildTelegramPocketIdPrompt(message.from.language_code), {
 		force_reply: true,

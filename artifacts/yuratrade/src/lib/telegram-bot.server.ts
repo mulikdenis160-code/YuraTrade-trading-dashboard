@@ -20,6 +20,7 @@ import {
   telegramLocale,
   TELEGRAM_INSTRUCTIONS_CALLBACK_DATA,
   TELEGRAM_LANGUAGE_CALLBACK_DATA,
+  type TelegramLocale,
 } from "./telegram-bot";
 
 type TelegramChat = {
@@ -124,6 +125,18 @@ async function sendTelegramMessage(
   });
 }
 
+async function readLocaleOrFallback(
+  telegramUserId: string,
+  fallback: TelegramLocale,
+): Promise<TelegramLocale> {
+  try {
+    return await readTelegramLocale(telegramUserId) ?? fallback;
+  } catch (error) {
+    console.error("[telegram-locale-read-failed]", error);
+    return fallback;
+  }
+}
+
 function isValidChatId(value: unknown): value is number | string {
   return (
     (typeof value === "number" && Number.isSafeInteger(value)) ||
@@ -170,8 +183,10 @@ async function handleCallbackQuery(callback: TelegramCallbackQuery): Promise<voi
   const verification = await verifyLinkedPocketAccountForTelegramUser(
     String(telegramUserId),
   );
-  const locale = await readTelegramLocale(String(telegramUserId)) ??
-    telegramLocale(callback.from?.language_code);
+  const locale = await readLocaleOrFallback(
+    String(telegramUserId),
+    telegramLocale(callback.from?.language_code),
+  );
   if (verification.status !== "verified") {
     const reply = formatTelegramVerificationReply(
       verification,
@@ -217,8 +232,10 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
         String(telegramUserId),
       );
       if (verification.status === "verified") {
-        const locale = await readTelegramLocale(String(telegramUserId)) ??
-          telegramLocale(message.from?.language_code);
+        const locale = await readLocaleOrFallback(
+          String(telegramUserId),
+          telegramLocale(message.from?.language_code),
+        );
         const reply = formatTelegramVerificationReply(
           verification,
           locale,
@@ -256,8 +273,10 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
     message.from.language_code,
     message.from.id,
   );
-  const locale = await readTelegramLocale(String(message.from.id)) ??
-    telegramLocale(message.from.language_code);
+  const locale = await readLocaleOrFallback(
+    String(message.from.id),
+    telegramLocale(message.from.language_code),
+  );
   await sendTelegramMessage(
     chat.id,
     reply.text,
