@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { isValidExpirySeconds } from "./expiry";
 import { pocketGateMiddleware } from "./pocket-gate.middleware";
+import { RECOVERY_PREPARATION_TIMEOUT_MS } from "./signal-config";
 
 export const loadFeed = createServerFn({ method: "GET" })
   .middleware([pocketGateMiddleware])
@@ -26,20 +27,29 @@ export const takeSignal = createServerFn({ method: "POST" })
   .validator((input: {
     symbol: string;
     expirySeconds: number;
+    recovery?: boolean;
+    timeoutMs?: number;
   }) => {
     const symbol = typeof input?.symbol === "string" ? input.symbol.trim() : "";
     const expirySeconds = Number(input?.expirySeconds);
+    const recovery = input?.recovery === true;
+    const timeoutMs = input?.timeoutMs;
+    if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs < 1_000 || timeoutMs > RECOVERY_PREPARATION_TIMEOUT_MS)) {
+      throw new Error("Недопустимый срок подготовки сигнала.");
+    }
     if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol) || !isValidExpirySeconds(expirySeconds)) {
       throw new Error("Выберите пару и срок экспирации от 30 секунд до 4 часов.");
     }
     return {
       symbol,
       expirySeconds,
+      recovery,
+      timeoutMs,
     };
   })
   .handler(async ({ data }) => {
     const { feedSignal } = await import("./pocket-live.server");
-    return feedSignal(data.symbol, data.expirySeconds);
+    return feedSignal(data.symbol, data.expirySeconds, { recovery: data.recovery, timeoutMs: data.timeoutMs });
   });
 
 export const confirmSignalEntry = createServerFn({ method: "POST" })

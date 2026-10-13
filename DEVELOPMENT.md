@@ -83,7 +83,7 @@ and `corepack pnpm@10.30.0 --filter @workspace/api-server run dev`;
   authentication; it is not proof of an invalid key.
 
 Current validation: all workspace type checks and all three application builds
-passed. Application tests: 217 passed. Tooling tests: 193 passed, four failed
+passed. Application tests: 225 passed. Tooling tests: 193 passed, four failed
 because the platform documentation described above is missing. HTTP smoke
 checks passed for the website, the API health endpoint and mockup sandbox.
 Pocket Option authenticated and supplied history and fast ticks. After fixing
@@ -159,3 +159,27 @@ recovery check, not a Gemini signal generation or a Replit production test.
 Evidence: /workspace/site-preview/pocket-history-recovery-results.json.
 A separate real series still observed missing responses before these checks;
 provider outages and invalid history remain errors rather than fabricated data.
+
+## Recovery signal preparation
+
+Recovery requests explicitly select a 30-second model deadline and up to
+45 seconds for preparation. Ordinary requests retain their ten-second model
+and twenty-second preparation limits. Browser recovery has one shared
+60-second budget, with a one-second transport allowance per request, and
+allows at most two preparations. A second preparation reloads/validates market
+data; it does not reuse a previous direction. Only transient model failures
+(timeout, short unavailability/busy) or pair-scoped data failures may retry.
+Quota, configuration, malformed responses, long provider cooldowns and unknown
+RPC failures stop immediately. Leaving recovery suppresses further attempts.
+
+Recovery confirmation now supplies the prepared signal expiration, bounds the
+confirmation request and checks the returned quote validity before navigation.
+Expired background-tab recovery cannot open an old signal.
+
+225 tests, all package typechecks and builds passed. Real recovery-mode
+generation and confirmation succeeded for AEDCNY OTC (120-second expiry),
+with preparation taking 7.39 seconds. A preceding independent real request
+returned Gemini HTTP503; do not claim every provider request succeeds.
+Evidence: /workspace/site-preview/overlay-live-check.json. Saved signal
+windows are historical and expired. Deploy the updated source in Replit
+to verify actual production behavior; no trade was opened by these checks.

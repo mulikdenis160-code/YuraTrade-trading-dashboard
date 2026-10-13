@@ -22,14 +22,14 @@ import {
 import {
   MAX_OVERLAYS,
   DEFAULT_SIGNAL_EXPIRY_SECONDS,
-  RECOVERY_HISTORY_RETRY_MS,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_COPY_DELAY_SECONDS,
 } from "@/lib/signal-config";
 import { copyPairName } from "@/lib/pair-clipboard";
 import { settleSignalRequest, waitForSignalRequest } from "@/lib/signal-request";
 import { formatExpiryForLanguage, useLanguage } from "@/lib/language";
-import { visibleSignalReleaseAt } from "@/lib/signal-release-time";
+import { prepareRecovery } from "@/lib/signal-recovery";
+import { visibleSignalReleaseAt, signalEntryIsLive } from "@/lib/signal-release-time";
 import { getTelegramInitData } from "@/lib/telegram-webapp";
 
 type Group = "fx";
@@ -442,32 +442,19 @@ function SignalCard({ search }: { search: Search }) {
     if (phase !== "preparing-recovery") return;
     let stop = false;
     void (async () => {
-      const deadline = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
-      let result: Awaited<ReturnType<typeof takeSignal>> | undefined;
-      while (!stop && Date.now() < deadline) {
-        const remainingMs = deadline - Date.now();
-        result = await waitForSignalRequest(
-          settleSignalRequest(takeSignal({
-            data: { symbol: search.symbol, expirySeconds: search.seconds },
-          })),
-          Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, remainingMs),
-          t("signal.analysisTimeout"),
-        );
-        if (stop) return;
-        const historyIsStale =
-          result.decision === "pass" &&
-          result.reason.includes("Последняя закрытая свеча слишком старая");
-        if (!historyIsStale) break;
-        const retryDelay = Math.min(RECOVERY_HISTORY_RETRY_MS, deadline - Date.now());
-        if (retryDelay <= 0) break;
-        await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
-      }
+      const result = await prepareRecovery<Extract<Awaited<ReturnType<typeof takeSignal>>, { decision: "signal" }>>({
+        prepare: (timeoutMs) => takeSignal({
+          data: { symbol: search.symbol, expirySeconds: search.seconds, recovery: true, timeoutMs },
+        }),
+        timeoutMessage: t("signal.analysisTimeout"),
+        cancelled: () => stop,
+      });
       if (stop || !result) return;
       if (result.decision === "pass") {
         setPhase("no-signal");
         setError(
           result.reason.includes("Последняя закрытая свеча слишком старая")
-            ? "Pocket Option не обновил свечи за 20 секунд. Перекрытие не выдано по устаревшим данным."
+            ? "Pocket Option не передал свежие свечи. Перекрытие не выдано по устаревшим данным."
             : result.reason,
         );
         if (search.batchRunId) {
@@ -496,9 +483,15 @@ function SignalCard({ search }: { search: Search }) {
   useEffect(() => {
     if (phase !== "hunt" || !preparedRecovery) return;
     let stop = false;
-    void confirmSignalEntry({ data: { symbol: search.symbol } })
+    void (async () => {
+      if (!signalEntryIsLive(preparedRecovery.expiresAtMs)) throw new Error(t("signal.entryExpired"));
+      return await waitForSignalRequest(settleSignalRequest(confirmSignalEntry({
+        data: { symbol: search.symbol, expiresAtMs: preparedRecovery.expiresAtMs },
+      })), Math.min(SIGNAL_PREPARATION_TIMEOUT_MS, preparedRecovery.expiresAtMs - Date.now()), t("signal.entryExpired"));
+    })()
       .then(async (entry) => {
         if (stop) return;
+        if (!signalEntryIsLive(entry.validUntilMs)) throw new Error(t("signal.entryExpired"));
         await navigate({
           to: "/signal",
           replace: true,

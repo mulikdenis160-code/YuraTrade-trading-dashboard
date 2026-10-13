@@ -32,6 +32,8 @@ import {
   MIN_ENTRY_BUFFER_MS,
   SIGNAL_CANDLE_SECONDS,
   SIGNAL_ANALYSIS_TIMEOUT_MS,
+  RECOVERY_ANALYSIS_TIMEOUT_MS,
+  RECOVERY_PREPARATION_TIMEOUT_MS,
   SIGNAL_HISTORY_PAGE_TIMEOUT_MS,
   SIGNAL_PREPARATION_TIMEOUT_MS,
   SIGNAL_QUOTE_WAIT_MS,
@@ -72,7 +74,7 @@ const WARM_HISTORY_REFRESH_MS = 30_000;
 const ELIGIBLE_PAYOUTS = new Set([80, 92]);
 const CANDIDATE_HISTORY_PAGE_TIMEOUT_MS = 4_500;
 const SIGNAL_PREPARATION_TIMEOUT_MESSAGE =
-  "Поиск сигнала не завершился за 20 секунд. Сигнал не выдан.";
+  "Подготовка сигнала не завершилась за отведённое время. Сигнал не выдан.";
 const BROKER_QUEUE_KEY = "single-pocket-option-connection";
 
 function waitForSignalPreparation<T>(request: Promise<T>, deadlineAtMs: number): Promise<T> {
@@ -1439,11 +1441,12 @@ function summarizeCandleCadence(series: HistoricalCandle[][], expectedSeconds: n
 export async function feedSignal(
   symbol: string,
   expirySeconds: number,
+  options: { recovery?: boolean; timeoutMs?: number } = {},
 ): Promise<FeedSignalResult> {
   if (!isValidExpirySeconds(expirySeconds)) throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
   const unavailable = marketAiAvailability();
   if (unavailable) return unavailable.toResult();
-  try { return await prepareFeedSignal(symbol, expirySeconds); }
+  try { return await prepareFeedSignal(symbol, expirySeconds, options); }
   catch (error) {
     if (error instanceof MarketAiServiceError) return error.toResult();
     if (error instanceof SignalDataError) return error.toResult();
@@ -1451,13 +1454,16 @@ export async function feedSignal(
   }
 }
 
-async function prepareFeedSignal(symbol: string, expirySeconds: number): Promise<FeedSignalResult> {
+async function prepareFeedSignal(symbol: string, expirySeconds: number, options: { recovery?: boolean; timeoutMs?: number } = {}): Promise<FeedSignalResult> {
   startPocketFeed();
   if (!isValidExpirySeconds(expirySeconds)) {
     throw new Error("Выберите срок экспирации от 30 секунд до 4 часов.");
   }
   const pipelineStartedAt = performance.now();
-  const preparationDeadlineAtMs = Date.now() + SIGNAL_PREPARATION_TIMEOUT_MS;
+  const preparationBudget = options.recovery
+    ? Math.min(options.timeoutMs ?? RECOVERY_PREPARATION_TIMEOUT_MS, RECOVERY_PREPARATION_TIMEOUT_MS)
+    : SIGNAL_PREPARATION_TIMEOUT_MS;
+  const preparationDeadlineAtMs = Date.now() + preparationBudget;
   await waitForSignalPreparation(ensureFeed(), preparationDeadlineAtMs);
   const pair = pairs.get(symbol);
   if (
@@ -1506,7 +1512,7 @@ async function prepareFeedSignal(symbol: string, expirySeconds: number): Promise
   }
   const entryHistoryRequest = settleSignalRequest(freshSignalHistory(symbol, 60));
   const remainingAnalysisMs = Math.min(
-    SIGNAL_ANALYSIS_TIMEOUT_MS,
+    options.recovery ? RECOVERY_ANALYSIS_TIMEOUT_MS : SIGNAL_ANALYSIS_TIMEOUT_MS,
     preparationDeadlineAtMs - Date.now() - 100,
   );
   if (remainingAnalysisMs <= 0) {

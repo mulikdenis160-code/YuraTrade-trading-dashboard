@@ -571,3 +571,14 @@ test("analysis deadlines abort the SDK request instead of leaving it running in 
   }, [], ["EURUSD_otc"], 10), /Не удалось получить ответ от ИИ/);
   assert.equal(signal?.aborted, true);
 });
+
+test("recovery supplies its longer deadline and an abort signal to the AI request", async () => {
+  const review = await requestMarketAiReviewOnce(async (_messages, options) => {
+    assert.equal(options?.timeoutMs, 30000);
+    assert.equal(options?.signal.aborted, false);
+    return { choices: [{ message: { content: JSON.stringify({ direction: "up", explanation: "Цена растёт.", confidence: 60 }) }, finish_reason: "STOP" }] };
+  }, [], ["EURUSD_otc"], 30000);
+  assert.equal(review.decision, "signal");
+  if (review.decision !== "signal") assert.fail("Expected a signal");
+  assert.equal(review.direction, "call");
+});
