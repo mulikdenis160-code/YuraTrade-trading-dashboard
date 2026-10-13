@@ -679,7 +679,6 @@ function createMarketAiController(options = {}) {
 		unavailable
 	};
 }
-var SIGNAL_HISTORY_PAGE_TIMEOUT_MS = 4500;
 //#endregion
 //#region src/lib/market-ai.server.ts
 var signalReviewSchema = object({
@@ -874,22 +873,60 @@ function refreshPeriodHistories(state, nowMs, limit = 128) {
 //#endregion
 //#region src/lib/async-keyed-queue.ts
 function createKeyedAsyncQueue() {
-	const tails = /* @__PURE__ */ new Map();
-	return async function run(key, operation) {
-		const previous = tails.get(key) ?? Promise.resolve();
-		let releaseTurn = () => {};
-		const turn = new Promise((resolve) => {
-			releaseTurn = resolve;
+	const queues = /* @__PURE__ */ new Map();
+	return function run(key, operation, priority = 0) {
+		return new Promise((resolve, reject) => {
+			const turn = {
+				priority,
+				start: () => {
+					Promise.resolve().then(operation).then(resolve, reject).finally(() => {
+						const waiting = queues.get(key);
+						if (waiting.length === 0) {
+							queues.delete(key);
+							return;
+						}
+						let next = 0;
+						for (let i = 1; i < waiting.length; i++) if (waiting[i].priority > waiting[next].priority) next = i;
+						waiting.splice(next, 1)[0].start();
+					});
+				}
+			};
+			const waiting = queues.get(key);
+			if (waiting) waiting.push(turn);
+			else {
+				queues.set(key, []);
+				turn.start();
+			}
 		});
-		const tail = previous.then(() => turn);
-		tails.set(key, tail);
-		await previous;
+	};
+}
+//#endregion
+//#region src/lib/pocket-history-recovery.ts
+function scheduleHistoryRecovery(options) {
+	let stopped = false;
+	let retryTimer;
+	const deadlineTimer = setTimeout(() => {
+		if (stopped) return;
+		stop();
+		options.expire();
+	}, options.timeoutMs);
+	function stop() {
+		stopped = true;
+		clearTimeout(deadlineTimer);
+		clearTimeout(retryTimer);
+	}
+	if (options.retry) retryTimer = setTimeout(() => {
+		if (stopped) return;
 		try {
-			return await operation();
-		} finally {
-			releaseTurn();
-			if (tails.get(key) === tail) tails.delete(key);
+			options.retry?.();
+		} catch (error) {
+			stop();
+			options.fail(error);
 		}
+	}, Math.min(2500, options.timeoutMs / 2));
+	return {
+		timer: deadlineTimer,
+		stop
 	};
 }
 //#endregion
@@ -935,8 +972,9 @@ function createPocketEventDecoder() {
 			return null;
 		}
 		if (message.startsWith("42")) {
-			pending = null;
-			return parsePocketSocketIoEvent(message);
+			const event = parsePocketSocketIoEvent(message);
+			if (event?.name === "successauth" || event?.name === "NotAuthorized") pending = null;
+			return event;
 		}
 		if (!pending || !message.startsWith("[") && !message.startsWith("{")) return null;
 		try {
@@ -1129,7 +1167,7 @@ var pocketSharedRuntime = pocketGlobal.__primePocketSharedRuntime ??= {
 };
 var pocketBrokerRuntime = pocketGlobal;
 pocketBrokerRuntime.__primePocketDispose?.();
-var runBrokerCommand = pocketBrokerRuntime.__primePocketBrokerCommandQueue ??= createKeyedAsyncQueue();
+var runBrokerCommand = pocketBrokerRuntime.__primePocketBrokerPriorityQueue ??= createKeyedAsyncQueue();
 var pendingHistory = pocketBrokerRuntime.__primePocketPendingHistory ??= /* @__PURE__ */ new Map();
 var pairs = /* @__PURE__ */ new Map();
 var pairMarketData = pocketSharedRuntime.pairMarketData;
@@ -1378,10 +1416,11 @@ function subscribe(symbol, periodSeconds = 1) {
 	if (now - (subscribedAt.get(key) ?? 0) < 3e4) return;
 	if (!socket || socket.readyState !== wrapper_default.OPEN) return;
 	subscribedAt.set(key, now);
-	runBrokerCommand(BROKER_QUEUE_KEY, async () => {
-		const current = socket;
-		if (current && current.readyState === wrapper_default.OPEN) for (const frame of buildPocketQuoteSubscriptionFrames(symbol)) current.send(frame);
-	}).catch(() => {});
+	try {
+		for (const frame of buildPocketQuoteSubscriptionFrames(symbol)) socket.send(frame);
+	} catch {
+		subscribedAt.delete(key);
+	}
 }
 function failPending(error) {
 	for (const request of pendingHistory.values()) {
@@ -1693,7 +1732,7 @@ function startPocketFeed() {
 					if (historyNeedsWarm && Date.now() - lastAttempt >= WARM_HISTORY_REFRESH_MS) {
 						lastWarmHistoryAttempt.set(pair.symbol, Date.now());
 						try {
-							await loadCandles(pair.symbol, 60, SIGNAL_HISTORY_PAGE_TIMEOUT_MS, 1);
+							await loadCandles(pair.symbol, 60, 4500, 1, -1);
 						} catch (error) {
 							console.warn("[pocket-history-warmup-failed]", JSON.stringify({
 								symbol: pair.symbol,
@@ -1726,10 +1765,15 @@ pocketBrokerRuntime.__primePocketDispose = () => {
 function eligibleSignalPairs() {
 	return [...pairs.values()].filter((pair) => pair.group === "fx" && pair.symbol.toLowerCase().includes("otc") && ELIGIBLE_PAYOUTS.has(pair.payout)).sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name)).slice(0, MAX_ELIGIBLE_PAIRS);
 }
-async function loadHistoryPage(symbol, seconds, time, timeoutMs = 4500) {
+async function loadHistoryPage(symbol, seconds, time, timeoutMs = 4500, priority = 0) {
 	return runBrokerCommand(BROKER_QUEUE_KEY, async () => {
 		await ensureFeed();
 		if (!pairs.has(symbol)) throw new Error("Эта пара сейчас недоступна.");
+		const cached = historyForPeriod(pairMarketData.get(symbol), seconds);
+		if (Math.abs(Date.now() / 1e3 - time) <= seconds * 2 && closedHistory(cached, seconds).length >= 30 && historyIsFresh(cached, seconds)) return {
+			candles: [...cached],
+			rejectedRows: 0
+		};
 		if (!socket || socket.readyState !== wrapper_default.OPEN) throw new Error("Котировки сейчас недоступны.");
 		const clockDeadline = Date.now() + Math.min(timeoutMs, 4500);
 		while (pocketSharedRuntime.clockOffsetSeconds === null && Date.now() < clockDeadline) await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1750,31 +1794,58 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 4500) {
 			const requestTime = pocketHistoryRequestTime(time * 1e3, clockOffsetSeconds, seconds);
 			const requestIndex = Math.max(lastHistoryRequestIndex + 1, Math.floor(Date.now() / 10));
 			lastHistoryRequestIndex = requestIndex;
-			const timer = setTimeout(() => {
-				if (settleLatestHistoryFromCache(symbol)) return;
-				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
-				console.warn("[pocket-history-timeout]", JSON.stringify({
-					symbol,
-					periodSeconds: seconds,
-					requestTime,
-					serverClockOffsetSeconds: clockOffsetSeconds,
-					timeBasis: "local-plus-feed-offset",
-					timeoutMs,
-					socketReadyState: socket?.readyState ?? null,
-					pairAvailable: pairs.has(symbol),
-					connectionError: connectionError || null,
-					lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null
-				}));
-				reject(/* @__PURE__ */ new Error(request.receivedHistory ? "Pocket Option прислал только устаревшую или неполную историю. Свежие свечи пока недоступны." : `История свечей не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
-			}, timeoutMs);
+			const sendHistory = () => {
+				if (socket !== current || current.readyState !== wrapper_default.OPEN) throw new Error("Соединение с Pocket Option прервалось во время загрузки истории.");
+				sendPocketSubscription(current, symbol, seconds);
+				current.send("42" + JSON.stringify(["loadHistoryPeriod", buildPocketHistoryRequest(symbol, seconds, requestTime, requestIndex, seconds * HISTORY_PAGE_CANDLES)]));
+			};
+			const recovery = scheduleHistoryRecovery({
+				timeoutMs,
+				retry: priority < 0 ? null : () => {
+					if (settleLatestHistoryFromCache(symbol)) return;
+					console.info("[pocket-history-retry]", JSON.stringify({
+						symbol,
+						periodSeconds: seconds,
+						requestIndex
+					}));
+					sendHistory();
+				},
+				fail: (error) => {
+					if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+					reject(error);
+				},
+				expire: () => {
+					if (settleLatestHistoryFromCache(symbol)) return;
+					if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
+					console.warn("[pocket-history-timeout]", JSON.stringify({
+						symbol,
+						periodSeconds: seconds,
+						requestTime,
+						serverClockOffsetSeconds: clockOffsetSeconds,
+						timeBasis: "local-plus-feed-offset",
+						timeoutMs,
+						socketReadyState: socket?.readyState ?? null,
+						pairAvailable: pairs.has(symbol),
+						connectionError: connectionError || null,
+						lastPocketMessageAgeMs: lastPocketMessageAt ? Date.now() - lastPocketMessageAt : null
+					}));
+					reject(/* @__PURE__ */ new Error(request.receivedHistory ? "Pocket Option прислал только устаревшую или неполную историю. Свежие свечи пока недоступны." : `История свечей не пришла за ${Math.ceil(timeoutMs / 1e3)} секунд. Попробуйте ещё раз.`));
+				}
+			});
 			request = {
 				asset: symbol,
 				index: requestIndex,
 				periodSeconds: seconds,
 				latestWanted: Math.abs(Date.now() / 1e3 - time) <= seconds * 2,
-				resolve,
-				reject,
-				timer
+				resolve: (history) => {
+					recovery.stop();
+					resolve(history);
+				},
+				reject: (error) => {
+					recovery.stop();
+					reject(error);
+				},
+				timer: recovery.timer
 			};
 			pendingHistory.set(symbol, request);
 			try {
@@ -1786,35 +1857,34 @@ async function loadHistoryPage(symbol, seconds, time, timeoutMs = 4500) {
 					timeBasis: "local-plus-feed-offset",
 					socketReadyState: current.readyState
 				}));
-				sendPocketSubscription(current, symbol, seconds);
-				current.send("42" + JSON.stringify(["loadHistoryPeriod", buildPocketHistoryRequest(symbol, seconds, requestTime, requestIndex, seconds * HISTORY_PAGE_CANDLES)]));
+				sendHistory();
 			} catch {
-				clearTimeout(timer);
+				recovery.stop();
 				if (pendingHistory.get(symbol) === request) pendingHistory.delete(symbol);
 				reject(/* @__PURE__ */ new Error("Не удалось запросить историю свечей Pocket Option."));
 			}
 		});
-	});
+	}, priority);
 }
 var historyLoads = /* @__PURE__ */ new Map();
-function loadCandles(symbol, seconds, pageTimeoutMs = 4500, pageLimit) {
-	const key = `${symbol}:${seconds}:${pageLimit ?? "all"}`;
+function loadCandles(symbol, seconds, pageTimeoutMs = 4500, pageLimit, priority = 0) {
+	const key = `${symbol}:${seconds}:${pageLimit ?? "all"}:${priority}`;
 	const existing = historyLoads.get(key);
 	if (existing) return existing;
-	const task = loadCandlesUnshared(symbol, seconds, pageTimeoutMs, pageLimit).finally(() => {
+	const task = loadCandlesUnshared(symbol, seconds, pageTimeoutMs, pageLimit, priority).finally(() => {
 		if (historyLoads.get(key) === task) historyLoads.delete(key);
 	});
 	historyLoads.set(key, task);
 	return task;
 }
-async function loadCandlesUnshared(symbol, seconds, pageTimeoutMs = 4500, pageLimit) {
+async function loadCandlesUnshared(symbol, seconds, pageTimeoutMs = 4500, pageLimit, priority = 0) {
 	await ensureFeed();
 	const collected = /* @__PURE__ */ new Map();
 	let rejectedRows = 0;
 	let cursor = Math.floor(Date.now() / 1e3);
 	const maxPages = pageLimit ?? Math.ceil(128 / HISTORY_PAGE_CANDLES);
 	for (let page = 0; page < maxPages && collected.size < 128; page += 1) {
-		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs);
+		const history = await loadHistoryPage(symbol, seconds, cursor, pageTimeoutMs, priority);
 		rejectedRows += history.rejectedRows;
 		const candles = history.candles;
 		if (candles.length === 0) break;

@@ -2,7 +2,7 @@ import { o as __toESM } from "../_runtime.mjs";
 import { a as object, i as number, o as string, r as literal, s as union } from "../_libs/zod.mjs";
 import { _ as require_react, a as HeadContent, c as createRouter, d as createFileRoute, f as createRootRoute, g as require_jsx_runtime, h as useRouter, i as Scripts, l as Outlet, m as useNavigate, o as useRouterState, p as Link, u as lazyRouteComponent } from "../_libs/@tanstack/react-router+[...].mjs";
 import { i as getServerFnById, n as createServerFn, r as TSS_SERVER_FUNCTION } from "./ssr.mjs";
-import { _ as pocketGateMiddleware, f as analysisPeriodForExpiry, g as isValidExpirySeconds, h as initializeTelegramWebApp, m as getTelegramInitData, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-Cu79IwpA.mjs";
+import { _ as pocketGateMiddleware, f as analysisPeriodForExpiry, g as isValidExpirySeconds, h as initializeTelegramWebApp, m as getTelegramInitData, t as ANALYSIS_PERIODS_SECONDS } from "./pocket-gate.middleware-Csk2ELeZ.mjs";
 import { n as isValidPocketOptionId, t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
 import { a as KeyRound, i as LayoutDashboard, n as TriangleAlert, o as History, s as GraduationCap, t as UserRound, u as ArrowRight } from "../_libs/lucide-react.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/createSsrRpc-CU_ZALBq.js
@@ -19,7 +19,7 @@ var createSsrRpc = (functionId) => {
 	});
 };
 //#endregion
-//#region node_modules/.nitro/vite/services/ssr/assets/router-CneoqEyh.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-DGCxSxFb.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -137,8 +137,8 @@ function todayKey() {
 	return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 function levelForBalance(balance) {
-	if (balance === null) return null;
-	return [...levels].reverse().find((level) => balance >= level.deposit) ?? null;
+	if (balance === null || balance < 50) return null;
+	return [...levels].reverse().find((level) => balance >= level.deposit) ?? levels[0];
 }
 function signalsUsedToday(pocketId) {
 	if (typeof localStorage === "undefined") return 0;
@@ -1121,9 +1121,9 @@ var copy = {
 		"Deposit has not been read yet"
 	],
 	"signal.block.minimum": [
-		"Для сигналов нужен депозит от $60",
-		"Для сигналів потрібен депозит від $60",
-		"Signals require a deposit of at least $60"
+		"Для доступа к сигналам нужен депозит от $50",
+		"Для доступу до сигналів потрібен депозит від $50",
+		"Signals are available with a deposit of at least $50"
 	],
 	"signal.block.limit": [
 		"Лимит сигналов на сегодня закончился",
@@ -1561,9 +1561,9 @@ var copy = {
 		"Admin ID. No signal limit or minimum deposit is required."
 	],
 	"profile.userInfo": [
-		"Тариф зависит от первого депозита. Базовый от $60 — 10 сигналов в день, Профессиональный от $200 — 40, Глубокий от $500 — без лимита.",
-		"Тариф залежить від першого депозиту. Базовий від $60 — 10 сигналів на день, Професійний від $200 — 40, Глибокий від $500 — без ліміту.",
-		"Your plan depends on the first deposit. Basic from $60: 10 signals/day; Professional from $200: 40; Deep from $500: unlimited."
+		"Доступ к сигналам — от $50. Тариф зависит от первого депозита: Базовый от $60 — 10 сигналов в день, Профессиональный от $200 — 40, Глубокий от $500 — без лимита.",
+		"Доступ до сигналів — від $50. Тариф залежить від першого депозиту: Базовий від $60 — 10 сигналів на день, Професійний від $200 — 40, Глибокий від $500 — без ліміту.",
+		"Signals are available from a $50 deposit. Your plan depends on your first deposit: Basic from $60 (10 signals/day), Professional from $200 (40), Deep from $500 (unlimited)."
 	],
 	"profile.currentLimit": [
 		"Ваш персональный дневной лимит: {limit}.",
@@ -2750,15 +2750,15 @@ function Frame() {
 	if (!id) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gate, {});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}) });
 }
-var $$splitComponentImporter$4 = () => import("./routes-DbV_z76v.mjs");
+var $$splitComponentImporter$4 = () => import("./routes-CtE769pF.mjs");
 var Route$6 = createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./history-BRv7gTVx.mjs");
+var $$splitComponentImporter$3 = () => import("./history-qzfljnwn.mjs");
 var Route$5 = createFileRoute("/history")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
-var $$splitComponentImporter$2 = () => import("./learn-B3ICsDMB.mjs");
+var $$splitComponentImporter$2 = () => import("./learn-Bm2OIKND.mjs");
 var Route$4 = createFileRoute("/learn")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./profile-Bsp300m4.mjs");
+var $$splitComponentImporter$1 = () => import("./profile-CC0b4eo8.mjs");
 var Route$3 = createFileRoute("/profile")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./signal-Ce2KDVhS.mjs");
+var $$splitComponentImporter = () => import("./signal-DF6MdJY2.mjs");
 var groups = /* @__PURE__ */ new Set(["fx"]);
 function readBars(value) {
 	if (!Array.isArray(value)) return [];
@@ -2821,7 +2821,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	}
 	const symbol = new URL(request.url).searchParams.get("symbol")?.trim() ?? "";
 	if (!/^[#A-Za-z0-9._-]{2,32}$/.test(symbol)) return new Response("bad symbol", { status: 400 });
-	const { followQuote, quoteStatus } = await import("./pocket-live.server-BafZC3xF.mjs");
+	const { followQuote, quoteStatus } = await import("./pocket-live.server-DvvNwW7W.mjs");
 	const encoder = new TextEncoder();
 	let closed = false;
 	const stream = new ReadableStream({ start(controller) {
@@ -2863,7 +2863,7 @@ var Route$1 = createFileRoute("/api/ticks")({ server: { handlers: { GET: async (
 	} });
 } } } });
 var Route = createFileRoute("/telegram/webhook")({ server: { handlers: { POST: async ({ request }) => {
-	const { handleTelegramWebhook } = await import("./telegram-bot.server-bE3a_EUK.mjs");
+	const { handleTelegramWebhook } = await import("./telegram-bot.server-DU-zGHBS.mjs");
 	return handleTelegramWebhook(request);
 } } } });
 var rootRouteChildren = {

@@ -10,3 +10,4 @@
 - [Managed database publishing](managed-db-publishing.md) — keep app migrations in development; let Replit Publish apply production schema changes.
 - [Dev broker feed isolation](dev-broker-feed-isolation.md) — a Vite bootstrap feed may not share tick/history state with server-function execution; verify both paths.
 - [pnpm deployment bootstrap](pnpm-deployment-bootstrap.md) — distinguish Replit's pnpm bootstrap failure from dependency or app-build failures; validate with Corepack.
+- [Signal access balance](signal-access-balance.md) — signal access starts at $50, while the Basic tier remains listed at $60 and retains its existing daily limit.

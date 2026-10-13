@@ -99,6 +99,11 @@ test("verification replies report the same tier limits as the website", () => {
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "123456789",
+    depositAmount: 50,
+  }, "ru").text, /Базовый.*10 сигналов/s);
+  assert.match(formatTelegramVerificationReply({
+    status: "verified",
+    pocketId: "123456789",
     depositAmount: 60,
   }, "ru").text, /Базовый.*10 сигналов/s);
   assert.match(formatTelegramVerificationReply({
@@ -115,7 +120,7 @@ test("verification replies report the same tier limits as the website", () => {
     status: "verified",
     pocketId: "123456789",
     depositAmount: 20,
-  }, "ru").text, /первого уровня/);
+  }, "ru").text, /депозит от \$50/);
 });
 
 test("configured admin IDs bypass verification when entered in Telegram", () => {

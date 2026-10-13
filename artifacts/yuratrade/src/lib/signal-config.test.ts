@@ -24,6 +24,9 @@ test("all users can receive three additional overlays after the first signal", (
 });
 
 test("daily tier limits are doubled while the Deep tier stays unlimited", () => {
+  assert.equal(levelForBalance(49.99), null);
+  assert.equal(levelForBalance(50)?.deposit, 60);
+  assert.equal(levelForBalance(59.99)?.daily, 10);
   assert.equal(levelForBalance(60)?.daily, 10);
   assert.equal(levelForBalance(200)?.daily, 40);
   assert.equal(levelForBalance(500)?.daily, null);

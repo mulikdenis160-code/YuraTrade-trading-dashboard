@@ -96,6 +96,7 @@ export const levels = [
 ] as const;
 
 const USED_KEY = "vprime_signals_used";
+export const MIN_SIGNAL_ACCESS_BALANCE = 50;
 
 function usedKey(pocketId: string | null) {
   return `${USED_KEY}:${pocketId || "unverified"}`;
@@ -107,8 +108,8 @@ function todayKey() {
 }
 
 export function levelForBalance(balance: number | null) {
-  if (balance === null) return null;
-  return [...levels].reverse().find((level) => balance >= level.deposit) ?? null;
+  if (balance === null || balance < MIN_SIGNAL_ACCESS_BALANCE) return null;
+  return [...levels].reverse().find((level) => balance >= level.deposit) ?? levels[0];
 }
 
 export function signalsUsedToday(pocketId: string | null) {

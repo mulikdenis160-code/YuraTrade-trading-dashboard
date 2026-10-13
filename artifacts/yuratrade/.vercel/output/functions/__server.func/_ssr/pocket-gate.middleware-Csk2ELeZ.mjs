@@ -1,5 +1,5 @@
 import { t as createMiddleware } from "./ssr.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-Cu79IwpA.js
+//#region node_modules/.nitro/vite/services/ssr/assets/pocket-gate.middleware-Csk2ELeZ.js
 var MAX_QUOTE_AGE_MS = 2e3;
 var MIN_ENTRY_BUFFER_MS = 15e3;
 var SIGNAL_COPY_DELAY_MS = 1e4;
@@ -7,7 +7,7 @@ var MAX_SIGNAL_COUNTDOWN_MS = 25e3;
 var SIGNAL_ANALYSIS_TIMEOUT_MS = 1e4;
 var SIGNAL_PREPARATION_TIMEOUT_MS = 2e4;
 var RECOVERY_HISTORY_RETRY_MS = 3e3;
-var SIGNAL_HISTORY_PAGE_TIMEOUT_MS = 4500;
+var SIGNAL_HISTORY_PAGE_TIMEOUT_MS = 8e3;
 var SIGNAL_QUOTE_WAIT_MS = 2e3;
 var ANALYSIS_PERIODS_SECONDS = [
 	60,

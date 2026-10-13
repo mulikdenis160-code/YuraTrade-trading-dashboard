@@ -377,7 +377,7 @@ const copy = {
   ],
   "signal.today": ["Сегодня {used} из {cap}", "Сьогодні {used} із {cap}", "Today {used} of {cap}"],
   "signal.block.deposit": ["Депозит ещё не прочитан", "Депозит ще не зчитано", "Deposit has not been read yet"],
-  "signal.block.minimum": ["Для сигналов нужен депозит от $60", "Для сигналів потрібен депозит від $60", "Signals require a deposit of at least $60"],
+  "signal.block.minimum": ["Для доступа к сигналам нужен депозит от $50", "Для доступу до сигналів потрібен депозит від $50", "Signals are available with a deposit of at least $50"],
   "signal.block.limit": ["Лимит сигналов на сегодня закончился", "Ліміт сигналів на сьогодні вичерпано", "Today's signal limit has been reached"],
   "signal.none": ["Сейчас нет подходящего входа. Дождитесь следующей проверки.", "Зараз немає відповідного входу. Дочекайтеся наступної перевірки.", "No suitable entry right now. Wait for the next check."],
   "history.kicker": ["Журнал", "Журнал", "Journal"],
@@ -494,9 +494,9 @@ const copy = {
   ],
   "profile.adminInfo": ["Админский ID. Лимита сигналов нет, депозит для входа не нужен.", "ID адміністратора. Ліміту сигналів немає, депозит для доступу не потрібен.", "Admin ID. No signal limit or minimum deposit is required."],
   "profile.userInfo": [
-    "Тариф зависит от первого депозита. Базовый от $60 — 10 сигналов в день, Профессиональный от $200 — 40, Глубокий от $500 — без лимита.",
-    "Тариф залежить від першого депозиту. Базовий від $60 — 10 сигналів на день, Професійний від $200 — 40, Глибокий від $500 — без ліміту.",
-    "Your plan depends on the first deposit. Basic from $60: 10 signals/day; Professional from $200: 40; Deep from $500: unlimited.",
+    "Доступ к сигналам — от $50. Тариф зависит от первого депозита: Базовый от $60 — 10 сигналов в день, Профессиональный от $200 — 40, Глубокий от $500 — без лимита.",
+    "Доступ до сигналів — від $50. Тариф залежить від першого депозиту: Базовий від $60 — 10 сигналів на день, Професійний від $200 — 40, Глибокий від $500 — без ліміту.",
+    "Signals are available from a $50 deposit. Your plan depends on your first deposit: Basic from $60 (10 signals/day), Professional from $200 (40), Deep from $500 (unlimited).",
   ],
   "profile.currentLimit": [
     "Ваш персональный дневной лимит: {limit}.",

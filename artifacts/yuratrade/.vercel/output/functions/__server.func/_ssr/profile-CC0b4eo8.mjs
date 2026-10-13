@@ -1,7 +1,7 @@
 import { g as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
 import { t as isAdminId } from "./pocket-admin-DnzTuOI1.mjs";
-import { A as levelForBalance, D as usePocket, j as levels, k as useLanguage } from "./router-CneoqEyh.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/profile-Bsp300m4.js
+import { A as levelForBalance, D as usePocket, j as levels, k as useLanguage } from "./router-DGCxSxFb.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/profile-CC0b4eo8.js
 var import_jsx_runtime = require_jsx_runtime();
 function ProfilePage() {
 	const { t } = useLanguage();
