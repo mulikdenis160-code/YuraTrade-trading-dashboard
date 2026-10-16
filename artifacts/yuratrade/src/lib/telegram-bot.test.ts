@@ -109,12 +109,12 @@ test("verification replies report the same tier limits as the website", () => {
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "123456789",
-    depositAmount: 200,
+    depositAmount: 150,
   }, "en").text, /Professional.*40 signals/s);
   assert.match(formatTelegramVerificationReply({
     status: "verified",
     pocketId: "123456789",
-    depositAmount: 500,
+    depositAmount: 400,
   }, "en").text, /Deep.*unlimited/s);
   assert.match(formatTelegramVerificationReply({
     status: "verified",

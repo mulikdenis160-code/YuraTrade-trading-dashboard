@@ -3,6 +3,7 @@ export const levels = [
     id: "iskra",
     name: "Базовый",
     deposit: 60,
+    minimumBalance: 50,
     tag: "Базовый",
     lead: "Один срок, направление и короткая карточка. Хватает, чтобы войти по свечам и не перепутать пару.",
     daily: 10,
@@ -31,6 +32,7 @@ export const levels = [
     id: "vector",
     name: "Профессиональный",
     deposit: 200,
+    minimumBalance: 150,
     tag: "Профессиональный",
     lead: "Младший срок сверяется со старшим. Слабый и спорный вход отсекается до карточки.",
     daily: 40,
@@ -61,6 +63,7 @@ export const levels = [
     id: "apex",
     name: "Глубокий",
     deposit: 500,
+    minimumBalance: 400,
     tag: "Глубокий",
     lead: "Полный разбор окна, запас до границы и жёсткий пропуск слабого сценария. До трёх перекрытий на всех уровнях.",
     daily: null,
@@ -109,7 +112,7 @@ function todayKey() {
 
 export function levelForBalance(balance: number | null) {
   if (balance === null || balance < MIN_SIGNAL_ACCESS_BALANCE) return null;
-  return [...levels].reverse().find((level) => balance >= level.deposit) ?? levels[0];
+  return [...levels].reverse().find((level) => balance >= level.minimumBalance) ?? levels[0];
 }
 
 export function signalsUsedToday(pocketId: string | null) {
