@@ -87,9 +87,8 @@ export function activeGeminiModel(
   return { model: DIRECT_AI_MODEL, label: DIRECT_AI_MODEL_LABEL };
 }
 
-let client: GoogleGenAI | null = null;
-let clientIdentity = "";
-let requestController = createMarketAiController();
+const clients = new Map<string, GoogleGenAI>();
+const controllers = new Map<string, ReturnType<typeof createMarketAiController>>();
 const controllerGlobal = globalThis as typeof globalThis & {
   __primeGeminiControl?: { identity: string; controller: ReturnType<typeof createMarketAiController> };
 };
@@ -112,28 +111,38 @@ const geminiFetch: typeof fetch = async (input, init) => {
   return response;
 };
 
-function getGeminiClient() {
-  const hasProxy = Boolean(
-    process.env.AI_INTEGRATIONS_GEMINI_BASE_URL ||
-    process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  );
-  const apiKey = hasProxy
-    ? process.env.AI_INTEGRATIONS_GEMINI_API_KEY
-    : process.env.GEMINI_API_KEY;
+type MarketAiProvider = "primary" | "fallback";
+
+function getGeminiClient(provider: MarketAiProvider = "fallback") {
+  const model = provider === "primary"
+    ? { model: DIRECT_AI_MODEL, label: DIRECT_AI_MODEL_LABEL }
+    : activeGeminiModel();
+  const hasProxy = Boolean(model.proxyBaseUrl);
+  const apiKey = provider === "primary"
+    ? process.env.GEMINI_PRIMARY_API_KEY
+    : hasProxy
+      ? process.env.AI_INTEGRATIONS_GEMINI_API_KEY
+      : process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      hasProxy
-        ? "Настройки Gemini proxy неполные. Сигнал не выдан."
-        : "Gemini не настроен. Добавьте GEMINI_API_KEY в Replit Secrets или настройте Replit Gemini proxy.",
+      provider === "primary"
+        ? "Основной Gemini не настроен. Добавьте GEMINI_PRIMARY_API_KEY в Replit Secrets."
+        : hasProxy
+          ? "Настройки резервного Gemini proxy неполные. Сигнал не выдан."
+          : "Резервный Gemini не настроен. Подключите Replit Gemini proxy.",
     );
   }
-  const model = activeGeminiModel();
-  const identity = `${model.model}\u0000${apiKey}\u0000${model.proxyBaseUrl ?? ""}`;
-  if (!client || clientIdentity !== identity) {
+  const identity = `${provider}\u0000${model.model}\u0000${apiKey}\u0000${model.proxyBaseUrl ?? ""}`;
+  let client = clients.get(identity);
+  let controller = controllers.get(identity);
+  if (!controller) {
     const identityHash = createHash("sha256").update(identity).digest("hex");
-    requestController = controllerGlobal.__primeGeminiControl?.identity === identityHash
+    controller = controllerGlobal.__primeGeminiControl?.identity === identityHash
       ? controllerGlobal.__primeGeminiControl.controller : createMarketAiController();
-    controllerGlobal.__primeGeminiControl = { identity: identityHash, controller: requestController };
+    controllers.set(identity, controller);
+    controllerGlobal.__primeGeminiControl = { identity: identityHash, controller };
+  }
+  if (!client) {
     client = new GoogleGenAI({
       apiKey,
       httpOptions: {
@@ -145,9 +154,9 @@ function getGeminiClient() {
         retryOptions: { attempts: 1 },
       },
     });
-    clientIdentity = identity;
+    clients.set(identity, client);
   }
-  return { client, model, controller: requestController };
+  return { client, model, controller };
 }
 
 export function marketAiAvailability() {
@@ -359,7 +368,11 @@ type ReviewChoice = {
 type ReviewCompletion = { choices: ReviewChoice[] };
 type ReviewCompletionRequest = (messages: ReviewMessage[], options?: { signal: AbortSignal; timeoutMs: number }) => Promise<ReviewCompletion>;
 
-function requestMarketAiCompletion(messages: ReviewMessage[], options?: { signal: AbortSignal; timeoutMs: number }) {
+function requestMarketAiCompletion(
+  messages: ReviewMessage[],
+  options: { signal: AbortSignal; timeoutMs: number } | undefined,
+  provider: MarketAiProvider,
+) {
   const system = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
@@ -368,7 +381,7 @@ function requestMarketAiCompletion(messages: ReviewMessage[], options?: { signal
     .filter((message) => message.role === "user")
     .map((message) => message.content)
     .join("\n\n");
-  const { client: gemini, model, controller } = getGeminiClient();
+  const { client: gemini, model, controller } = getGeminiClient(provider);
   const key = createHash("sha256").update(JSON.stringify([model.model, system, userPrompt])).digest("hex");
   const deadline = Date.now() + (options?.timeoutMs ?? SIGNAL_ANALYSIS_TIMEOUT_MS);
 
@@ -453,6 +466,7 @@ export async function analyzeMarketCandidates(
   options: {
     nowSeconds?: number;
     request?: ReviewCompletionRequest;
+    fallbackRequest?: ReviewCompletionRequest;
     timeoutMs?: number;
   } = {},
 ): Promise<MarketAiReview> {
@@ -596,10 +610,24 @@ export async function analyzeMarketCandidates(
     { role: "system", content: DIRECT_AI_SYSTEM_PROMPT },
     { role: "user", content: userPrompt },
   ];
-  return requestMarketAiReviewOnce(
-    options.request ?? requestMarketAiCompletion,
-    baseMessages,
-    [candidate.symbol],
-    options.timeoutMs,
-  );
+  const timeoutMs = options.timeoutMs ?? SIGNAL_ANALYSIS_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
+  const primaryTimeoutMs = Math.max(1, Math.floor(timeoutMs / 2));
+  const primaryRequest = options.request ?? ((messages, requestOptions) =>
+    requestMarketAiCompletion(messages, requestOptions, "primary"));
+  const runReview = (request: ReviewCompletionRequest, remainingMs: number) =>
+    requestMarketAiReviewOnce(request, baseMessages, [candidate.symbol], remainingMs);
+  try {
+    return await runReview(primaryRequest, primaryTimeoutMs);
+  } catch (primaryError) {
+    const fallbackRequest = options.fallbackRequest ?? ((messages, requestOptions) =>
+      requestMarketAiCompletion(messages, requestOptions, "fallback"));
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw primaryError;
+    console.warn("[signal-ai-fallback]", JSON.stringify({
+      primaryFailure: marketAiFailure(primaryError).code,
+      provider: "replit-gemini",
+    }));
+    return runReview(fallbackRequest, remainingMs);
+  }
 }

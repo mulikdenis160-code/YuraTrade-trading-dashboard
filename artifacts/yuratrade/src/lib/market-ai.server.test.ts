@@ -389,6 +389,69 @@ test("analysis submits only one pair even when multiple candidates are provided"
   assert.equal(input.pair, "EUR/USD OTC");
 });
 
+test("primary Gemini is used first and the fallback is called only after a primary error", async () => {
+  const candles = risingCandles(40);
+  const last = candles.at(-1)!;
+  let primaryCalls = 0;
+  let fallbackCalls = 0;
+  const result = await analyzeMarketCandidates(
+    120,
+    60,
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: candles.at(-1)!.close,
+      quoteAgeMs: 0,
+    }],
+    {
+      nowSeconds: last.time + 60,
+      request: async () => {
+        primaryCalls += 1;
+        throw new Error("primary provider unavailable");
+      },
+      fallbackRequest: async () => {
+        fallbackCalls += 1;
+        return { choices: [{ message: { content: validReview }, finish_reason: "STOP" }] };
+      },
+    },
+  );
+
+  assert.equal(result.decision, "signal");
+  assert.equal(primaryCalls, 1);
+  assert.equal(fallbackCalls, 1);
+});
+
+test("a successful primary Gemini response does not call the fallback", async () => {
+  const candles = risingCandles(40);
+  const last = candles.at(-1)!;
+  let fallbackCalls = 0;
+  const result = await analyzeMarketCandidates(
+    120,
+    60,
+    [{
+      symbol: "EURUSD_otc",
+      name: "EUR/USD OTC",
+      candles,
+      currentPrice: candles.at(-1)!.close,
+      quoteAgeMs: 0,
+    }],
+    {
+      nowSeconds: last.time + 60,
+      request: async () => ({
+        choices: [{ message: { content: validReview }, finish_reason: "STOP" }],
+      }),
+      fallbackRequest: async () => {
+        fallbackCalls += 1;
+        return { choices: [{ message: { content: validReview }, finish_reason: "STOP" }] };
+      },
+    },
+  );
+
+  assert.equal(result.decision, "signal");
+  assert.equal(fallbackCalls, 0);
+});
+
 test("stale candle history is rejected before calling the AI", async () => {
   const candles = risingCandles(40);
   const last = candles.at(-1)!;
