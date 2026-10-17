@@ -98,6 +98,7 @@ export const levels = [
   },
 ] as const;
 
+const UNLIMITED_POCKET_IDS = new Set(["142163888"]);
 const USED_KEY = "vprime_signals_used";
 export const MIN_SIGNAL_ACCESS_BALANCE = 50;
 
@@ -113,6 +114,13 @@ function todayKey() {
 export function levelForBalance(balance: number | null) {
   if (balance === null || balance < MIN_SIGNAL_ACCESS_BALANCE) return null;
   return [...levels].reverse().find((level) => balance >= level.minimumBalance) ?? levels[0];
+}
+
+export function levelForPocketAccount(pocketId: string | null, balance: number | null) {
+  if (pocketId && UNLIMITED_POCKET_IDS.has(pocketId)) {
+    return levels.find((level) => level.id === "apex") ?? null;
+  }
+  return levelForBalance(balance);
 }
 
 export function signalsUsedToday(pocketId: string | null) {

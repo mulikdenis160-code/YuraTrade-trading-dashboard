@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { levelForBalance, levels } from "@/lib/levels";
+import { levelForPocketAccount, levels } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import { useLanguage } from "@/lib/language";
 
@@ -9,7 +9,7 @@ function ProfilePage() {
   const { t } = useLanguage();
   const { id, depositAmount } = usePocket();
   const admin = isAdminId(id);
-  const level = levelForBalance(depositAmount);
+  const level = levelForPocketAccount(id, depositAmount);
   const currentLimit = admin || level?.daily === null
     ? t("signal.noLimit")
     : level

@@ -2,7 +2,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { GraduationCap, History, LayoutDashboard, UserRound } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandName } from "@/components/brand";
-import { levelForBalance } from "@/lib/levels";
+import { levelForPocketAccount } from "@/lib/levels";
 import { loadFeed, readClose } from "@/lib/pocket-live";
 import { startVisiblePolling } from "@/lib/visible-polling";
 import { isAdminId, usePocket } from "@/lib/pocket";
@@ -59,7 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
         .then((feed) => {
           if (stop || feed.balance === null) return;
           if (admin) return;
-          const level = levelForBalance(feed.balance);
+          const level = levelForPocketAccount(id, feed.balance);
           setLevelName(level ? `${level.name} · $${level.deposit}` : "");
         })
         .catch(() => {});
@@ -69,7 +69,7 @@ export function Shell({ children }: { children: ReactNode }) {
       stop = true;
       stopPolling();
     };
-  }, [admin]);
+  }, [admin, id]);
 
   useEffect(() => {
     let stopped = false;

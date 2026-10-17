@@ -14,6 +14,7 @@ import {
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import {
   levelForBalance,
+  levelForPocketAccount,
   markSignalUsed,
   signalsUsedToday,
 } from "./levels.ts";
@@ -34,6 +35,12 @@ test("daily tier limits are doubled while the Deep tier stays unlimited", () => 
   assert.equal(levelForBalance(400)?.deposit, 500);
   assert.equal(levelForBalance(200)?.daily, 40);
   assert.equal(levelForBalance(500)?.daily, null);
+});
+
+test("a designated Pocket Option account gets unlimited tier without admin access", () => {
+  assert.equal(levelForPocketAccount("142163888", 0)?.id, "apex");
+  assert.equal(levelForPocketAccount("142163888", 0)?.daily, null);
+  assert.equal(levelForPocketAccount("142163889", 0), null);
 });
 
 test("daily signal counts are isolated by Pocket Option ID", () => {

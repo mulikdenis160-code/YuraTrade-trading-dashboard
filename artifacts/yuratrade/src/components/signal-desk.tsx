@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { chooseSignalPair, confirmSignalEntry, loadFeed, takeSignal } from "@/lib/pocket-live";
 import { startVisiblePolling } from "@/lib/visible-polling";
-import { levelForBalance, markSignalUsed, signalsUsedToday } from "@/lib/levels";
+import { levelForPocketAccount, markSignalUsed, signalsUsedToday } from "@/lib/levels";
 import { isAdminId, usePocket } from "@/lib/pocket";
 import {
   readSignalJournal,
@@ -120,7 +120,7 @@ export function SignalDesk() {
     requestSignalBatchStop(hasActiveSeries);
   }, []);
 
-  const level = levelForBalance(depositAmount);
+  const level = levelForPocketAccount(id, depositAmount);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const cap = admin ? null : level ? level.daily : 0;
   const left = cap === null ? null : Math.max(0, cap - used);
