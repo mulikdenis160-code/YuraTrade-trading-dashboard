@@ -30,6 +30,10 @@ test("start command detection accepts bot addressing and payloads", () => {
 });
 
 test("start message has registration and already-registered buttons, without Mini App", () => {
+  assert.equal(
+    POCKET_OPTION_REFERRAL_URL,
+    "https://po-ru4.click/register?utm_campaign=857649&utm_source=affiliate&utm_medium=sr&a=iRpVNOoIijYLHF&al=1802408&ac=youtube&cid=985161",
+  );
   const reply = buildTelegramStartReply("ru");
   assert.deepEqual(reply.reply_markup.inline_keyboard, [
     [{ text: "Регистрация в Pocket Option", url: POCKET_OPTION_REFERRAL_URL }],
@@ -115,6 +119,12 @@ test("verification replies report the same tier limits as the website", () => {
     status: "verified",
     pocketId: "123456789",
     depositAmount: 400,
+  }, "en").text, /Deep.*unlimited/s);
+  assert.match(formatTelegramVerificationReply({
+    status: "verified",
+    pocketId: "123456789",
+    depositAmount: 50,
+    tierGrantId: "apex",
   }, "en").text, /Deep.*unlimited/s);
   assert.match(formatTelegramVerificationReply({
     status: "verified",

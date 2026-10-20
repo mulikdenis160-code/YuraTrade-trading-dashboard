@@ -30,7 +30,7 @@ const links = [
 export function Shell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const navigate = useNavigate();
-  const { id } = usePocket();
+  const { id, tierGrantId } = usePocket();
   const { language, setLanguage, t } = useLanguage();
   const admin = isAdminId(id);
   const [levelName, setLevelName] = useState("");
@@ -59,7 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
         .then((feed) => {
           if (stop || feed.balance === null) return;
           if (admin) return;
-          const level = levelForPocketAccount(id, feed.balance);
+          const level = levelForPocketAccount(id, feed.balance, tierGrantId);
           setLevelName(level ? `${level.name} · $${level.deposit}` : "");
         })
         .catch(() => {});
@@ -69,7 +69,7 @@ export function Shell({ children }: { children: ReactNode }) {
       stop = true;
       stopPolling();
     };
-  }, [admin, id]);
+  }, [admin, id, tierGrantId]);
 
   useEffect(() => {
     let stopped = false;

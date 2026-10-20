@@ -5,6 +5,7 @@ import {
   type PocketGateVerification,
 } from "./pocket-gate";
 import { isValidPocketOptionId } from "./pocket-admin.ts";
+import type { TierId } from "./levels.ts";
 import { getTelegramInitData, initializeTelegramWebApp } from "./telegram-webapp";
 
 export { ADMIN_IDS, isAdminId } from "./pocket-admin";
@@ -32,7 +33,8 @@ type PocketState = {
   ready: boolean;
   id: string | null;
   depositAmount: number | null;
-  accept: (id: string, depositAmount: number) => void;
+  tierGrantId: TierId | null;
+  accept: (id: string, depositAmount: number, tierGrantId?: TierId | null) => void;
   verifyAccount: (id: string) => Promise<PocketGateVerification>;
 };
 
@@ -42,6 +44,7 @@ export function PocketProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [id, setId] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState<number | null>(null);
+  const [tierGrantId, setTierGrantId] = useState<TierId | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +72,7 @@ export function PocketProvider({ children }: { children: ReactNode }) {
           if (!cancelled && state.status === "verified" && isPocketId(state.pocketId)) {
             setId(state.pocketId);
             setDepositAmount(state.depositAmount);
+            setTierGrantId(state.tierGrantId ?? null);
           }
         })
         .catch(() => {
@@ -89,11 +93,12 @@ export function PocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const accept = (next: string, nextDepositAmount: number) => {
+  const accept = (next: string, nextDepositAmount: number, nextTierGrantId?: TierId | null) => {
     const trimmed = next.trim();
     if (!isPocketId(trimmed)) return;
     setId(trimmed);
     setDepositAmount(nextDepositAmount);
+    setTierGrantId(nextTierGrantId ?? null);
   };
 
   const verifyAccount = async (next: string): Promise<PocketGateVerification> => {
@@ -112,6 +117,7 @@ export function PocketProvider({ children }: { children: ReactNode }) {
       if (result.status === "verified") {
         setId(result.pocketId);
         setDepositAmount(result.depositAmount);
+        setTierGrantId(result.tierGrantId ?? null);
       }
       return result;
     } catch {
@@ -120,7 +126,7 @@ export function PocketProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <PocketContext.Provider value={{ ready, id, depositAmount, accept, verifyAccount }}>
+    <PocketContext.Provider value={{ ready, id, depositAmount, tierGrantId, accept, verifyAccount }}>
       {children}
     </PocketContext.Provider>
   );

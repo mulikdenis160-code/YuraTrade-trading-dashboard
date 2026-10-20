@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { TierId } from "./levels.ts";
 
 export type PocketGateVerification =
-  | { status: "verified"; pocketId: string; depositAmount: number }
+  | { status: "verified"; pocketId: string; depositAmount: number; tierGrantId?: TierId | null }
   | {
       status:
         | "invalid_id"
@@ -14,7 +15,7 @@ export type PocketGateVerification =
     };
 
 export type PocketGateState =
-  | { status: "verified"; pocketId: string; depositAmount: number }
+  | { status: "verified"; pocketId: string; depositAmount: number; tierGrantId?: TierId | null }
   | {
       status:
         | "unverified"

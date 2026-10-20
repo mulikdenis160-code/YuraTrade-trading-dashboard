@@ -548,138 +548,6 @@ function pocketProxyAgent(feedUrl) {
 }
 require_undici();
 //#endregion
-//#region src/lib/market-ai-control.ts
-var MarketAiServiceError = class extends Error {
-	code;
-	retryAfterMs;
-	status;
-	retryDelayProvided;
-	constructor(code, message, retryAfterMs = 0, status, retryDelayProvided = false) {
-		super(message);
-		this.code = code;
-		this.retryAfterMs = retryAfterMs;
-		this.status = status;
-		this.retryDelayProvided = retryDelayProvided;
-		this.name = "MarketAiServiceError";
-	}
-	toResult() {
-		return {
-			decision: "pass",
-			reason: this.message,
-			retryAcrossPairs: false,
-			failureCode: this.code,
-			retryAfterMs: this.retryAfterMs
-		};
-	}
-};
-var record = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-var failureCodes = /* @__PURE__ */ new Set([
-	"ai_rate_limited",
-	"ai_quota_exhausted",
-	"ai_unavailable",
-	"ai_busy",
-	"ai_timeout",
-	"ai_configuration",
-	"ai_invalid_response"
-]);
-/** Parse only provider status/retry metadata; never expose raw error bodies. */
-function marketAiFailure(error) {
-	if (error instanceof MarketAiServiceError) return error;
-	const source = record(error);
-	if (source?.name === "MarketAiServiceError" && failureCodes.has(source.code) && typeof source.message === "string" && typeof source.retryAfterMs === "number" && Number.isFinite(source.retryAfterMs) && source.retryAfterMs >= 0) return new MarketAiServiceError(source.code, source.message, source.retryAfterMs, typeof source.status === "number" ? source.status : void 0, source.retryDelayProvided === true);
-	let body = source;
-	if (typeof source?.message === "string") try {
-		body = record(JSON.parse(source.message)) ?? source;
-	} catch {}
-	const detail = record(body?.error) ?? body;
-	const status = Number(source?.status ?? source?.statusCode ?? detail?.code);
-	const details = Array.isArray(detail?.details) ? detail.details.map(record).filter(Boolean) : [];
-	const retry = details.find((item) => String(item?.["@type"]).endsWith("RetryInfo"));
-	const parsedDelay = typeof retry?.retryDelay === "string" && /^(\d+(?:\.\d+)?)s$/.test(retry.retryDelay) ? Math.ceil(parseFloat(retry.retryDelay) * 1e3) : 0;
-	const delay = Number.isFinite(parsedDelay) ? parsedDelay : 0;
-	const exhausted = details.flatMap((item) => Array.isArray(item?.violations) ? item.violations : []).map(record).some((item) => item?.quotaValue === "0" || item?.quotaValue === 0 || /PerDay/i.test(String(item?.quotaId)));
-	if (status === 429) return new MarketAiServiceError(exhausted ? "ai_quota_exhausted" : "ai_rate_limited", exhausted ? "Квота Gemini исчерпана или недоступна. Проверьте лимиты проекта Google AI Studio." : "Gemini временно ограничил запросы. Дождитесь окончания паузы и повторите попытку.", delay || 6e4, status, delay > 0);
-	if ([
-		400,
-		401,
-		403,
-		404
-	].includes(status)) return new MarketAiServiceError("ai_configuration", "Gemini отклонил запрос. Проверьте ключ, доступ к модели и настройки подключения.", 0, status);
-	const name = error instanceof Error ? error.name : "";
-	if ([408, 504].includes(status) || /timeout|abort/i.test(name)) return new MarketAiServiceError("ai_timeout", "Не удалось получить ответ от ИИ за отведённое время. Сигнал не выдан.");
-	const networkCode = String(record(source?.cause)?.code ?? source?.code ?? "");
-	if (status >= 500 || /connection|fetch/i.test(name) || /ECONN|EAI_AGAIN|ETIMEDOUT/.test(networkCode)) return new MarketAiServiceError("ai_unavailable", "Сервис Gemini временно недоступен. Повторите попытку после паузы.", delay || 5e3, Number.isFinite(status) ? status : void 0, delay > 0);
-	return new MarketAiServiceError("ai_invalid_response", "Не удалось завершить анализ Gemini. Сигнал не выдан.");
-}
-function pause(ms, signal) {
-	return new Promise((resolve, reject) => {
-		signal?.throwIfAborted();
-		const finish = () => {
-			signal?.removeEventListener("abort", abort);
-			resolve();
-		};
-		const timer = setTimeout(finish, ms);
-		const abort = () => {
-			clearTimeout(timer);
-			signal?.removeEventListener("abort", abort);
-			reject(signal?.reason);
-		};
-		signal?.addEventListener("abort", abort, { once: true });
-	});
-}
-function createMarketAiController(options = {}) {
-	const now = options.now ?? Date.now;
-	const sleep = options.sleep ?? pause;
-	let active = false;
-	let until = 0;
-	let previous;
-	const requests = /* @__PURE__ */ new Map();
-	function unavailable() {
-		if (previous && now() < until) return new MarketAiServiceError(previous.code, previous.message, until - now(), previous.status, true);
-		if (active) return new MarketAiServiceError("ai_busy", "Анализ уже выполняется. Повторите запрос через несколько секунд.", 1e3);
-	}
-	async function run(key, operation, deadlineAtMs, signal) {
-		const same = requests.get(key);
-		if (same) return same;
-		const blocked = unavailable();
-		if (blocked) throw blocked;
-		active = true;
-		const task = (async () => {
-			await Promise.resolve();
-			try {
-				for (let attempt = 0;; attempt += 1) {
-					signal?.throwIfAborted();
-					if (now() >= deadlineAtMs) throw new MarketAiServiceError("ai_timeout", "Не удалось получить ответ от ИИ за отведённое время. Сигнал не выдан.");
-					try {
-						return await operation(Math.max(1, deadlineAtMs - now()));
-					} catch (error) {
-						const failure = marketAiFailure(error);
-						const retryDelay = failure.retryDelayProvided ? failure.retryAfterMs : 1e3;
-						if (attempt === 0 && failure.code === "ai_unavailable" && retryDelay <= 2e3 && now() + retryDelay + 3e3 < deadlineAtMs && !signal?.aborted) {
-							await sleep(retryDelay, signal);
-							continue;
-						}
-						if (failure.code === "ai_rate_limited" || failure.code === "ai_quota_exhausted" || failure.code === "ai_unavailable") {
-							previous = failure;
-							until = now() + failure.retryAfterMs;
-						}
-						throw failure;
-					}
-				}
-			} finally {
-				active = false;
-				requests.delete(key);
-			}
-		})();
-		requests.set(key, task);
-		return task;
-	}
-	return {
-		run,
-		unavailable
-	};
-}
-//#endregion
 //#region src/lib/market-ai.server.ts
 var signalReviewSchema = object({
 	decision: literal("signal"),
@@ -702,7 +570,6 @@ discriminatedUnion("decision", [signalReviewSchema, passReviewSchema]);
 	"При корректных входных данных обязательно выбери направление вверх или вниз. Не используй вторую модель-классификатор. Не добавляй к заданному формату дополнительные поля или метки.",
 	"Верни только один компактный JSON-объект: {\"direction\":\"up\"|\"down\",\"explanation\":\"одно короткое предложение на русском, не более 160 символов\",\"confidence\":0..100}. Уверенность — субъективная оценка, а не вероятность выигрыша и не подтверждённая статистика. Не обещай результат и не открывай сделки."
 ].join(" ");
-createMarketAiController();
 //#endregion
 //#region src/lib/signal-data-error.ts
 var SignalDataError = class extends Error {
@@ -1160,6 +1027,7 @@ var MAX_ELIGIBLE_PAIRS = 8;
 var WARM_HISTORY_REFRESH_MS = 3e4;
 var ELIGIBLE_PAYOUTS = /* @__PURE__ */ new Set([80, 92]);
 var BROKER_QUEUE_KEY = "single-pocket-option-connection";
+var FEED_IDLE_TIMEOUT_MS = 9e4;
 var pocketGlobal = globalThis;
 var pocketSharedRuntime = pocketGlobal.__primePocketSharedRuntime ??= {
 	pairMarketData: /* @__PURE__ */ new Map(),
@@ -1190,6 +1058,8 @@ var decodePocketEvent = createPocketEventDecoder();
 var earlyFastHistory = /* @__PURE__ */ new Map();
 var lastStreamDiagnosticAt = 0;
 var feedWarmupStarted = false;
+var lastFeedActivityAt = 0;
+var feedIdleTimer = null;
 function latestPairTick(symbol) {
 	return (pairMarketData.get(symbol)?.ticks)?.at(-1) ?? null;
 }
@@ -1714,7 +1584,19 @@ function ensureFeedConnection() {
 	return ready;
 }
 function startPocketFeed() {
-	if (FEED_DISABLED || feedWarmupStarted) return;
+	if (FEED_DISABLED) return;
+	lastFeedActivityAt = Date.now();
+	if (feedIdleTimer) clearTimeout(feedIdleTimer);
+	feedIdleTimer = setTimeout(() => {
+		feedIdleTimer = null;
+		const idleForMs = Date.now() - lastFeedActivityAt;
+		if (idleForMs < FEED_IDLE_TIMEOUT_MS) {
+			startPocketFeedIdleTimer();
+			return;
+		}
+		stopPocketFeedAfterIdle(idleForMs);
+	}, FEED_IDLE_TIMEOUT_MS);
+	if (feedWarmupStarted) return;
 	feedWarmupStarted = true;
 	(async () => {
 		while (feedWarmupStarted) {
@@ -1752,9 +1634,38 @@ function startPocketFeed() {
 		}
 	})();
 }
+function startPocketFeedIdleTimer() {
+	if (feedIdleTimer) clearTimeout(feedIdleTimer);
+	feedIdleTimer = setTimeout(() => {
+		feedIdleTimer = null;
+		const idleForMs = Date.now() - lastFeedActivityAt;
+		if (idleForMs < FEED_IDLE_TIMEOUT_MS) {
+			startPocketFeedIdleTimer();
+			return;
+		}
+		stopPocketFeedAfterIdle(idleForMs);
+	}, FEED_IDLE_TIMEOUT_MS);
+}
+function stopPocketFeedAfterIdle(idleForMs) {
+	feedWarmupStarted = false;
+	cancelReady?.();
+	failPending(/* @__PURE__ */ new Error("Поток Pocket Option остановлен после простоя."));
+	const oldSocket = socket;
+	socket = null;
+	isAuthorized = false;
+	expectAssets = false;
+	expectStream = false;
+	expectBalance = false;
+	pairs.clear();
+	subscribedAt.clear();
+	oldSocket?.terminate();
+	console.info("[pocket-feed-idle-stop]", JSON.stringify({ idleForMs }));
+}
 pocketBrokerRuntime.__primePocketDispose = () => {
 	disposed = true;
 	feedWarmupStarted = false;
+	if (feedIdleTimer) clearTimeout(feedIdleTimer);
+	feedIdleTimer = null;
 	cancelReady?.();
 	const oldSocket = socket;
 	socket = null;

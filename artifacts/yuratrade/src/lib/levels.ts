@@ -98,9 +98,10 @@ export const levels = [
   },
 ] as const;
 
-const UNLIMITED_POCKET_IDS = new Set(["142163888"]);
 const USED_KEY = "vprime_signals_used";
 export const MIN_SIGNAL_ACCESS_BALANCE = 50;
+
+export type TierId = (typeof levels)[number]["id"];
 
 function usedKey(pocketId: string | null) {
   return `${USED_KEY}:${pocketId || "unverified"}`;
@@ -116,10 +117,13 @@ export function levelForBalance(balance: number | null) {
   return [...levels].reverse().find((level) => balance >= level.minimumBalance) ?? levels[0];
 }
 
-export function levelForPocketAccount(pocketId: string | null, balance: number | null) {
-  if (pocketId && UNLIMITED_POCKET_IDS.has(pocketId)) {
-    return levels.find((level) => level.id === "apex") ?? null;
-  }
+export function levelForPocketAccount(
+  pocketId: string | null,
+  balance: number | null,
+  tierGrantId?: TierId | null,
+) {
+  if (!pocketId) return null;
+  if (tierGrantId) return levels.find((level) => level.id === tierGrantId) ?? null;
   return levelForBalance(balance);
 }
 

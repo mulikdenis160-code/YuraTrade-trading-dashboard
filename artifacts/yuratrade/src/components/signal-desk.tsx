@@ -38,7 +38,7 @@ type PendingPair = PairChoice & {
 
 export function SignalDesk() {
   const navigate = useNavigate();
-  const { id, depositAmount } = usePocket();
+  const { id, depositAmount, tierGrantId } = usePocket();
   const { language, t } = useLanguage();
   const admin = isAdminId(id);
   const [ready, setReady] = useState(false);
@@ -120,7 +120,7 @@ export function SignalDesk() {
     requestSignalBatchStop(hasActiveSeries);
   }, []);
 
-  const level = levelForPocketAccount(id, depositAmount);
+  const level = levelForPocketAccount(id, depositAmount, tierGrantId);
   const analysisSeconds = analysisPeriodForExpiry(expirySeconds);
   const cap = admin ? null : level ? level.daily : 0;
   const left = cap === null ? null : Math.max(0, cap - used);

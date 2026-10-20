@@ -38,8 +38,8 @@ test("daily tier limits are doubled while the Deep tier stays unlimited", () => 
 });
 
 test("a designated Pocket Option account gets unlimited tier without admin access", () => {
-  assert.equal(levelForPocketAccount("142163888", 0)?.id, "apex");
-  assert.equal(levelForPocketAccount("142163888", 0)?.daily, null);
+  assert.equal(levelForPocketAccount("142163888", 0, "apex")?.id, "apex");
+  assert.equal(levelForPocketAccount("142163888", 0, "apex")?.daily, null);
   assert.equal(levelForPocketAccount("142163889", 0), null);
 });
 

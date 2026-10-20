@@ -33,7 +33,7 @@ export function Gate() {
     try {
       const verification = await verifyAccount(value);
       if (verification.status === "verified") {
-        accept(verification.pocketId, verification.depositAmount);
+        accept(verification.pocketId, verification.depositAmount, verification.tierGrantId);
       } else {
         setResult(resultKeys[verification.status]);
       }

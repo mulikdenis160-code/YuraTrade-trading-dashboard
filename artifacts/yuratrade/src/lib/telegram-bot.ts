@@ -1,4 +1,4 @@
-import { levelForBalance } from "./levels.ts";
+import { levelForBalance, levels } from "./levels.ts";
 import { isAdminId } from "./pocket-admin.ts";
 import { POCKET_OPTION_REFERRAL_URL } from "./pocket-gate-config.ts";
 import type { PocketGateVerification } from "./pocket-gate.ts";
@@ -248,7 +248,9 @@ export function formatTelegramVerificationReply(
     return { text: copy.adminVerified, retryWithId: false };
   }
 
-  const level = levelForBalance(result.depositAmount);
+  const level = result.tierGrantId
+    ? levels.find((item) => item.id === result.tierGrantId) ?? null
+    : levelForBalance(result.depositAmount);
   if (!level) return { text: copy.noLevel, retryWithId: false };
 
   const levelName = copy.tierNames[level.id];
