@@ -18,8 +18,8 @@ import {
 import type { MarketCandle } from "./signal-model.server.ts";
 import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
-test("direct market analysis uses Gemini 3.6 Flash when no proxy is configured", () => {
-  assert.equal(DIRECT_AI_MODEL, "gemini-3.6-flash");
+test("direct market analysis uses the supported Gemini 3.8 Flash model when no proxy is configured", () => {
+  assert.equal(DIRECT_AI_MODEL, "gemini-3.8-flash");
 });
 
 test("proxy Gemini Flash keeps the required output token limit without extra reasoning delay", () => {

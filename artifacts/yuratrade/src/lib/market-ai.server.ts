@@ -7,8 +7,8 @@ import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts"
 import type { MarketCandle } from "./signal-model.server.ts";
 import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
 
-export const DIRECT_AI_MODEL = "gemini-3.6-flash";
-export const DIRECT_AI_MODEL_LABEL = "Gemini 3.6 Flash";
+export const DIRECT_AI_MODEL = "gemini-3.8-flash";
+export const DIRECT_AI_MODEL_LABEL = "Gemini 3.8 Flash";
 export const PROXY_AI_MODEL = "gemini-3.8-flash";
 export const PROXY_AI_MODEL_LABEL = "Gemini 3.8 Flash";
 export const DIRECT_AI_HISTORY_CANDLES = 128;
