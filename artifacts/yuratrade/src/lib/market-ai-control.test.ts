@@ -68,7 +68,7 @@ test("repeated transient failure stops after two calls and opens a short cooldow
   assert.equal(calls, 2);
 });
 
-test("identical in-flight requests share work; different concurrent requests cannot flood Gemini", async () => {
+test("identical requests share work and distinct concurrent requests wait for their turn", async () => {
   let release!: (value: number) => void;
   const gate = new Promise<number>(resolve => { release = resolve; });
   let calls = 0;
@@ -76,12 +76,28 @@ test("identical in-flight requests share work; different concurrent requests can
   const deadline = Date.now() + 10_000;
   const first = control.run("same", async () => { calls++; return gate; }, deadline);
   const same = control.run("same", async () => { calls++; return 99; }, deadline);
-  await assert.rejects(control.run("different", async () => { calls++; return 100; }, deadline),
-    (failure: MarketAiServiceError) => failure.code === "ai_busy");
-  release(42);
-  assert.deepEqual(await Promise.all([first, same]), [42, 42]);
+  const different = control.run("different", async () => { calls++; return 100; }, deadline);
+  await Promise.resolve();
   assert.equal(calls, 1);
+  release(42);
+  assert.deepEqual(await Promise.all([first, same, different]), [42, 42, 100]);
+  assert.equal(calls, 2);
   assert.equal(control.unavailable(), undefined);
+});
+
+test("a queued request does not call Gemini after its deadline expires", async () => {
+  let now = 0;
+  let release!: (value: number) => void;
+  const gate = new Promise<number>(resolve => { release = resolve; });
+  let calls = 0;
+  const control = createMarketAiController({ now: () => now });
+  const first = control.run("first", async () => gate, 10_000);
+  const queued = control.run("queued", async () => { calls++; return 2; }, 5_000);
+  now = 6_000;
+  release(1);
+  assert.equal(await first, 1);
+  await assert.rejects(queued, (failure: MarketAiServiceError) => failure.code === "ai_timeout");
+  assert.equal(calls, 0);
 });
 
 test("aborting a backoff stops retrying and releases the active slot", async () => {

@@ -96,13 +96,12 @@ export function createMarketAiController(options: {
 } = {}) {
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? pause;
-  let active = false;
+  let queueTail: Promise<void> = Promise.resolve();
   let until = 0;
   let previous: MarketAiServiceError | undefined;
   const requests = new Map<string, Promise<unknown>>();
   function unavailable(): MarketAiServiceError | undefined {
     if (previous && now() < until) return new MarketAiServiceError(previous.code, previous.message, until - now(), previous.status, true);
-    if (active) return new MarketAiServiceError("ai_busy", "Анализ уже выполняется. Повторите запрос через несколько секунд.", 1_000);
     return undefined;
   }
   async function run<T>(key: string, operation: (remainingMs: number) => Promise<T>, deadlineAtMs: number, signal?: AbortSignal): Promise<T> {
@@ -110,11 +109,17 @@ export function createMarketAiController(options: {
     if (same) return same as Promise<T>;
     const blocked = unavailable();
     if (blocked) throw blocked;
-    active = true;
+    const turn = queueTail;
+    let releaseTurn!: () => void;
+    queueTail = new Promise<void>((resolve) => { releaseTurn = resolve; });
     const task = (async () => {
-      // Defer execution until the in-flight map is populated, including sync failures.
-      await Promise.resolve();
+      // Serialize distinct requests to limit provider pressure, but wait rather
+      // than returning a misleading "analysis already running" failure.
+      await turn;
       try {
+        signal?.throwIfAborted();
+        const queuedBlock = unavailable();
+        if (queuedBlock) throw queuedBlock;
         for (let attempt = 0; ; attempt += 1) {
           signal?.throwIfAborted();
           if (now() >= deadlineAtMs) throw new MarketAiServiceError("ai_timeout", "Не удалось получить ответ от ИИ за отведённое время. Сигнал не выдан.");
@@ -135,7 +140,10 @@ export function createMarketAiController(options: {
             throw failure;
           }
         }
-      } finally { active = false; requests.delete(key); }
+      } finally {
+        releaseTurn();
+        requests.delete(key);
+      }
     })();
     requests.set(key, task);
     return task;
