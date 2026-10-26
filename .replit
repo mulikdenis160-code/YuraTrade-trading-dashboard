@@ -26,4 +26,3 @@ channel = "stable-25_05"
 
 [userenv.shared]
 POCKET_OPTION_FEED_DISABLED = "false"
-PRIME_EXTERNAL_APIS_DISABLED = "true"
