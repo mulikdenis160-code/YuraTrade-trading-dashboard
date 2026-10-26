@@ -6,6 +6,7 @@ import {
 } from "../auth/isolation.server.ts";
 import { env, isWorkspacePreview } from "../env.server.ts";
 import { assertAppDataServerOnly } from "./server-only.ts";
+import { EXTERNAL_APIS_DISABLED_MESSAGE, externalApisDisabled } from "../external-api-control.server.ts";
 import {
   CONNECTOR_TOKEN_HEADER,
   CONNECTOR_TOKEN_PENDING_CODE,
@@ -336,6 +337,9 @@ export async function callTool(
   args: ToolArgs,
   options: CallToolOptions,
 ): Promise<CallToolResult> {
+  if (externalApisDisabled()) {
+    return { ok: false, data: null, errorMessage: EXTERNAL_APIS_DISABLED_MESSAGE };
+  }
   const blocked = crossSiteBlockedResult() ?? nonPostBlockedResult();
   if (blocked) return blocked;
 

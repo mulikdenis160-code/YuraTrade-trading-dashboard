@@ -5,6 +5,7 @@ import {
   type JWTVerifyGetKey,
 } from "jose";
 import { env, isWorkspacePreview } from "../env.server.ts";
+import { externalApisDisabled } from "../external-api-control.server.ts";
 
 export const GATE_IDENTITY_HEADER = "x-grok-identity";
 export const GATE_JWKS_PATH = "/__gate/identity-key";
@@ -36,6 +37,7 @@ export function gateTokenAudience(): string {
 }
 
 async function defaultJwksFetch(url: string): Promise<GateJwks | null> {
+  if (externalApisDisabled()) return null;
   try {
     const res = await fetch(url, {
       headers: { accept: "application/json" },

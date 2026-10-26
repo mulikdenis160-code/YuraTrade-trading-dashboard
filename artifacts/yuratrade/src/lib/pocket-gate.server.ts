@@ -8,6 +8,7 @@ import { isValidPocketOptionId } from "./pocket-admin.ts";
 import { readTierGrant } from "./tier-grants.server";
 import type { PocketGateState, PocketGateVerification } from "./pocket-gate";
 import type { TelegramLocale } from "./telegram-bot";
+import { externalApisDisabled } from "./external-api-control.server.ts";
 
 const PARTNER_ID = "857649";
 const PARTNER_API_URL = "https://pocketpartners.me/api/v1/user-info";
@@ -103,6 +104,7 @@ async function incrementAttemptCount(telegramUserId: string): Promise<number> {
 }
 
 async function readPartnerStatus(pocketOptionId: string) {
+  if (externalApisDisabled()) throw new Error("External APIs are disabled.");
   const apiKey = process.env.POCKET_OPTION_PARTNER_API_KEY?.trim();
   if (!apiKey) throw new Error("Partner API configuration is missing.");
 

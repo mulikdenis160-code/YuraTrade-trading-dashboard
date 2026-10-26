@@ -22,6 +22,7 @@ import {
   TELEGRAM_LANGUAGE_CALLBACK_DATA,
   type TelegramLocale,
 } from "./telegram-bot";
+import { externalApisDisabled } from "./external-api-control.server.ts";
 
 type TelegramChat = {
   id?: number | string;
@@ -83,6 +84,7 @@ async function telegramRequest<T>(
   method: string,
   body: Record<string, unknown>,
 ): Promise<T> {
+  if (externalApisDisabled()) throw new Error("External APIs are disabled.");
   const token = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
 
@@ -297,6 +299,7 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
 }
 
 export async function handleTelegramWebhook(request: Request): Promise<Response> {
+  if (externalApisDisabled()) return new Response("ok", { status: 200 });
   if (!hasValidWebhookSecret(
     request.headers.get("x-telegram-bot-api-secret-token"),
   )) {

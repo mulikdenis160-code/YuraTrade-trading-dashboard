@@ -59,9 +59,12 @@ import {
 import { nextCandleEntryWindow } from "./signal-entry-window";
 import { settleSignalRequest, waitForSignalRequest } from "./signal-request.ts";
 import { signalReleaseAt, signalEntryExpiresAt, entryConfirmationExpiresAt, signalEntryIsLive } from "./signal-release-time";
+import { externalApisDisabled } from "./external-api-control.server";
 
 const FEED_AUTH = (process.env.POCKET_OPTION_FEED_AUTH ?? "").trim();
-const FEED_DISABLED = process.env.POCKET_OPTION_FEED_DISABLED?.trim().toLowerCase() === "true";
+const FEED_DISABLED =
+  externalApisDisabled() ||
+  process.env.POCKET_OPTION_FEED_DISABLED?.trim().toLowerCase() === "true";
 const FEED_DISABLED_MESSAGE = "Поток Pocket Option временно отключён.";
 const AUTH_MISSING_MESSAGE =
   "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";

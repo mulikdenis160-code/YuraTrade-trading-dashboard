@@ -548,6 +548,11 @@ function pocketProxyAgent(feedUrl) {
 }
 require_undici();
 //#endregion
+//#region src/lib/external-api-control.server.ts
+function externalApisDisabled(env = process.env) {
+	return env.PRIME_EXTERNAL_APIS_DISABLED?.trim().toLowerCase() === "true";
+}
+//#endregion
 //#region src/lib/market-ai.server.ts
 var signalReviewSchema = object({
 	decision: literal("signal"),
@@ -1017,7 +1022,7 @@ function pocketHistoryCandleLocalTime(serverTimeSeconds, serverClockOffsetSecond
 //#endregion
 //#region src/lib/pocket-live.server.ts
 var FEED_AUTH = (process.env.POCKET_OPTION_FEED_AUTH ?? "").trim();
-var FEED_DISABLED = process.env.POCKET_OPTION_FEED_DISABLED?.trim().toLowerCase() === "true";
+var FEED_DISABLED = externalApisDisabled() || process.env.POCKET_OPTION_FEED_DISABLED?.trim().toLowerCase() === "true";
 var FEED_DISABLED_MESSAGE = "Поток Pocket Option временно отключён.";
 var AUTH_MISSING_MESSAGE = "Не настроена свежая авторизация Pocket Option. Добавьте её в Replit Secrets как POCKET_OPTION_FEED_AUTH.";
 var AUTH_REJECTED_MESSAGE = "Pocket Option отклонил авторизацию. Проверьте актуальность секрета POCKET_OPTION_FEED_AUTH.";

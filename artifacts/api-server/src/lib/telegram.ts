@@ -28,6 +28,11 @@ async function telegramRequest<T>(
   method: string,
   body?: Record<string, unknown>,
 ): Promise<T> {
+  const externalApisDisabled =
+    process.env["PRIME_EXTERNAL_APIS_DISABLED"]?.trim().toLowerCase() === "true";
+  if (externalApisDisabled && method !== "deleteWebhook") {
+    throw new Error("External APIs are disabled.");
+  }
   const token = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
 
@@ -72,6 +77,15 @@ function webhookOrigin(url: string): string {
 
 export async function ensureTelegramWebhook(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;
+  if (process.env["PRIME_EXTERNAL_APIS_DISABLED"]?.trim().toLowerCase() === "true") {
+    try {
+      await telegramRequest("deleteWebhook", { drop_pending_updates: false });
+      logger.info("Telegram webhook removed because external APIs are disabled");
+    } catch (err) {
+      logger.error({ err }, "Telegram webhook removal failed");
+    }
+    return;
+  }
   const secret = webhookSecret();
   if (!secret) {
     logger.error("SESSION_SECRET is unavailable; Telegram webhook was not registered");

@@ -3871,47 +3871,47 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"4cc8a698b27084a764e9f2f4554eb5fdebf61fc3dead4a697775e5341ebfd84e": {
 		functionName: "chooseSignalPair_createServerFn_handler",
-		importer: () => import("./pocket-live-DHbXq2VH.mjs")
+		importer: () => import("./pocket-live-CXOf-2a2.mjs")
 	},
 	"58c30415821085dcde5bb462a2c6ab10f538dcb655b2bf2a79cd04bd11ff23fd": {
 		functionName: "setTierGrant_createServerFn_handler",
-		importer: () => import("./tier-grants-VcPCU2GL.mjs")
+		importer: () => import("./tier-grants-Dt5mde8F.mjs")
 	},
 	"6371e9e3c6b085f084b610f0963a4d0c3a8f7505cd9b27e857273106d98380f6": {
 		functionName: "revokeTierGrant_createServerFn_handler",
-		importer: () => import("./tier-grants-VcPCU2GL.mjs")
+		importer: () => import("./tier-grants-Dt5mde8F.mjs")
 	},
 	"65a316e774e0ea4a3bef3cd70e45365d003566e62fb4f915e8f227872abf97ab": {
 		functionName: "takeBest_createServerFn_handler",
-		importer: () => import("./pocket-live-DHbXq2VH.mjs")
+		importer: () => import("./pocket-live-CXOf-2a2.mjs")
 	},
 	"8d16ab25d49de3ba563bd027483e243a7e3dc42cde9f9a502b86bdc62ed38062": {
 		functionName: "confirmSignalEntry_createServerFn_handler",
-		importer: () => import("./pocket-live-DHbXq2VH.mjs")
+		importer: () => import("./pocket-live-CXOf-2a2.mjs")
 	},
 	"aac57122ce5b3a8923821121771eb8cb948eb3f0ce20a93ea73c801a87060f96": {
 		functionName: "verifyPocketAccount_createServerFn_handler",
-		importer: () => import("./pocket-gate-BinUdf0S.mjs")
+		importer: () => import("./pocket-gate-BTar8zG1.mjs")
 	},
 	"b900180c993554286d82dd224bf57a5fc610cd2c0e205fb2e89f79e8fa4a3641": {
 		functionName: "getPocketGateState_createServerFn_handler",
-		importer: () => import("./pocket-gate-BinUdf0S.mjs")
+		importer: () => import("./pocket-gate-BTar8zG1.mjs")
 	},
 	"c3bf91de64f793a1fdff73992de93db6878fb230b41776a1663843f0dd5e02d1": {
 		functionName: "readClose_createServerFn_handler",
-		importer: () => import("./pocket-live-DHbXq2VH.mjs")
+		importer: () => import("./pocket-live-CXOf-2a2.mjs")
 	},
 	"d2c775a90d1d52f1df16c72600501889bd42e3d7a85d2861c45a2fd5e3537f78": {
 		functionName: "listTierGrants_createServerFn_handler",
-		importer: () => import("./tier-grants-VcPCU2GL.mjs")
+		importer: () => import("./tier-grants-Dt5mde8F.mjs")
 	},
 	"e7eabc0cd6ed805a34adcafedfe18f606c2fbbb009e971fe08cadbcf71358857": {
 		functionName: "takeSignal_createServerFn_handler",
-		importer: () => import("./pocket-live-DHbXq2VH.mjs")
+		importer: () => import("./pocket-live-CXOf-2a2.mjs")
 	},
 	"fb07d0a82ccd0e21eb307fec3024649c271630507c2eb15012c43274deadb043": {
 		functionName: "loadFeed_createServerFn_handler",
-		importer: () => import("./pocket-live-DHbXq2VH.mjs")
+		importer: () => import("./pocket-live-CXOf-2a2.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -6549,7 +6549,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-Bqld21AH.mjs").then((n) => n.t),
+		import("./router-C8pcFV-V.mjs").then((n) => n.t),
 		import("./start-peFgR8ck.mjs"),
 		import("./empty-plugin-adapters-CInA4tz9.mjs")
 	]);

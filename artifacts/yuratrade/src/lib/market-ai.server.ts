@@ -6,6 +6,7 @@ import { z } from "zod";
 import { buildMarketAnalysisContext } from "./market-analysis-context.server.ts";
 import type { MarketCandle } from "./signal-model.server.ts";
 import { SIGNAL_ANALYSIS_TIMEOUT_MS } from "./signal-config.ts";
+import { EXTERNAL_APIS_DISABLED_MESSAGE, externalApisDisabled } from "./external-api-control.server.ts";
 
 export const DIRECT_AI_MODEL = "gemini-3.8-flash";
 export const DIRECT_AI_MODEL_LABEL = "Gemini 3.8 Flash";
@@ -94,6 +95,7 @@ const controllerGlobal = globalThis as typeof globalThis & {
 };
 
 const geminiFetch: typeof fetch = async (input, init) => {
+  if (externalApisDisabled()) throw new Error(EXTERNAL_APIS_DISABLED_MESSAGE);
   const response = await environmentFetch(input, init);
   if ([429, 500, 502, 503].includes(response.status)) {
     let body: unknown;
@@ -470,6 +472,9 @@ export async function analyzeMarketCandidates(
     timeoutMs?: number;
   } = {},
 ): Promise<MarketAiReview> {
+  if (externalApisDisabled()) {
+    return { decision: "pass", reason: EXTERNAL_APIS_DISABLED_MESSAGE };
+  }
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
   const preparedCandidates = candidates.slice(0, 1).map((candidate) => ({
     ...candidate,
