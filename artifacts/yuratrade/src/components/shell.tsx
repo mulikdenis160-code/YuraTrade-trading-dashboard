@@ -13,6 +13,7 @@ import {
   recordSignalOutcome,
   markExpiredPendingSignals,
   readSignalJournal,
+  signalPriceMove,
 } from "@/lib/signal-journal";
 import {
   completeSignalBatchAttempt,
@@ -112,13 +113,7 @@ export function Shell({ children }: { children: ReactNode }) {
           lastAttempt.set(entry.id, now);
           try {
             const quote = await readClose({ data: { symbol: entry.symbol } });
-            const digits = Math.max(
-              entry.openPrice >= 100 ? 2 : entry.openPrice >= 10 ? 3 : 5,
-              quote.close >= 100 ? 2 : quote.close >= 10 ? 3 : 5,
-            );
-            const start = Number(entry.openPrice.toFixed(digits));
-            const finish = Number(quote.close.toFixed(digits));
-            const move = finish === start ? 0 : finish > start ? 1 : -1;
+            const move = signalPriceMove(entry.openPrice, quote.close);
             const outcome = classifySignalAttempt(entry.direction, move, entry.step);
             const saved = recordSignalOutcome(entry.id, quote.close, outcome);
             if (entry.batchRunId && entry.batchPosition) {

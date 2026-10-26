@@ -75,6 +75,12 @@ export function classifySignalAttempt(
   return step < MAX_OVERLAYS ? "overlay" : "loss";
 }
 
+export function signalPriceMove(openPrice: number, closePrice: number): -1 | 0 | 1 {
+  if (closePrice > openPrice) return 1;
+  if (closePrice < openPrice) return -1;
+  return 0;
+}
+
 export function signalRecordId(signal: Pick<StartedSignal, "symbol" | "startedAt" | "step">) {
   return `${signal.startedAt}:${signal.step}:${signal.symbol}`;
 }
@@ -123,6 +129,18 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
   const analysisSeconds = (ANALYSIS_PERIODS_SECONDS as readonly number[]).includes(providedAnalysisSeconds)
     ? providedAnalysisSeconds
     : legacyAnalysisSeconds;
+  const step = Math.max(0, Math.min(3, Number(entry.step)));
+  const closePrice = Number(entry.closePrice);
+  const outcome =
+    entry.outcome === "draw" &&
+    Number.isFinite(closePrice) &&
+    signalPriceMove(Number(entry.openPrice), closePrice) !== 0
+      ? classifySignalAttempt(
+          entry.direction,
+          signalPriceMove(Number(entry.openPrice), closePrice),
+          step,
+        )
+      : (entry.outcome as JournalOutcome);
 
   return {
     id: entry.id,
@@ -135,7 +153,7 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
     payout: Math.max(0, Math.min(100, Number(entry.payout))),
     seconds,
     analysisSeconds,
-    step: Math.max(0, Math.min(3, Number(entry.step))),
+    step,
     startedAt: Number(entry.startedAt),
     ...(Number.isFinite(entry.settledAt) ? { settledAt: Number(entry.settledAt) } : {}),
     ...(typeof entry.batchRunId === "string" && entry.batchRunId.length <= 120
@@ -149,7 +167,7 @@ function normalizeEntry(value: unknown): SignalJournalEntry | null {
           ),
         }
       : {}),
-    outcome: entry.outcome as JournalOutcome,
+    outcome,
     ...(Number.isFinite(entry.ruleScore) ? { ruleScore: Number(entry.ruleScore) } : {}),
     ...(Number.isFinite(entry.aiConfidence)
       ? { aiConfidence: Math.max(0, Math.min(100, Math.round(Number(entry.aiConfidence)))) }
@@ -257,9 +275,32 @@ function readStoredSignalJournal(local: Storage): StoredSignalJournal | null {
     .filter((entry): entry is SignalJournalEntry => entry !== null)
     .sort((a, b) => b.startedAt - a.startedAt)
     .slice(0, MAX_ENTRIES);
+  const totals = normalizeStoredTotals(envelope?.totals) ?? totalsFromEntries(entries);
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  for (const rawEntry of rawEntries) {
+    if (!rawEntry || typeof rawEntry !== "object") continue;
+    const previous = rawEntry as Partial<SignalJournalEntry>;
+    if (previous.outcome !== "draw" || typeof previous.id !== "string") continue;
+    const corrected = entriesById.get(previous.id);
+    if (!corrected || corrected.outcome === "draw") continue;
+    const groupTotals = totals[corrected.group];
+    const wins = groupTotals.wins + Number(corrected.outcome === "win");
+    const losses = groupTotals.losses + Number(corrected.outcome === "loss");
+    const draws = Math.max(0, groupTotals.draws - 1);
+    const settled = Math.max(0, groupTotals.settled - 1) +
+      Number(corrected.outcome === "win" || corrected.outcome === "loss");
+    const decided = wins + losses;
+    totals[corrected.group] = {
+      settled,
+      wins,
+      losses,
+      draws,
+      hitRate: decided > 0 ? (wins / decided) * 100 : null,
+    };
+  }
   return {
     entries,
-    totals: normalizeStoredTotals(envelope?.totals) ?? totalsFromEntries(entries),
+    totals,
   };
 }
 

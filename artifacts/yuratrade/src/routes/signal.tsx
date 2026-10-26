@@ -9,6 +9,7 @@ import {
   recordSignalOutcome,
   recordSignalStarted,
   readSignalJournal,
+  signalPriceMove,
   signalRecordId,
 } from "@/lib/signal-journal";
 import {
@@ -385,10 +386,7 @@ function SignalCard({ search }: { search: Search }) {
     void readClose({ data: { symbol: search.symbol } })
       .then((quote) => {
         setClose(quote.close);
-        const digits = Math.max(digitsOf(search.open), digitsOf(quote.close));
-        const entry = Number(search.open.toFixed(digits));
-        const finish = Number(quote.close.toFixed(digits));
-        const move = finish === entry ? 0 : finish > entry ? 1 : -1;
+        const move = signalPriceMove(search.open, quote.close);
         const outcome = classifySignalAttempt(search.direction, move, search.step);
         const saved = recordSignalOutcome(journalId, quote.close, outcome);
         if (!saved) setJournalWarning("Результат не удалось сохранить в локальный журнал.");

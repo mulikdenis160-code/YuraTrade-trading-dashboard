@@ -11,6 +11,7 @@ import {
   recentlyUsedSignalSymbols,
   signalJournalCsv,
   signalRecordId,
+  signalPriceMove,
   summarizeSignals,
   type StartedSignal,
   type SignalJournalEntry,
@@ -155,6 +156,88 @@ test("intermediate losses are overlays and only the exhausted series counts as a
   assert.equal(summary.losses, 1);
   assert.equal(summary.settled, 1);
   assert.equal(summary.netUnits, -1);
+});
+
+test("small price changes are not rounded into a draw", () => {
+  const open = 1.080001;
+  const lowerClose = 1.080004;
+  const higherClose = 1.080006;
+
+  assert.equal(Number(open.toFixed(5)), Number(lowerClose.toFixed(5)));
+  assert.equal(signalPriceMove(open, lowerClose), 1);
+  assert.equal(classifySignalAttempt("put", signalPriceMove(open, lowerClose), 3), "loss");
+  assert.equal(signalPriceMove(open, higherClose), 1);
+  assert.equal(classifySignalAttempt("call", signalPriceMove(open, higherClose), 3), "win");
+  assert.equal(signalPriceMove(open, open), 0);
+});
+
+test("legacy draws with unequal saved prices are corrected from the verified price move", () => {
+  const signal: StartedSignal = {
+    id: "legacy-rounded-draw",
+    symbol: "EURUSD_otc",
+    name: "EUR/USD OTC",
+    group: "fx",
+    direction: "put",
+    openPrice: 1.080001,
+    payout: 92,
+    seconds: 60,
+    analysisSeconds: 60,
+    step: 3,
+    startedAt: 1_750_000_000_000,
+    strategyVersion: "test",
+    note: "",
+    bars: [],
+  };
+  const previousJournal = values.get("vprime_signal_journal_v1");
+  values.set("vprime_signal_journal_v1", JSON.stringify([
+    { ...signal, closePrice: 1.080004, settledAt: signal.startedAt + 60_000, outcome: "draw" },
+  ]));
+
+  assert.equal(readSignalJournal()[0]?.outcome, "loss");
+  if (previousJournal === undefined) values.delete("vprime_signal_journal_v1");
+  else values.set("vprime_signal_journal_v1", previousJournal);
+});
+
+test("stored totals migrate with a legacy draw that was actually a loss", () => {
+  const previousJournal = values.get("vprime_signal_journal_v1");
+  const signal: StartedSignal = {
+    id: "legacy-draw-total",
+    symbol: "EURUSD_otc",
+    name: "EUR/USD OTC",
+    group: "fx",
+    direction: "put",
+    openPrice: 1.080001,
+    payout: 92,
+    seconds: 60,
+    analysisSeconds: 60,
+    step: 3,
+    startedAt: 1_750_000_000_000,
+    strategyVersion: "test",
+    note: "",
+    bars: [],
+  };
+  values.set("vprime_signal_journal_v1", JSON.stringify({
+    version: 2,
+    entries: [
+      { ...signal, closePrice: 1.080004, settledAt: signal.startedAt + 60_000, outcome: "draw" },
+    ],
+    totals: {
+      fx: { settled: 1, wins: 0, losses: 0, draws: 1, hitRate: null },
+      crypto: { settled: 0, wins: 0, losses: 0, draws: 0, hitRate: null },
+      stock: { settled: 0, wins: 0, losses: 0, draws: 0, hitRate: null },
+      commodity: { settled: 0, wins: 0, losses: 0, draws: 0, hitRate: null },
+    },
+  }));
+
+  assert.deepEqual(readSignalJournalTotals(), {
+    settled: 1,
+    wins: 0,
+    losses: 1,
+    draws: 0,
+    hitRate: 0,
+  });
+  if (previousJournal === undefined) values.delete("vprime_signal_journal_v1");
+  else values.set("vprime_signal_journal_v1", previousJournal);
 });
 
 test("a win after one or more overlays is counted once and draws end the series", () => {
