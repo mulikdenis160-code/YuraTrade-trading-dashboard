@@ -217,3 +217,27 @@ test("ignores malformed Socket.IO event frames", () => {
   assert.equal(parsePocketSocketIoEvent('42["updateStream"'), null);
   assert.equal(parsePocketSocketIoEvent('0{"sid":"abc"}'), null);
 });
+
+
+test("preserves sessionToken in captured frames and JSON auth payloads", () => {
+  for (const isDemo of [0, 1]) {
+    const payload = { sessionToken: "test-token", isDemo, uid: 123 };
+    for (const input of [JSON.stringify(payload), `42${JSON.stringify(["auth", payload])}`]) {
+      const frame = buildPocketAuthFrame(input);
+      assert.ok(frame);
+      const output = JSON.parse(frame.slice(2))[1];
+      assert.equal(output.sessionToken, "test-token");
+      assert.equal(output.session, undefined);
+      assert.equal(output.uid, 123);
+      assert.equal(pocketFeedUrlForAuth(input)?.includes("demo-api-"), isDemo === 1);
+    }
+  }
+});
+
+test("rejects auth without a nonempty string credential", () => {
+  for (const payload of [{}, {sessionToken: " "}, {session: 123}, {sessionToken: null}]) {
+    const input = `42${JSON.stringify(["auth", {...payload, isDemo: 1}])}`;
+    assert.equal(buildPocketAuthFrame(input), null);
+    assert.equal(pocketFeedUrlForAuth(input), null);
+  }
+});

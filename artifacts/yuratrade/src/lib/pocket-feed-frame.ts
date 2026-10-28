@@ -61,53 +61,45 @@ export type PocketFastHistory = {
   ticks: Array<{ time: number; price: number }>;
 };
 
-export function buildPocketAuthFrame(auth: string): string | null {
+/** Accept a captured Socket.IO auth frame or its JSON payload. Never log it. */
+function parsePocketAuth(auth: string): Record<string, unknown> | null {
   const frame = auth.trim();
-  if (!frame.startsWith("42")) return null;
-
   try {
-    const packet: unknown = JSON.parse(frame.slice(2));
-    if (
-      !Array.isArray(packet) ||
-      packet[0] !== "auth" ||
-      !packet[1] ||
-      typeof packet[1] !== "object" ||
-      Array.isArray(packet[1])
-    ) {
-      return null;
-    }
-    return `42${JSON.stringify([
-      "auth",
-      {
-        ...(packet[1] as Record<string, unknown>),
-        platform: 2,
-        isFastHistory: true,
-        isOptimized: true,
-      },
-    ])}`;
+    const parsed: unknown = JSON.parse(frame.startsWith("42") ? frame.slice(2) : frame);
+    const payload = Array.isArray(parsed)
+      ? parsed[0] === "auth" ? parsed[1] : null
+      : parsed;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+    const record = payload as Record<string, unknown>;
+    // Preserve the supplied credential name: sessionToken and session are
+    // distinct provider formats, and must not be silently renamed.
+    if (![record.sessionToken, record.session].some(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    )) return null;
+    return record;
   } catch {
     return null;
   }
 }
 
-export function pocketFeedUrlForAuth(auth: string): string | null {
-  const frame = auth.trim();
-  if (!frame.startsWith("42")) return null;
+export function buildPocketAuthFrame(auth: string): string | null {
+  const payload = parsePocketAuth(auth);
+  if (!payload) return null;
+  return `42${JSON.stringify([
+    "auth",
+    { ...payload, platform: 2, isFastHistory: true, isOptimized: true },
+  ])}`;
+}
 
-  try {
-    const packet: unknown = JSON.parse(frame.slice(2));
-    if (!Array.isArray(packet) || packet[0] !== "auth" || !packet[1] || typeof packet[1] !== "object") {
-      return null;
-    }
-    const isDemo = (packet[1] as Record<string, unknown>).isDemo;
-    if (isDemo === true || isDemo === 1 || isDemo === "1") {
-      return "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket";
-    }
-    if (isDemo === false || isDemo === 0 || isDemo === "0") {
-      return "wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket";
-    }
-  } catch {
-    return null;
+export function pocketFeedUrlForAuth(auth: string): string | null {
+  const payload = parsePocketAuth(auth);
+  if (!payload) return null;
+  const isDemo = payload.isDemo;
+  if (isDemo === true || isDemo === 1 || isDemo === "1") {
+    return "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket";
+  }
+  if (isDemo === false || isDemo === 0 || isDemo === "0") {
+    return "wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket";
   }
   return null;
 }
