@@ -71,11 +71,9 @@ function parsePocketAuth(auth: string): Record<string, unknown> | null {
       : parsed;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
     const record = payload as Record<string, unknown>;
-    // Preserve the supplied credential name: sessionToken and session are
-    // distinct provider formats, and must not be silently renamed.
-    if (![record.sessionToken, record.session].some(
-      (value) => typeof value === "string" && value.trim().length > 0,
-    )) return null;
+    // The quote server requires its own session credential. A cabinet
+    // sessionToken belongs to a different connection and cannot replace it.
+    if (typeof record.session !== "string" || !record.session.trim()) return null;
     return record;
   } catch {
     return null;

@@ -839,7 +839,7 @@ function connect() {
   const feedUrl = pocketFeedUrlForAuth(FEED_AUTH);
   if (!feedUrl) {
     connectionError =
-      "Неверный формат авторизации Pocket Option: нужен полный кадр 42[\"auth\",…] с полем isDemo.";
+      "Неверная авторизация потока котировок Pocket Option: скопируйте auth-кадр соединения po.market с полями session и isDemo. Кадр кабинета с sessionToken не подходит.";
     console.error("[pocket-feed-auth-format-invalid]");
     throw new Error(connectionError);
   }
@@ -951,7 +951,9 @@ function ensureFeedConnection() {
         clearInterval(timer);
         ready = null;
         cancelReady = null;
-        if (!connectionError) connectionError = "Котировки Pocket Option не получены за 12 секунд.";
+        if (!connectionError) connectionError = isAuthorized
+          ? "Авторизация Pocket Option подтверждена, но список активов не получен за 12 секунд."
+          : "Pocket Option не подтвердил авторизацию за 12 секунд. Нужен свежий auth-кадр потока котировок с полем session.";
         reject(new Error(connectionError));
       }
     }, 200);

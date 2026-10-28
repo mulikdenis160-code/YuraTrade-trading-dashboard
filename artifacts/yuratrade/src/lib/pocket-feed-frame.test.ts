@@ -219,19 +219,20 @@ test("ignores malformed Socket.IO event frames", () => {
 });
 
 
-test("preserves sessionToken in captured frames and JSON auth payloads", () => {
-  for (const isDemo of [0, 1]) {
-    const payload = { sessionToken: "test-token", isDemo, uid: 123 };
-    for (const input of [JSON.stringify(payload), `42${JSON.stringify(["auth", payload])}`]) {
-      const frame = buildPocketAuthFrame(input);
-      assert.ok(frame);
-      const output = JSON.parse(frame.slice(2))[1];
-      assert.equal(output.sessionToken, "test-token");
-      assert.equal(output.session, undefined);
-      assert.equal(output.uid, 123);
-      assert.equal(pocketFeedUrlForAuth(input)?.includes("demo-api-"), isDemo === 1);
-    }
+test("rejects cabinet sessionToken frames for the quote server", () => {
+  const payload = { sessionToken: "test-token", isDemo: 1, uid: "123" };
+  for (const input of [JSON.stringify(payload), `42${JSON.stringify(["auth", payload])}`]) {
+    assert.equal(buildPocketAuthFrame(input), null);
+    assert.equal(pocketFeedUrlForAuth(input), null);
   }
+});
+
+test("accepts JSON quote-server auth payloads without changing credentials", () => {
+  const input = JSON.stringify({ session: "test-session", isDemo: 1, uid: 123 });
+  const frame = buildPocketAuthFrame(input);
+  assert.ok(frame);
+  assert.equal(JSON.parse(frame.slice(2))[1].session, "test-session");
+  assert.ok(pocketFeedUrlForAuth(input)?.includes("demo-api-"));
 });
 
 test("rejects auth without a nonempty string credential", () => {
